@@ -49,7 +49,7 @@ gh repo set-default --view
 
 ## 未解風險
 
-- 推送到 `main` 未自動觸發 CI，需手動 `gh workflow run ci.yml`（2026-10-03 手動執行 `37031364316` 全綠）；`go test -race` 需要 gcc，本機未安裝，只能由 CI 驗證。
+- 推送到 `main` 不會自動觸發 CI：GitHub 對「fork 時已含 workflow」的 repo 預設停用（Actions 頁顯示 *Workflows aren't being run on this forked repository*），需維護者在 Actions 頁按下啟用；在那之前每次推送後手動 `gh workflow run ci.yml`（`b4b6f6a` 的手動執行 `37035605853` 全綠）。`go test -race` 需要 gcc，本機未安裝，只能由 CI 驗證。
 - `assets/` 的畫面截圖仍是上游簡體介面，尚未重拍。
 - 發佈檔未做程式碼簽章；單檔安裝程式是自解壓執行檔，SmartScreen 與防毒軟體可能示警。
 - 繁體化後每次同步上游都要重跑轉換工具並人工對照 PowerShell 測試裡的字元碼常數。
