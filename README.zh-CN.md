@@ -5,7 +5,10 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue.svg)](#)
 
-[English](README.md) | [中文说明]
+[English](README.en.md) | 简体中文 | [繁體中文](README.md)
+
+> 本专案为 [`sybxxx/codex-auto-retry`](https://github.com/sybxxx/codex-auto-retry) 的维护 fork，遵循 MIT 授权条款。
+> 维护差异记录于 [`FORK.md`](FORK.md) 与 [`docs/DECISIONS.md`](docs/DECISIONS.md)。上游审查清单位于 [`docs/UPSTREAM.md`](docs/UPSTREAM.md)。
 
 Codex Auto Retry 是一款专为 Windows 平台 Codex 打造的开源可靠性守护与原地自动恢复工具。它可以在后台静默监测 Codex 任务生命周期，在遭遇网络波动、服务限流（Rate Limit）、请求超时、服务器异常或模型空回复时，**在原任务中安全、自动地原地恢复运行**，同时完整保留任务工作区、模型配置与推理参数。
 

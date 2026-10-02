@@ -1,232 +1,163 @@
 # Codex Auto Retry
 
-[![CI](https://github.com/sybxxx/codex-auto-retry/actions/workflows/ci.yml/badge.svg)](https://github.com/sybxxx/codex-auto-retry/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/sybxxx/codex-auto-retry?label=latest%20release)](https://github.com/sybxxx/codex-auto-retry/releases/latest)
+[![CI](https://github.com/SanHsien/codex-auto-retry/actions/workflows/ci.yml/badge.svg)](https://github.com/SanHsien/codex-auto-retry/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/sybxxx/codex-auto-retry?label=upstream%20release)](https://github.com/sybxxx/codex-auto-retry/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue.svg)](#)
 
-[English] | [中文说明](README_zh.md)
+[English](README.en.md) | [简体中文](README.zh-CN.md) | 繁體中文
 
-Codex Auto Retry is an open-source reliability and automatic recovery tool for Codex on Windows. It monitors Codex task lifecycle events and safely resumes the exact interrupted task after recoverable provider, network, rate-limit, timeout, or empty-response failures while preserving working context, permissions, and runtime settings.
+> 本專案為 [`sybxxx/codex-auto-retry`](https://github.com/sybxxx/codex-auto-retry) 的繁體中文維護 fork，遵循 MIT 授權條款。
+> 維護差異記錄於 [`FORK.md`](FORK.md) 與 [`docs/DECISIONS.md`](docs/DECISIONS.md)；上游審查清冊位於 [`docs/UPSTREAM.md`](docs/UPSTREAM.md)。
 
-It runs as a local Windows watchdog service and does not require a per-task prompt. The watchdog provides a notification-area tray controller and an embedded Codex management panel (via MCP), while recovery remains independent of either interface being open. The latest Windows x64 release is available from the [GitHub Releases](https://github.com/sybxxx/codex-auto-retry/releases/latest) page.
+**Codex Auto Retry** 是一款專為 Windows 平台 Codex 打造的開源可靠性守護與原地自動接續工具。它在背景靜默監控 Codex 任務生命週期，當遭遇網路中斷、服務限流（Rate Limit / 5 小時額度重設）、請求逾時、伺服器 5xx 異常或空回覆時，**在原聊天中安全、自動地原地接續執行**，完整保留任務工作區、模型設定與推理參數。
 
-For contribution boundaries and vulnerability disclosure, see [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
-
----
-
-## Table of Contents
-
-- [Why Codex Auto Retry?](#why-codex-auto-retry)
-- [Quick Start](#quick-start)
-- [Recovery Behavior](#recovery-behavior)
-  - [Exact-Task & Silent Continuation](#exact-task--silent-continuation)
-  - [Goal Mode & Pause Protection](#goal-mode--pause-protection)
-  - [Subagent Deterministic Recovery](#subagent-deterministic-recovery)
-  - [Dual Safety Limits & Backoff Strategies](#dual-safety-limits--backoff-strategies)
-  - [Retryable & Non-Retryable Fault Boundaries](#retryable--non-retryable-fault-boundaries)
-- [User Interfaces](#user-interfaces)
-  - [Windows Tray Controller](#windows-tray-controller)
-  - [Embedded Management Panel (MCP)](#embedded-management-panel-mcp)
-- [Safety and Privacy](#safety-and-privacy)
-- [Installation and Maintenance](#installation-and-maintenance)
-- [Fail-Open Shared Backend Safety](#fail-open-shared-backend-safety)
-- [Limitations](#limitations)
-- [Maintainer](#maintainer)
+本工具作為 Windows 本地背景輕量守護行程（Watchdog）運作，不需在每個 Codex 會話中手動輸入提示詞。同時提供 Windows 系統匣常駐托盤控制器，以及 Codex 原生內嵌管理面板（基於 MCP 協定），介面開閉皆不影響背景自動復原。
 
 ---
 
-## Why Codex Auto Retry?
+## 目錄
 
-Long-running Codex work can be interrupted after tools have already executed or after a provider has accepted a request. Codex Auto Retry is designed to continue that same task without creating a replacement conversation, replaying completed side effects, changing the task on screen, or leaving a dead global endpoint.
-
-| Dimension | Without Codex Auto Retry | With Codex Auto Retry |
-| :--- | :--- | :--- |
-| **Transient Failures** | Task aborts; requires manual restart or prompt resubmission | **Automatically detected & resumed with bounded backoff** |
-| **Conversation Context** | Often requires starting a new thread; lost history & context | **Exact-task resumption; preserves full history & parameters** |
-| **Tool Side Effects** | Re-sending prompts risks replaying completed file/DB changes | **Continues in-place; completed tools are never re-executed** |
-| **User Disruption** | Error popups steal focus and interrupt ongoing thought | **Silent background recovery; zero stolen focus or screen changes** |
-| **Runaway Protection** | Manual retries can enter infinite loops or drain API quota | **Dual safety limits (outage & consecutive) + circuit breakers** |
-
-### Key Capabilities
-
-- **Exact-task recovery**: Resumes the original Codex thread and keeps its working directory, model/provider, permissions, and reasoning settings.
-- **Bounded operation**: Separates recovery and no-progress limits, applies a time circuit breaker, and stops with an explicit reason when a local channel is unavailable.
-- **Current Desktop compatibility**: Supports current rollout filenames and the official Windows IPC owner route (`\\.\pipe\codex-ipc`), with the plugin-owned WebSocket as an optional verified path.
-- **Fail-open safety**: Shared backend mode is opt-in; normal Codex startup uses its official backend when the optional recovery path is unavailable.
-- **Privacy-conscious state**: Retry decisions retain lifecycle metadata only; conversation text, tool contents, credentials, and response bodies are not stored for recovery.
+- [為什麼需要 Codex Auto Retry？](#為什麼需要-codex-auto-retry)
+- [核心接續機制](#核心接續機制)
+- [使用者介面](#使用者介面)
+  - [Windows 系統匣托盤控制器](#windows-系統匣托盤控制器)
+  - [Codex 內嵌管理面板（MCP）](#codex-內嵌管理面板mcp)
+- [快速上手（終端使用者）](#快速上手終端使用者)
+- [隱私與安全保證](#隱私與安全保證)
+- [故障安全設計（Fail-Open）](#故障安全設計fail-open)
+- [本機開發與驗收](#本機開發與驗收)
+- [維護者與授權條款](#維護者與授權條款)
 
 ---
 
-## Quick Start
+## 為什麼需要 Codex Auto Retry？
 
-1. **Download**: Grab the latest Windows x64 ZIP from [Releases](https://github.com/sybxxx/codex-auto-retry/releases/latest).
-2. **Extract**: Extract it to a standard local folder (do not run directly from inside the archive preview).
-3. **Install**: Fully close Codex, then double-click `安装.cmd`. The installer verifies the package and starts the watchdog service.
-4. **Verify**: Open Codex and create a new task. The watchdog will automatically detect active tasks. You can also say `打开 Codex Auto Retry 管理面板` to open the embedded control panel.
-5. See [Windows installation notes](release/windows/README-安装说明.txt) for route verification, shared backend details, and safe-launch behavior.
+長時間運行的 Codex 任務常在工具已執行或模型已產生部分輸出後，遭遇中斷（例如 5 小時用量重設、網路瞬斷或伺服器超載）。
 
----
+傳統手動重試往往會開新會話，遺失中間狀態或重放已執行的副作用。Codex Auto Retry 確保：
 
-## Recovery Behavior
+1. **原地續跑**：延續同一個任務，不開替換對話，不重放已完成的工具操作。
+2. **Turn 關聯檢驗**：精確比對 `task_started` 與 `task_complete` 的 Turn ID，防止無關成功回合誤標記為復原。
+3. **退避曲線**：支援固定（Fixed）、線性遞增（Linear）與指數倍增（Exponential）等待延遲，可自訂上限。
+4. **行程守護**：Codex 關閉時自動停止重試倒數，不浪費請求額度。
 
-### Exact-Task & Silent Continuation
-
-- **In-Process Resumption**: Rejoins the exact failed task through the Codex App process that is already running. Codex Desktop and the watchdog are two clients of one local shared app-server, so recovery does not open a task link, focus Codex, change the task currently on screen, or create a hidden `codex exec resume` task.
-- **Thread Settings Integrity**: The official IPC recovery request preserves the current collaboration-mode model and reasoning settings (required by modern Codex Desktop). It restores the failed task with its latest working directory, workspace roots, model, provider, service tier, reasoning settings, personality, approval routing, and effective permission profile instead of applying generic App defaults.
-- **Clean Dialogue**: In a normal conversation, it starts an empty-input continuation in that same task. The original request and completed tool results stay in context, while no new user-message bubble is added and the composer draft is untouched.
-- **Fallback Compatibility**: Uses the configured fallback retry text (default: `继续` / `Continue`) only as a narrow compatibility fallback when Codex explicitly rejects empty-input turns. It never rolls back and resends the failed turn, preventing duplicate tool execution.
-- **Rollout Schema Support**: Supports current Codex rollout names in both `thread-id.jsonl` and `thread-id_turn-id.jsonl` forms. The persistent thread ID is kept as the queue key; older turn-keyed state is migrated and duplicate entries for the same task are merged on startup.
-- **Concurrency**: Keeps separate retry state for every task and can dispatch up to four due tasks independently by default. If a failed task is already running, its retry remains queued and will re-check later instead of canceling.
-
-### Goal Mode & Pause Protection
-
-- **Native Goal State**: In goal mode, uses Codex's native goal state and activates only a blocked goal that can be attributed to the same provider failure. Codex then creates the continuation turn itself.
-- **Turn Adoption**: If an active goal creates another turn immediately after an empty reply, that turn is adopted into the same bounded recovery chain instead of being mistaken for new manual work.
-- **Authoritative Pauses**: Treats a user or AI pause (including a goal waiting for user review) as authoritative. A pause during the failed turn, countdown, or controller startup cancels recovery; only an explicit later `active` goal update clears the goal hold.
-- **Pre-existing Pause Isolation**: If the pause predates a later user-started conversation turn, a provider failure in that later turn may be silently continued while the goal remains paused and unchanged.
-- **Fail-Closed Goals**: Never converts completed, usage-limited, budget-limited, or unknown goal states into a normal-conversation `continue` turn.
-
-### Subagent Deterministic Recovery
-
-- **Exact Existing Child Continuation**: For an empty reply from an internal subagent, appends one deterministic recovery event to its parent and silently continues the exact existing child thread.
-- **Parent State Restoration**: An unloaded parent is first restored with its own persisted task settings before event injection.
-- **Sole Wake-Up Owner**: The watchdog remains the sole wake-up owner for that event. The event explicitly forbids creating a replacement child; live child state, persisted notification acknowledgement, and turn correlation prevent duplicate continuation or duplicate Agent creation. Other child failures remain owned by the parent workflow.
-
-### Dual Safety Limits & Backoff Strategies
-
-To prevent runaway retry loops and excessive resource consumption, two independent safety limits are enforced:
-
-1. **`本次故障恢复` (`Recoveries This Outage`)**: Bounds all automatic recovery attempts during a single persistent outage (default: 15, configurable from 1 to 1000).
-2. **`连续无进展` (`Consecutive No Progress`)**: Bounds consecutive retries that produce neither a visible assistant reply nor a completed tool result (default: 5, configurable from 1 to 100).
-
-- **Reset Rules**: A successful completion or a new user turn clears both counters; visible progress clears only the consecutive no-progress count.
-- **Exhaustion Handling**: When an active goal reaches either limit through repeated empty replies, the watchdog retains the exhausted entry, marks that goal as `blocked`, and notifies: `目标连续空回复达到上限，目标恢复已停止` (*Goal consecutive empty-reply limit reached, goal recovery stopped*).
-- **Backoff Strategies**: Supports fixed, linear, or doubling (exponential) delays capped at a configurable maximum. Linear waits add a configurable number of seconds each time. Increasing waits follow the consecutive no-progress count, so visible progress resets the delay sequence.
-- **Turn Correlation**: Correlates the new `task_started` turn ID with its matching `task_complete`. An unrelated successful turn cannot falsely mark a retry as recovered.
-
-**Authentication ceiling:** Both settings panels expose `auth_max_attempts` (default 6, range 1-1000). Limited authentication errors use the smaller of this ceiling and each global limit. Temporary `auth_unavailable` failures use the global limits. If an error changes category or a limit is lowered, historical counts remain intact: `19/6` means 19 attempts preceded the newly applicable six-attempt ceiling. Already-truncated old records are not reconstructed.
-
-### Retryable & Non-Retryable Fault Boundaries
-
-- **Retryable Faults**:
-  - Network failures, connection resets, and request timeouts;
-  - HTTP 5xx server errors;
-  - Rate limits and temporary capacity exhaustion;
-  - Structured CC Switch `cc_switch_upstream_error` wrappers (when `upstream_status` is 400 and cause is `Upstream request failed`);
-  - Interrupted streams;
-  - "Empty responses" (HTTP 200 returned but no final model output generated);
-  - Temporarily unavailable authentication services (within the configured global limits).
-- **Non-Retryable Faults (Fail-Closed)**:
-  - User cancellation or abort;
-  - Client-side invalid requests and ordinary HTTP 400/404 errors;
-  - Missing model declarations;
-  - Context length / token limit exceeded errors;
-  - Policy, permission, and approval rejections.
-- **Process Exit Safeguard**: If Codex App exits, the watchdog stops the affected retry immediately without consuming another provider attempt, preventing countdowns against a closed application.
+```text
++--------------------------------------------------------------+
+| Windows 11 Desktop (Codex App)                               |
+|                                                              |
+|   Codex 任務遭遇 Rate Limit、連線中斷或 5xx 伺服器異常       |
+|            |                                                 |
+|            v (\\.\pipe\codex-ipc 原生命名管道)               |
+|   +----------------------------------------------------+     |
+|   | codex-auto-retry Watchdog (常駐系統匣背景行程)     |     |
+|   | - 零內容紀錄：只看生命週期狀態與旗標               |     |
+|   | - 支援退避策略與 Turn ID 精確對齊                  |     |
+|   | - 內建 MCP 管理面板（在 Codex 內打字即可開啟）     |     |
+|   +----------------------------------------------------+     |
+|            |                                                 |
+|            v (額度恢復或服務可用)                            |
+|   自動接續原聊天續跑（不開新工作階段、不重放已完成動作）     |
++--------------------------------------------------------------+
+```
 
 ---
 
-## User Interfaces
+## 核心接續機制
 
-### Windows Tray Controller
+### 可重試與不可重試邊界
 
-The watchdog runs as a single lightweight background process with a notification-area icon in Windows.
-
-<!-- Screenshot placeholder: Tray controller -->
-<!-- ![Windows Tray Controller](assets/tray.png) -->
-
-- **Hover Tooltip**: Displays the current status (running, paused, waiting, active, stopped) and live countdown for the nearest pending retry.
-- **Explorer Restart Recovery**: If Windows Explorer restarts, the watchdog automatically re-registers the tray icon and restores current state.
-- **Double-Click**: Opens the graphical settings window.
-- **Right-Click Context Menu**: Allows quick pausing/resuming of dispatch, opening settings, or exiting the watchdog.
-
-The settings window allows configuring:
-- Recovery limits (`Recoveries This Outage` and `Consecutive No Progress`);
-- Delay curves (fixed, linear increment, or doubling backoff, with custom initial and max caps);
-- Fallback retry text (up to 500 characters);
-- Watchdog notification preferences;
-- One-click Chinese/English localization toggle.
-
-<p align="center">
-  <img src="assets/settings_en.png" alt="Codex Auto Retry Settings Window (English)" width="520" />
-</p>
-
-### Embedded Management Panel (MCP)
-
-Users can open the management panel directly inside Codex by asking:
-> `打开 Codex Auto Retry 管理面板` *(Open Codex Auto Retry Management Panel)*
-
-<p align="center">
-  <img src="assets/panel.png" alt="Codex Embedded Management Panel (MCP)" width="620" />
-</p>
-
-Built with vanilla TypeScript and embedded into the Go MCP binary via Go `embed`, the panel requires no Node.js runtime and performs zero external network requests. It displays:
-- Watchdog health, monitored session directories, and timestamp of last scan;
-- Active and pending retry queues with real-time countdown timers;
-- Immediate retry (`Retry Now`) and cancellation controls;
-- Exhausted task list with a one-click attempt budget reset button;
-- Global pause/resume toggle.
+* **可自動重試的故障**：
+  * 網路連線中斷、連線重設與逾時
+  * HTTP 5xx 伺服器錯誤
+  * Rate Limit 與暫時性容量耗盡（如 5 小時額度重設）
+  * 串流傳輸中斷
+  * 空回覆（Empty Response：HTTP 200 但無輸出）
+  * 暫時性驗證服務不可用（在設定上限內）
+* **不可重試（Fail-Closed 即刻停止）**：
+  * 使用者主動取消或中止
+  * 客戶端無效請求與 HTTP 400 / 404
+  * 缺少模型宣告
+  * 上下文長度／Token 限制超出
+  * 安全政策、權限與審批拒絕
 
 ---
 
-## Safety and Privacy
+## 使用者介面
 
-- **Zero Content Logging**: The scanner processes only lifecycle records and boolean progress flags. Conversation messages, user prompts, assistant outputs, tool inputs/outputs, credentials, and response bodies are **never decoded, logged, or stored**.
-- **Settings Reader Allowlist**: Immediately before recovery, a strict allowlist decodes only essential context (`working_directory`, `workspace_roots`, `model`, `provider`, `service_tier`, `reasoning_effort`, `personality`, `approval_policy`, and `permission_mode`). All other fields are discarded.
-- **Atomic Persistence**: Runtime state is written atomically. Windows file sharing violations (from virus scanners or indexers) are retried gracefully without crashing.
-- **Resource Caps**: The state file enforces hard limits of 20,000 processed events, 2,000 file cursors, and 500 inactive task records, with a maximum file size cap of 8 MB. Operational logs rotate at 5 MB (keeping up to 3 backups). Individual automatic recovery chains feature a 30-minute hard circuit breaker.
+### Windows 系統匣托盤控制器
 
----
+守護行程以單一輕量背景行程執行，於 Windows 通知區域顯示圖示：
 
-## Installation and Maintenance
+* **懸停提示（Tooltip）**：即時顯示運作狀態（running、paused、waiting、active、stopped）與下次重試倒數。
+* **Explorer 重啟自癒**：Windows 檔案總管重啟時自動重新註冊托盤圖示並恢復狀態。
+* **雙擊**：開啟圖形化設定視窗。
+* **右鍵選單**：快速暫停／繼續派發、開啟設定或結束守護行程。
+* **設定視窗**：支援設定復原上限、延遲曲線、備援提示文字、通知偏好與繁簡英介面切換。
 
-### End-User Installation
+### Codex 內嵌管理面板（MCP）
 
-1. Download and extract the self-contained Windows x64 release ZIP.
-2. Fully close Codex App, then double-click `安装.cmd`.
-3. The installer verifies file hashes via SHA-256, registers current-user startup, deploys the local watchdog under `%LOCALAPPDATA%\CodexAutoRetry`, and registers the Codex plugin.
-4. Neither administrator rights nor Go/Node.js dependencies are required.
+可在 Codex 對話中直接呼叫：
 
-The one-click installer shows a Chinese Retry/Cancel prompt while Codex is running. Save your work, exit Codex including its tray entry, then select **Retry**. Cancellation or a five-minute timeout leaves the installed plugin/runtime unchanged. The installer never force-closes Codex; direct `deploy.ps1` calls retain immediate rejection unless `-WaitForCodexExit` is supplied.
+> `打開 Codex Auto Retry 管理面板` 或 `Open Codex Auto Retry Management Panel`
 
-Plugin-list support is checked before replacement; final verification requires the exact installed version. CLI warnings do not turn successful commands into failures. If verification fails, rollback restores plugin and runtime files together and leaves retries stopped. Incomplete rollback retains its backup and journal. Error diagnostics expose only exit codes and safe categories, not credentials or raw output.
+採用純 TypeScript 撰寫並透過 Go `embed` 內嵌於 MCP 二進位檔中，零外部網路請求且不需 Node.js 執行期環境。提供：
 
-### Administrative & Break-Glass Tools
-
-- `启动管理器.cmd`: Launches a windowed startup manager (without leaving a command console) showing exact startup commands, supervisor status, heartbeat, and Windows `StartupApproved` status.
-- `安全停用.cmd`: One-click emergency script that immediately disables shared mode, clears plugin-owned registry values, and restores Codex to official direct execution.
-- `卸载.cmd`: Cleanly uninstalls the watchdog and plugin while preserving user settings and logs by default. Run `.\uninstall-release.ps1 -RemoveData` to perform a full cleanup.
-
-<p align="center">
-  <img src="assets/startup_manager.png" alt="Codex Auto Retry Startup Manager" width="560" />
-</p>
+* 守護行程健康度、監控會話目錄與最後掃描時間。
+* 作用中與等待中佇列，附即時倒數計時器。
+* 即時手動重試（`Retry Now`）與取消控制項。
+* 全域暫停／繼續切換。
 
 ---
 
-## Fail-Open Shared Backend Safety
+## 快速上手（終端使用者）
 
-The watchdog is built with a **Fail-Open** guarantee:
+1. 下載並解壓縮 Windows x64 發佈檔（可自 [GitHub Releases](https://github.com/sybxxx/codex-auto-retry/releases/latest) 取得）。
+2. 完全關閉 Codex App，雙擊執行 `安装.cmd`（或執行 `release\windows\deploy.ps1`）。
+3. 安裝程式自動校驗 SHA-256、設定目前使用者開機啟動，並將守護行程部署於 `%LOCALAPPDATA%\CodexAutoRetry`，同時完成 Codex 外掛註冊。
+4. **不需系統管理員權限**，亦不需安裝 Go 或 Node.js。
 
-- **Opt-In Shared Mode**: A fresh install defaults `shared_app_server_enabled` to `false` and does not set global system environment variables.
-- **Modern Official IPC**: On supported Windows Desktop versions, verified official `\\.\pipe\codex-ipc` recovery works independently of the shared-backend switch. It does not start a shared server or change global routing. Use the automatic-retry pause control, not the shared-mode switch, to pause retries.
-- **Transport Recovery**: Eligible recent pre-dispatch stops can rejoin the same chain after a verified route returns, preserving counters and the thirty-minute deadline. New user turns, cancellation, active work, expired chains and ambiguous dispatches prevent automatic reopening.
-- **Legacy Fallback Route**: For older Codex Desktop versions requiring a local loopback server, the launcher verifies ownership, checks loopback health, and dynamically assigns a free port near `49621` if conflicts occur.
-- **Safe Recovery**: If the watchdog crashes or encounters an invalid state, it fails open, allowing Codex to start normally with its official backend without hanging.
+### 管理與維護腳本
 
----
+位於 `release\windows\`：
 
-## Limitations
-
-- **Authentication**: Permanently revoked or expired logins cannot be bypassed; user re-authentication is required.
-- **Runtime Requirement**: Codex App must be open for retries to dispatch.
-- **OS Support**: Tray controller and IPC routes require Windows 10 or Windows 11 (x64).
-- **Completion Notifications**: The `ChatGPT finished a turn` notification is emitted by Codex App before an empty-response failure can be classified. To suppress it, use Codex's native **Settings > General > Notifications > Turn completion notifications > Never** setting.
+* `启动管理器.cmd`：開啟啟動管理器視窗，顯示啟動指令、監護狀態、心跳與 Windows `StartupApproved` 狀態。
+* `安全停用.cmd`：一鍵緊急停止腳本，停用共享模式、清理外掛登錄值並恢復 Codex 官方直接執行模式。
+* `卸载.cmd`：乾淨解除安裝守護行程與外掛，預設保留使用者設定與日誌。執行 `.\uninstall-release.ps1 -RemoveData` 可執行完全清除。
 
 ---
 
-## Maintainer
+## 隱私與安全保證
 
-Maintained by [`sybxxx`](https://github.com/sybxxx) (TQY Local Tools).
+* **零對話內容紀錄（Zero Content Logging）**：掃描器僅處理生命週期事件與布林進度旗標。使用者提問、助手回覆、工具呼叫、參數、憑證與回應內文絕不解碼、記錄或儲存。
+* **嚴格讀取白名單**：僅在復原派發前解碼必要設定（工作目錄、模型、provider、reasoning_effort、審批策略等），其餘欄位全數捨棄。
+* **不可逆覆寫保護**：狀態檔案採用原子寫入（Atomic Write），平滑重試檔案衝突。
+* **資源硬性上限**：日誌定期滾動（5 MB，最多保留 3 份），單次自動復原鏈設有 30 分鐘硬性中斷保護。
 
-Licensed under the [MIT License](LICENSE).
+---
+
+## 故障安全設計（Fail-Open）
+
+* **官方 IPC 優先**：支援 Windows Desktop 官方命名管道 `\\.\pipe\codex-ipc`，不啟動本機伺服器、不修改全域網路路由。
+* **安全降級**：若守護行程當機或遭遇異常狀態，保證 Fail-Open，Codex 仍能以官方後端正常啟動，絕不卡死應用程式。
+
+---
+
+## 本機開發與驗收
+
+本 fork 採 **Windows 11 原生** 開發環境：
+
+```powershell
+# 執行 Windows 原生一鍵門禁檢查
+pwsh -NoProfile -File tools\dev_check.ps1
+
+# 執行產品冒煙測試
+pwsh -NoProfile -File scripts\smoke-test.ps1
+```
+
+---
+
+## 維護者與授權條款
+
+* 原作者：`sybxxx` (TQY Local Tools)，遵循 [MIT License](LICENSE)。
+* 本維護 Fork：由 `SanHsien` 維護，詳細差異與取捨見 [`FORK.md`](FORK.md)。
