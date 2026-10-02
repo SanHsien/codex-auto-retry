@@ -11,8 +11,8 @@ scripts/bin/*
 
 # Local and editor artifacts
 *.tmp
-.DS_Store
 Thumbs.db
+scripts/source/*.exe
 
 # Fork maintenance & Python environment
 .env

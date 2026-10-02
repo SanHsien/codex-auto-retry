@@ -74,7 +74,7 @@ Source code lives under `scripts/source`.
 | `shared_server_windows.go` | Starts and records the opt-in shared app-server in one hidden inherited console, applies the normalized bundled `codex_app` MCP override, validates loopback health and versioned process ownership, migrates stale launch/config state after Codex closes, and discovers the Codex CLI. |
 | `codex_app_mcp_windows.go` | Reads the bundled Desktop `codex_app` definition without modifying it, normalizes it into a TOML app-server override, and computes the migration hash. |
 | `shared_mode_windows.go` | Owns the transactional opt-in endpoint backup/restore, deferred cleanup while Desktop is live, registry broadcast, health gate, and plugin-owned server shutdown without touching API keys. |
-| `startup_approval_windows.go`, `startup_approval_nonwindows.go` | Read the independent Windows sign-in approval state for the management snapshot without mutating startup configuration. |
+| `startup_approval_windows.go` | Read the independent Windows sign-in approval state for the management snapshot without mutating startup configuration. |
 | `desktop_transport_windows.go` | Read-only detection of stopped, official stdio, verified official IPC, or shared-server Codex transport. |
 | `shared_controller.go` | Settings-preserving unloaded task and parent resume, live task/goal rechecks, deterministic parent notification, exact-child continuation, goal recovery/blocking, and silent normal continuation. |
 | `roots.go` | Default Codex, optional Cockpit, and explicitly configured session-root discovery. |
@@ -82,7 +82,7 @@ Source code lives under `scripts/source`.
 | `config.go` | Versioned defaults, validation, legacy visible-UI migration, and user overrides. |
 | `jsonio.go` | Atomic JSON persistence. |
 | `logger.go` | Size-limited, privacy-safe operational logging. |
-| `lock_windows.go`, `lock_nonwindows.go`, `config_lock*.go` | Per-user single-instance lock and cross-process config sidecar lock. |
+| `lock_windows.go`, `config_lock*.go` | Per-user single-instance lock and cross-process config sidecar lock. |
 | `ui/settings.ps1` | Embedded Windows Forms status and settings window with one-click Chinese/English localization toggle launched from the tray icon. |
 | `*_test.go` | Classification, parsing, privacy, migration, restart, mirroring, correlation, concurrency, controller bounds, shared-server ownership, and two-client recovery regression tests. |
 

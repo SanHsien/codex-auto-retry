@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue.svg)](#)
 
-English | [简体中文](README.zh-CN.md) | [繁體中文](README.md)
+English | [繁體中文](README.md)
 
 > This repository is a Windows-first maintenance fork of [`sybxxx/codex-auto-retry`](https://github.com/sybxxx/codex-auto-retry) under the MIT License.
 > Maintenance differences are recorded in [`FORK.md`](FORK.md) and [`docs/DECISIONS.md`](docs/DECISIONS.md). Upstream audit ledger is in [`docs/UPSTREAM.md`](docs/UPSTREAM.md).
@@ -190,6 +190,8 @@ Built with vanilla TypeScript and embedded into the Go MCP binary via Go `embed`
 2. Fully close Codex App, then double-click `安装.cmd`.
 3. The installer verifies file hashes via SHA-256, registers current-user startup, deploys the local watchdog under `%LOCALAPPDATA%\CodexAutoRetry`, and registers the Codex plugin.
 4. Neither administrator rights nor Go/Node.js dependencies are required.
+
+> `release\windows\` in the source tree is only the installer template; it has no `release-manifest.json` or `payload\`, so running it directly fails with `release-manifest.json is missing`. To install from source, run `pwsh -NoProfile -File scripts\build-release.ps1` (requires Go and Node.js), extract the generated `Codex-Auto-Retry-<version>-windows-x64.zip`, and run `安装.cmd` from that folder.
 
 The one-click installer shows a Chinese Retry/Cancel prompt while Codex is running. Save your work, exit Codex including its tray entry, then select **Retry**. Cancellation or a five-minute timeout leaves the installed plugin/runtime unchanged. The installer never force-closes Codex; direct `deploy.ps1` calls retain immediate rejection unless `-WaitForCodexExit` is supplied.
 

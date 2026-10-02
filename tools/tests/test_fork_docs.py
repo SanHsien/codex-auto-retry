@@ -26,7 +26,6 @@ def test_required_overlay_files_exist() -> None:
     required = (
         "README.md",
         "README.en.md",
-        "README.zh-CN.md",
         "FORK.md",
         "NOTICE.md",
         "AGENTS.md",
@@ -59,6 +58,32 @@ def test_readme_pair_cross_links_and_names_the_fork() -> None:
     assert "sybxxx/codex-auto-retry" in en
     assert "FORK.md" in zh
     assert "MIT" in zh
+
+
+def test_release_payload_entries_exist() -> None:
+    script = (ROOT / "scripts" / "build-release.ps1").read_text(encoding="utf-8")
+    match = re.search(r"foreach \(\$entry in @\(([^)]*)\)\)", script)
+    assert match is not None
+    entries = re.findall(r"'([^']+)'", match.group(1))
+    assert "README.md" in entries
+    assert "README.en.md" in entries
+    missing = [name for name in entries if not (ROOT / name).exists()]
+    assert missing == []
+
+
+def test_fork_is_windows_only() -> None:
+    source = ROOT / "scripts" / "source"
+    assert sorted(path.name for path in source.glob("*_nonwindows.go")) == []
+    documents = [*ROOT.glob("*.md"), *(ROOT / "docs").rglob("*.md")]
+    stale = [
+        str(path.relative_to(ROOT))
+        for path in documents
+        if "_nonwindows.go" in path.read_text(encoding="utf-8")
+        and path.name not in {"CHANGELOG.md", "CHANGELOG.en.md", "DECISIONS.md", "REVIEW.md"}
+        and path.name not in check_links.SKIP_NAMES
+    ]
+    assert stale == []
+    assert not (ROOT / "README.zh-CN.md").exists()
 
 
 def test_gitignore_covers_user_data_and_reports() -> None:

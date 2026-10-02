@@ -10,11 +10,19 @@
 
 ## [Unreleased]
 
+### Fixed
+- `scripts/build-release.ps1` 打包清單仍指向已改名的 `README_zh.md`，導致無法產生發佈檔；改為 `README.md` 與 `README.en.md`，並加入契約測試。
+- 移除 `*_nonwindows.go` 後重建 `scripts/bin/` 兩個執行檔與 `scripts/build-info.json`，來源雜湊重新對齊。
+- 在原始碼的 `release\windows\` 直接執行 `安装.cmd` 時，`deploy.ps1` 改為明確說明缺少 `release-manifest.json` 以及正確安裝方式；README 補上從原始碼安裝的步驟。
+- `docs/project-map.md` 移除已刪除的非 Windows 檔案說明；`.gitignore` 移除 `.DS_Store` 並忽略 `scripts/source/*.exe`。
+
 ## [0.7.12-fork.1] - 2026-10-02
 
 ### Added
 - 初始化 SanHsien 專用之 Windows-first 維護型 fork。
-- 建立繁體中文入口主檔 [`README.md`](README.md)，原簡中說明保留為 [`README.zh-CN.md`](README.zh-CN.md)，英文鏡像設為 [`README.en.md`](README.en.md)。
+- 建立繁體中文入口主檔 [`README.md`](README.md)，英文鏡像設為 [`README.en.md`](README.en.md)。
+- 移除非 Windows 平台之 Go stub 程式碼（`*_nonwindows.go`）與相關檔案，專注純 Windows 11 原生架構。
+- 移除簡體中文 README 檔案。
 - 建立 AI 維護指引單一真相源 [`AGENTS.md`](AGENTS.md)。
 - 建立 Fork 關係說明 [`FORK.md`](FORK.md) 與授權宣告 [`NOTICE.md`](NOTICE.md)。
 - 加入 `.cursor/rules/no-upstream-pr.mdc` 機器層防護，防止誤向上游開 PR。

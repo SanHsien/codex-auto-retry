@@ -94,6 +94,10 @@ function Read-ReleaseManifest {
     param([string]$Root)
 
     $path = Join-Path $Root 'release-manifest.json'
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        # release\windows in the source tree is only the installer template.
+        throw 'release-manifest.json is missing. This folder is the installer template from the source tree, not a packaged release. Download the Windows x64 release ZIP, or run scripts\build-release.ps1 and install from the archive it creates.'
+    }
     $manifest = Read-JsonDocument -Path $path
     if ($null -eq $manifest -or $manifest.product -ne 'Codex Auto Retry' -or
         $manifest.target -ne 'windows-x64') {

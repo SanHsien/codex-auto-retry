@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue.svg)](#)
 
-[English](README.en.md) | [简体中文](README.zh-CN.md) | 繁體中文
+[English](README.en.md) | 繁體中文
 
 > 本專案為 [`sybxxx/codex-auto-retry`](https://github.com/sybxxx/codex-auto-retry) 的繁體中文維護 fork，遵循 MIT 授權條款。
 > 維護差異記錄於 [`FORK.md`](FORK.md) 與 [`docs/DECISIONS.md`](docs/DECISIONS.md)；上游審查清冊位於 [`docs/UPSTREAM.md`](docs/UPSTREAM.md)。
@@ -113,13 +113,15 @@
 ## 快速上手（終端使用者）
 
 1. 下載並解壓縮 Windows x64 發佈檔（可自 [GitHub Releases](https://github.com/sybxxx/codex-auto-retry/releases/latest) 取得）。
-2. 完全關閉 Codex App，雙擊執行 `安装.cmd`（或執行 `release\windows\deploy.ps1`）。
+2. 完全關閉 Codex App，在**解壓縮後的發佈檔資料夾**內雙擊執行 `安装.cmd`。
 3. 安裝程式自動校驗 SHA-256、設定目前使用者開機啟動，並將守護行程部署於 `%LOCALAPPDATA%\CodexAutoRetry`，同時完成 Codex 外掛註冊。
 4. **不需系統管理員權限**，亦不需安裝 Go 或 Node.js。
 
+> 原始碼內的 `release\windows\` 只是安裝範本，沒有 `release-manifest.json` 與 `payload\`，直接執行會出現 `release-manifest.json is missing`。要從原始碼安裝，先執行 `pwsh -NoProfile -File scripts\build-release.ps1`（需要 Go 與 Node.js），再解壓縮產生的 `Codex-Auto-Retry-<版本>-windows-x64.zip` 並執行其中的 `安装.cmd`。
+
 ### 管理與維護腳本
 
-位於 `release\windows\`：
+位於發佈檔根目錄（原始碼範本在 `release\windows\`）：
 
 * `启动管理器.cmd`：開啟啟動管理器視窗，顯示啟動指令、監護狀態、心跳與 Windows `StartupApproved` 狀態。
 * `安全停用.cmd`：一鍵緊急停止腳本，停用共享模式、清理外掛登錄值並恢復 Codex 官方直接執行模式。

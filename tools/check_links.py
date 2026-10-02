@@ -25,7 +25,6 @@ SKIP_NAMES = {
 MAINTAINED_DOCUMENTS = (
     "README.md",
     "README.en.md",
-    "README.zh-CN.md",
     "FORK.md",
     "NOTICE.md",
     "AGENTS.md",

@@ -1,6 +1,6 @@
 # Repository review（Windows-only）
 
-- Review date: 2026-10-02
+- Review date: 2026-10-03
 - Review baseline: `867da682d1863c4d4eb142aab3078aca4df8e0f3`
 - Remediation: 同日 fork-local overlay（不回貢）
 - Upstream reviewed through: `867da682d1863c4d4eb142aab3078aca4df8e0f3`
@@ -39,7 +39,16 @@ gh repo set-default --view
 | R-02 | P2 | 建立獨立維護測試目錄 `tools/tests/` 與獨立 `tools/pytest.ini`，隔離維護測試 |
 | R-03 | P2 | 建立 `FORK.md`、`NOTICE.md`、`AGENTS.md`，寫明對外邊界與安全性 |
 | R-04 | P2 | 建立 `.cursor/rules/no-upstream-pr.mdc`，防止誤向上游開 PR |
-| R-05 | P3 | 建立雙語說明與鏡像，主檔 `README.md`（繁中）、`README.en.md`（英文）與 `README.zh-CN.md`（簡中）互聯 |
+| R-05 | P3 | 建立雙語說明與鏡像，主檔 `README.md`（繁中）與 `README.en.md`（英文）互聯，移除簡體中文與非 Windows 程式碼 |
+| R-06 | P1 | `scripts/build-release.ps1` 打包清單仍列 `README_zh.md`（fork 改名後已不存在），發佈檔打不出來、CI 最後一步必紅；改列 `README.md`、`README.en.md`，加 `test_release_payload_entries_exist`（2026-10-03） |
+| R-07 | P1 | 刪除 `*_nonwindows.go` 後未重建，`scripts/build-info.json` 來源雜湊與內附執行檔不符，`Assert-CodexBuildProvenance` 會擋打包；已用 `scripts/build.ps1` 重建（2026-10-03） |
+| R-08 | P2 | 在原始碼 `release\windows\` 直接跑 `安装.cmd` 只回報「not a valid release」，看不出原因；`deploy.ps1` 改為指出缺 `release-manifest.json` 與正確做法，README 補從原始碼安裝步驟（2026-10-03） |
+| R-09 | P3 | `docs/project-map.md` 仍列已刪的非 Windows 檔案、`.gitignore` 留有 `.DS_Store`；已清除並加 `test_fork_is_windows_only`（2026-10-03） |
+
+## 未解風險
+
+- Fork 建立後 GitHub Actions 尚無任何執行紀錄；`go test -race` 需要 gcc，本機未安裝，只能由 CI 驗證。
+- `release\windows\` 的入口檔名、安裝說明文字檔與管理面板介面仍是上游的簡體中文；改名會動到打包與驗證腳本的檔名常數，屬產品層差異，尚未處理。
 
 ## 接受、不改契約
 

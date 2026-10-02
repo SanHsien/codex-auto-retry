@@ -10,11 +10,19 @@ English | [繁體中文](CHANGELOG.md)
 
 ## [Unreleased]
 
+### Fixed
+- `scripts/build-release.ps1` still listed the renamed `README_zh.md` in the payload, so no release archive could be built; it now ships `README.md` and `README.en.md`, guarded by a contract test.
+- Rebuild both `scripts/bin/` executables and `scripts/build-info.json` after removing `*_nonwindows.go`, so the source hash matches again.
+- Running `安装.cmd` from the source-tree `release\windows\` template now reports the missing `release-manifest.json` and how to install correctly; the READMEs document installing from source.
+- Drop deleted non-Windows files from `docs/project-map.md`; remove `.DS_Store` from `.gitignore` and ignore `scripts/source/*.exe`.
+
 ## [0.7.12-fork.1] - 2026-10-02
 
 ### Added
 - Initialize SanHsien's Windows-first maintenance fork.
-- Establish Traditional Chinese entry [`README.md`](README.md), keep original Simplified Chinese document as [`README.zh-CN.md`](README.zh-CN.md), and provide English mirror [`README.en.md`](README.en.md).
+- Establish Traditional Chinese entry [`README.md`](README.md), and provide English mirror [`README.en.md`](README.en.md).
+- Remove non-Windows Go stubs (`*_nonwindows.go`) and files, focusing on Windows 11 native runtime.
+- Remove Simplified Chinese README file.
 - Create AI maintenance guide as single source of truth [`AGENTS.md`](AGENTS.md).
 - Create fork documentation [`FORK.md`](FORK.md) and attribution notice [`NOTICE.md`](NOTICE.md).
 - Add `.cursor/rules/no-upstream-pr.mdc` guard rule to prevent accidental pull requests to upstream.
