@@ -46,7 +46,7 @@ gh repo set-default --view
 | R-09 | P3 | `docs/project-map.md` 仍列已刪的非 Windows 檔案、`.gitignore` 留有 `.DS_Store`；已清除並加 `test_fork_is_windows_only`（`51285a1`，2026-10-03） |
 | R-10 | P2 | 產品介面、安裝提示與 `release/windows/` 入口檔名仍是上游簡體中文；以 `tools/convert_zh_hant.py` 轉為繁體並同步改打包／驗證腳本的檔名常數，加 `test_product_strings_are_traditional_chinese`（`17c944d`，2026-10-03） |
 | R-11 | P3 | 只能下載壓縮檔再找入口檔安裝；新增單檔安裝程式 `scripts/installer/`，`release-test.ps1` 驗證其內容與壓縮檔一致（`17c944d`，2026-10-03） |
-| R-12 | P1 | 全新安裝的前置檢查列出全部市集，Codex 設定裡任何一個失效的無關市集都會讓安裝以 `configuration_error` 中止（維護者實機遇到）；`deploy.ps1`、`uninstall-release.ps1` 改為退回只列本外掛的市集，`installer-cli-smoke-test.ps1` 加兩個情境（2026-10-03） |
+| R-12 | P1 | 全新安裝的前置檢查列出全部市集，Codex 設定裡任何一個失效的無關市集都會讓安裝以 `configuration_error` 中止（維護者實機遇到）；`deploy.ps1`、`uninstall-release.ps1` 改為退回只列本外掛的市集，`installer-cli-smoke-test.ps1` 加兩個情境（`b0d225f`，2026-10-03） |
 
 ## 未解風險
 
