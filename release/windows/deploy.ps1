@@ -398,7 +398,12 @@ function Get-VerifiedPluginList {
             Start-Sleep -Milliseconds 500
             continue
         }
-        throw "Codex plugin verification failed (exit=$($listing.ExitCode), category=$category). No credentials or raw command output were logged."
+        if ($AllMarketplaces) {
+            # Listing every marketplace fails when any unrelated one has a
+            # missing or invalid source. Only our own marketplace matters.
+            return Get-VerifiedPluginList -Cli $Cli -PluginId $PluginId
+        }
+        throw "Codex plugin verification failed (exit=$($listing.ExitCode), category=$category). No credentials or raw command output were logged. Run 'codex plugin list' in a terminal to see the cause."
     }
 }
 

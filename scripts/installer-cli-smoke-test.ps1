@@ -34,7 +34,11 @@ $script:scenario = 'warning'
 function Invoke-CodexCli {
     param($Path, $Arguments, $TimeoutMilliseconds)
     $script:calls++
+    if ($script:scenario -in @('broken_other_marketplace', 'broken_everywhere') -and $Arguments -join ' ' -eq 'plugin list --json') {
+        return [pscustomobject]@{ExitCode=1;Output='';ErrorOutput='failed to load configured marketplace snapshot(s): SECRET_TEST_TOKEN';Failure=''}
+    }
     if ($Arguments -join ' ' -ne 'plugin list --marketplace personal --json') { throw 'Listing was not scoped to personal marketplace.' }
+    if ($script:scenario -eq 'broken_everywhere') { return [pscustomobject]@{ExitCode=1;Output='';ErrorOutput='config SECRET_TEST_TOKEN';Failure=''} }
     if ($script:scenario -eq 'transient' -and $script:calls -eq 1) { return [pscustomobject]@{ExitCode=2;Output='';ErrorOutput='network unavailable SECRET_TEST_TOKEN';Failure=''} }
     if ($script:scenario -eq 'failure') { return [pscustomobject]@{ExitCode=23;Output='';ErrorOutput='SECRET_TEST_TOKEN';Failure=''} }
     if ($script:scenario -eq 'invalid') { return [pscustomobject]@{ExitCode=0;Output='invalid SECRET_TEST_TOKEN';ErrorOutput='';Failure=''} }
@@ -50,8 +54,18 @@ foreach ($scenario in @('failure', 'invalid')) {
     try { $null = Get-VerifiedPluginList -Cli 'fake.exe' -PluginId 'codex-auto-retry@personal' } catch { $message = $_.Exception.Message }
     if (-not $message -or $message -match 'SECRET_TEST_TOKEN' -or $script:calls -ne 1) { throw 'Failure diagnostic leaked output or retried a permanent failure.' }
 }
+# A fresh install lists every marketplace. One unrelated marketplace with a
+# missing source must not block it when the personal marketplace still lists.
+$script:scenario = 'broken_other_marketplace'; $script:calls = 0
+$document = Get-VerifiedPluginList -Cli 'fake.exe' -PluginId 'codex-auto-retry@personal' -AllMarketplaces
+if ($script:calls -ne 2 -or @($document.installed).Count -ne 0) { throw 'Unrelated broken marketplace blocked a fresh install.' }
+$script:scenario = 'broken_everywhere'; $script:calls = 0; $message = ''
+try { $null = Get-VerifiedPluginList -Cli 'fake.exe' -PluginId 'codex-auto-retry@personal' -AllMarketplaces } catch { $message = $_.Exception.Message }
+if ($message -notmatch 'configuration_error' -or $message -notmatch 'codex plugin list' -or $message -match 'SECRET_TEST_TOKEN' -or $script:calls -ne 2) {
+    throw 'Scoped fallback failure was not reported safely.'
+}
 $script:scenario = 'failure'
-$preflight = $ast.EndBlock.Statements | Where-Object { $_ -is [System.Management.Automation.Language.TryStatementAst] -and $_.Extent.Text -match 'Checking plugin listing support' } | Select-Object -First 1
+$preflight =$ast.EndBlock.Statements | Where-Object { $_ -is [System.Management.Automation.Language.TryStatementAst] -and $_.Extent.Text -match 'Checking plugin listing support' } | Select-Object -First 1
 $transaction = $ast.EndBlock.Statements | Where-Object { $_.Extent.Text -like '$transactionRoot = Join-Path*' } | Select-Object -First 1
 if (-not $preflight -or $preflight.Extent.StartOffset -gt $transaction.Extent.StartOffset) { throw 'CLI preflight runs after mutation.' }
 $SkipRuntimeInstall = $true; $SkipPluginRegistration = $false

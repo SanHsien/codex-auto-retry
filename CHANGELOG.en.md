@@ -10,6 +10,11 @@ English | [繁體中文](CHANGELOG.md)
 
 ## [Unreleased]
 
+## [0.7.12-fork.3] - 2026-10-03
+
+### Fixed
+- On a fresh install, any configured Codex marketplace with a missing or invalid source (for example a deleted folder) made `codex plugin list --json` fail, so the installer stopped with `configuration_error`. It now falls back to listing only this plugin's own marketplace; the uninstaller does the same. The error message now points to `codex plugin list` for the cause.
+
 ## [0.7.12-fork.2] - 2026-10-03
 
 ### Added

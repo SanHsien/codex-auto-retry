@@ -10,6 +10,11 @@
 
 ## [Unreleased]
 
+## [0.7.12-fork.3] - 2026-10-03
+
+### Fixed
+- 全新安裝時，只要 Codex 設定裡有任何一個來源已失效的外掛市集（例如資料夾已刪除），`codex plugin list --json` 就會失敗，安裝程式因此以 `configuration_error` 中止。現在改為退回只列出本外掛所屬的市集；解除安裝腳本同樣處理。錯誤訊息補上用 `codex plugin list` 查原因的提示。
+
 ## [0.7.12-fork.2] - 2026-10-03
 
 ### Added

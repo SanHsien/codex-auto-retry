@@ -21,7 +21,12 @@ function Test-PluginInstalled {
     param([string]$Cli, [string]$PluginId)
 
     $result = Invoke-CodexCli -Path $Cli -Arguments @('plugin', 'list', '--json')
-    if ($result.ExitCode -ne 0) { throw 'Codex could not read the installed plugin list.' }
+    if ($result.ExitCode -ne 0) {
+        # An unrelated marketplace with a missing source fails the full listing.
+        $marketplaceName = ($PluginId -split '@', 2)[1]
+        $result = Invoke-CodexCli -Path $Cli -Arguments @('plugin', 'list', '--marketplace', $marketplaceName, '--json')
+    }
+    if ($result.ExitCode -ne 0) { throw "Codex could not read the installed plugin list. Run 'codex plugin list' in a terminal to see the cause." }
     try { $document = $result.Output | ConvertFrom-Json } catch { throw 'Codex returned an invalid plugin list.' }
     return $null -ne (@($document.installed) | Where-Object { $_.pluginId -eq $PluginId } | Select-Object -First 1)
 }
