@@ -47,7 +47,7 @@ gh repo set-default --view
 
 ## 未解風險
 
-- Fork 建立後 GitHub Actions 尚無任何執行紀錄；`go test -race` 需要 gcc，本機未安裝，只能由 CI 驗證。
+- 推送到 `main` 未自動觸發 CI，需手動 `gh workflow run ci.yml`（2026-10-03 手動執行 `37031364316` 全綠）；`go test -race` 需要 gcc，本機未安裝，只能由 CI 驗證。
 - `release\windows\` 的入口檔名、安裝說明文字檔與管理面板介面仍是上游的簡體中文；改名會動到打包與驗證腳本的檔名常數，屬產品層差異，尚未處理。
 
 ## 接受、不改契約
