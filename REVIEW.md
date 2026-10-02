@@ -40,10 +40,10 @@ gh repo set-default --view
 | R-03 | P2 | 建立 `FORK.md`、`NOTICE.md`、`AGENTS.md`，寫明對外邊界與安全性 |
 | R-04 | P2 | 建立 `.cursor/rules/no-upstream-pr.mdc`，防止誤向上游開 PR |
 | R-05 | P3 | 建立雙語說明與鏡像，主檔 `README.md`（繁中）與 `README.en.md`（英文）互聯，移除簡體中文與非 Windows 程式碼 |
-| R-06 | P1 | `scripts/build-release.ps1` 打包清單仍列 `README_zh.md`（fork 改名後已不存在），發佈檔打不出來、CI 最後一步必紅；改列 `README.md`、`README.en.md`，加 `test_release_payload_entries_exist`（2026-10-03） |
-| R-07 | P1 | 刪除 `*_nonwindows.go` 後未重建，`scripts/build-info.json` 來源雜湊與內附執行檔不符，`Assert-CodexBuildProvenance` 會擋打包；已用 `scripts/build.ps1` 重建（2026-10-03） |
-| R-08 | P2 | 在原始碼 `release\windows\` 直接跑 `安装.cmd` 只回報「not a valid release」，看不出原因；`deploy.ps1` 改為指出缺 `release-manifest.json` 與正確做法，README 補從原始碼安裝步驟（2026-10-03） |
-| R-09 | P3 | `docs/project-map.md` 仍列已刪的非 Windows 檔案、`.gitignore` 留有 `.DS_Store`；已清除並加 `test_fork_is_windows_only`（2026-10-03） |
+| R-06 | P1 | `scripts/build-release.ps1` 打包清單仍列 `README_zh.md`（fork 改名後已不存在），發佈檔打不出來、CI 最後一步必紅；改列 `README.md`、`README.en.md`，加 `test_release_payload_entries_exist`（`51285a1`，2026-10-03） |
+| R-07 | P1 | 刪除 `*_nonwindows.go` 後未重建，`scripts/build-info.json` 來源雜湊與內附執行檔不符，`Assert-CodexBuildProvenance` 會擋打包；已用 `scripts/build.ps1` 重建（`51285a1`，2026-10-03） |
+| R-08 | P2 | 在原始碼 `release\windows\` 直接跑 `安装.cmd` 只回報「not a valid release」，看不出原因；`deploy.ps1` 改為指出缺 `release-manifest.json` 與正確做法，README 補從原始碼安裝步驟（`51285a1`，2026-10-03） |
+| R-09 | P3 | `docs/project-map.md` 仍列已刪的非 Windows 檔案、`.gitignore` 留有 `.DS_Store`；已清除並加 `test_fork_is_windows_only`（`51285a1`，2026-10-03） |
 
 ## 未解風險
 
