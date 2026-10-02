@@ -125,7 +125,7 @@ func TestVersionThreeRetryLimitBecomesRecoveryBudget(t *testing.T) {
   "unknown_max_attempts": 3,
   "include_default_home": true,
   "include_cockpit_homes": true,
-  "retry_prompt": "继续",
+  "retry_prompt": "繼續",
   "show_notifications": true
 }`
 	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
@@ -239,7 +239,7 @@ func TestVersionFiveMigrationPreservesInstalledRetryPolicy(t *testing.T) {
   "session_roots": null,
   "include_default_home": true,
   "include_cockpit_homes": true,
-  "retry_prompt": "继续",
+  "retry_prompt": "繼續",
   "show_notifications": true
 }`)
 	if err := os.WriteFile(path, data, 0o600); err != nil {
@@ -252,7 +252,7 @@ func TestVersionFiveMigrationPreservesInstalledRetryPolicy(t *testing.T) {
 	if loaded.ConfigVersion != currentConfigVersion || loaded.InitialDelaySeconds != 3 ||
 		loaded.MaxDelaySeconds != 1800 || loaded.DelayIncrementSeconds != 10 ||
 		loaded.DelayStrategy != delayStrategyFixed || loaded.MaxConsecutiveRetries != 100 ||
-		loaded.MaxRecoveryAttempts != 1000 || loaded.RetryPrompt != "继续" ||
+		loaded.MaxRecoveryAttempts != 1000 || loaded.RetryPrompt != "繼續" ||
 		loaded.SharedAppServerPort != defaultConfig().SharedAppServerPort || loaded.ControllerFailureLimit != 3 {
 		t.Fatalf("version five migration changed the installed retry policy: %+v", loaded)
 	}

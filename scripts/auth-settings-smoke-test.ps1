@@ -48,7 +48,7 @@ try {
         $labelSize = [System.Windows.Forms.TextRenderer]::MeasureText($authLabel.Text, $authLabel.Font)
         if ($labelSize.Width -gt $authLabel.Width) { throw 'Auth limit label is clipped.' }
         $row = $taskList.Items[0]
-        $expectedReason = if ($language -eq 'en') { 'Auth Limit' } else { -join ([char[]](0x767b,0x5f55,0x5f02,0x5e38,0x4e13,0x7528,0x4e0a,0x9650)) }
+        $expectedReason = if ($language -eq 'en') { 'Auth Limit' } else { -join ([char[]](0x767b,0x5165,0x7570,0x5e38,0x5c08,0x7528,0x4e0a,0x9650)) }
         if ($row.SubItems[3].Text -ne '19/6' -or $row.SubItems[4].Text -ne '19/6' -or
             $row.SubItems[1].Text -ne $expectedReason) {
             throw 'The form lost the historical counters or auth-specific reason.'

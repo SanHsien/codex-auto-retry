@@ -229,7 +229,7 @@ func (m *managementService) setSharedAppServerEnabled(enabled bool, now time.Tim
 	if config.SharedAppServerEnabled == enabled && config.SharedAppServerRequested == enabled {
 		snapshot, snapshotErr := m.snapshotLocked(now.UTC())
 		if snapshotErr == nil {
-			snapshot.Notice = "共享后台模式未改变"
+			snapshot.Notice = "共用後端模式未改變"
 		}
 		return snapshot, snapshotErr
 	}
@@ -287,9 +287,9 @@ func (m *managementService) setSharedAppServerEnabled(enabled bool, now time.Tim
 	snapshot, err := m.snapshotLocked(now.UTC())
 	if err == nil {
 		if enabled {
-			snapshot.Notice = "共享后台已启用；完全退出 Codex 后，通过安全启动 Codex 入口接入"
+			snapshot.Notice = "共用後端已啟用；完全結束 Codex 後，透過安全啟動 Codex 入口接入"
 		} else {
-			snapshot.Notice = "共享后台模式已关闭，Codex 将使用官方后台"
+			snapshot.Notice = "共用後端模式已關閉，Codex 將使用官方後端"
 		}
 	}
 	return snapshot, err
@@ -319,7 +319,7 @@ func (m *managementService) setRetrySettings(settings RetrySettings, now time.Ti
 	}
 	snapshot, err := m.snapshotLocked(now.UTC())
 	if err == nil {
-		snapshot.Notice = "自动重试设置已保存"
+		snapshot.Notice = "自動重試設定已儲存"
 	}
 	return snapshot, err
 }
@@ -380,7 +380,7 @@ func (m *managementService) setRetryPrompt(prompt string, now time.Time) (Manage
 	}
 	snapshot, err := m.snapshotLocked(now.UTC())
 	if err == nil {
-		snapshot.Notice = "普通对话的重试文字已保存"
+		snapshot.Notice = "普通對話的重試文字已儲存"
 	}
 	return snapshot, err
 }
@@ -394,9 +394,9 @@ func (m *managementService) setPaused(paused bool, now time.Time) (ManagementSna
 	snapshot, err := m.snapshotLocked(now.UTC())
 	if err == nil {
 		if paused {
-			snapshot.Notice = "自动重试已暂停"
+			snapshot.Notice = "自動重試已暫停"
 		} else {
-			snapshot.Notice = "自动重试已恢复"
+			snapshot.Notice = "自動重試已恢復"
 		}
 	}
 	return snapshot, err
@@ -425,7 +425,7 @@ func (m *managementService) queueThreadCommand(action ControlCommandAction, thre
 	thread, found := state.Threads[threadID]
 	if !found || (action == commandRestartRetry && thread.Stopped == nil) ||
 		(action != commandRestartRetry && thread.Pending == nil) {
-		return ManagementSnapshot{}, errors.New("该任务当前没有可执行的重试操作")
+		return ManagementSnapshot{}, errors.New("該任務目前沒有可執行的重試操作")
 	}
 	if _, err := queueControlCommand(m.commandDir, action, threadID, now); err != nil {
 		return ManagementSnapshot{}, err
@@ -433,11 +433,11 @@ func (m *managementService) queueThreadCommand(action ControlCommandAction, thre
 	snapshot, err := m.snapshotLocked(now.UTC())
 	if err == nil {
 		if action == commandRetryNow {
-			snapshot.Notice = "已请求立即重试"
+			snapshot.Notice = "已請求立即重試"
 		} else if action == commandRestartRetry {
-			snapshot.Notice = "已重新开始计数并请求重试"
+			snapshot.Notice = "已重新開始計數並請求重試"
 		} else {
-			snapshot.Notice = "已请求取消这次重试"
+			snapshot.Notice = "已請求取消這次重試"
 		}
 	}
 	return snapshot, err
@@ -468,7 +468,7 @@ func managedRetries(state RuntimeState, now time.Time) []ManagedRetry {
 			}
 			retries = append(retries, ManagedRetry{
 				ThreadID:              threadID,
-				Label:                 "任务 " + shortThreadID(threadID),
+				Label:                 "任務 " + shortThreadID(threadID),
 				State:                 "pending",
 				Class:                 thread.Pending.Class,
 				DueAt:                 thread.Pending.DueAt.Format(time.RFC3339Nano),
@@ -488,7 +488,7 @@ func managedRetries(state RuntimeState, now time.Time) []ManagedRetry {
 			}
 			retries = append(retries, ManagedRetry{
 				ThreadID:              threadID,
-				Label:                 "任务 " + shortThreadID(threadID),
+				Label:                 "任務 " + shortThreadID(threadID),
 				State:                 stateName,
 				Class:                 thread.Awaiting.Class,
 				RecoveryAttempt:       thread.Awaiting.Attempt,
@@ -501,7 +501,7 @@ func managedRetries(state RuntimeState, now time.Time) []ManagedRetry {
 		if thread.Stopped != nil && stoppedRetryIsVisible(thread.Stopped, now) {
 			retries = append(retries, ManagedRetry{
 				ThreadID:              threadID,
-				Label:                 "任务 " + shortThreadID(threadID),
+				Label:                 "任務 " + shortThreadID(threadID),
 				State:                 "stopped",
 				Class:                 thread.Stopped.Class,
 				RecoveryAttempt:       thread.Stopped.Attempts,

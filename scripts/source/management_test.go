@@ -257,7 +257,7 @@ func TestManagementUpdatesAllRetrySettings(t *testing.T) {
 	service := newManagementService(t.TempDir())
 	now := time.Now().UTC()
 	snapshot, err := service.setRetrySettings(RetrySettings{
-		RetryPrompt:           "继续检查",
+		RetryPrompt:           "繼續檢查",
 		MaxConsecutiveRetries: 3,
 		MaxRecoveryAttempts:   7,
 		InitialDelaySeconds:   9,
@@ -269,7 +269,7 @@ func TestManagementUpdatesAllRetrySettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.RetryPrompt != "继续检查" || snapshot.MaxRecoveryAttempts != 7 ||
+	if snapshot.RetryPrompt != "繼續檢查" || snapshot.MaxRecoveryAttempts != 7 ||
 		snapshot.MaxConsecutiveRetries != 3 || snapshot.DelayStrategy != delayStrategyFixed ||
 		snapshot.InitialDelaySeconds != 9 || snapshot.MaxDelaySeconds != 120 ||
 		snapshot.DelayIncrementSeconds != 4 ||
@@ -281,7 +281,7 @@ func TestManagementUpdatesAllRetrySettings(t *testing.T) {
 func TestManagementUpdatesCombinedLocalSettingsAndPause(t *testing.T) {
 	service := newManagementService(t.TempDir())
 	settings := RetrySettings{
-		RetryPrompt:           "继续",
+		RetryPrompt:           "繼續",
 		MaxConsecutiveRetries: 2,
 		MaxRecoveryAttempts:   4,
 		InitialDelaySeconds:   6,
@@ -314,11 +314,11 @@ func TestManagementUpdatesPromptAndQueuesControls(t *testing.T) {
 	if err := writeJSONAtomic(service.statePath, state); err != nil {
 		t.Fatal(err)
 	}
-	updated, err := service.setRetryPrompt("继续处理", now)
+	updated, err := service.setRetryPrompt("繼續處理", now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.RetryPrompt != "继续处理" {
+	if updated.RetryPrompt != "繼續處理" {
 		t.Fatalf("prompt was not updated: %+v", updated)
 	}
 	paused, err := service.setPaused(true, now)

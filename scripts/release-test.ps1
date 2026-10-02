@@ -8,13 +8,13 @@ Set-StrictMode -Version 2
 
 $archive = (Resolve-Path -LiteralPath $ArchivePath).Path
 $testRoot = Join-Path $env:TEMP ('codex-auto-retry-release-test-' + [guid]::NewGuid().ToString('N'))
-$installLauncher = ([string][char]0x5b89) + ([char]0x88c5) + '.cmd'
-$uninstallLauncher = ([string][char]0x5378) + ([char]0x8f7d) + '.cmd'
-$installReadme = 'README-' + ([char]0x5b89) + ([char]0x88c5) + ([char]0x8bf4) + ([char]0x660e) + '.txt'
-$startupManagerLauncher = ([string][char]0x542f) + ([char]0x52a8) + ([char]0x7ba1) + ([char]0x7406) + ([char]0x5668) + '.cmd'
+$installLauncher = ([string][char]0x5b89) + ([char]0x88dd) + '.cmd'
+$uninstallLauncher = ([string][char]0x89e3) + ([char]0x9664) + ([char]0x5b89) + ([char]0x88dd) + '.cmd'
+$installReadme = 'README-' + ([char]0x5b89) + ([char]0x88dd) + ([char]0x8aaa) + ([char]0x660e) + '.txt'
+$startupManagerLauncher = ([string][char]0x555f) + ([char]0x52d5) + ([char]0x7ba1) + ([char]0x7406) + ([char]0x54e1) + '.cmd'
 $safeDisableLauncher = ([string][char]0x5b89) + ([char]0x5168) + ([char]0x505c) + ([char]0x7528) + '.cmd'
 $startupManagerVbs = 'startup-manager.vbs'
-$safeCodexLauncher = ([string][char]0x5b89) + ([char]0x5168) + ([char]0x542f) + ([char]0x52a8) + 'Codex.vbs'
+$safeCodexLauncher = ([string][char]0x5b89) + ([char]0x5168) + ([char]0x555f) + ([char]0x52d5) + 'Codex.vbs'
 
 function Get-PeSubsystem {
     param([string]$Path)
@@ -399,8 +399,36 @@ try {
     }
     }
 
+    # The single-file installer must unpack to exactly the verified archive.
+    $setup = $archive -replace '\.zip$', '-setup.exe'
+    if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) { throw "Single-file installer is missing: $setup" }
+    $setupRoot = Join-Path $testRoot 'setup-extract'
+    $setupSums = Get-Content -LiteralPath ($setup + '.sha256.txt') -Raw
+    if ($setupSums -notmatch '^([0-9a-f]{64})  ' -or
+        $matches[1] -ne (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()) {
+        throw 'Single-file installer does not match its published SHA-256.'
+    }
+    $savedPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $setupOutput = (& $setup -extract $setupRoot 2>&1 | Out-String)
+        $setupExit = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $savedPreference }
+    if ($setupExit -ne 0) { throw "Single-file installer could not extract its package:`n$setupOutput" }
+    $setupPackage = Join-Path $setupRoot $roots[0].Name
+    $expectedSums = Get-FileHash -LiteralPath (Join-Path $root 'SHA256SUMS.txt') -Algorithm SHA256
+    $actualSums = Get-FileHash -LiteralPath (Join-Path $setupPackage 'SHA256SUMS.txt') -Algorithm SHA256
+    if ($expectedSums.Hash -ne $actualSums.Hash) { throw 'Single-file installer contains a different checksum list.' }
+    $ErrorActionPreference = 'Continue'
+    try {
+        $setupDryRun = (& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $setupPackage 'deploy.ps1') -DryRun -SkipCodexCheck 2>&1 | Out-String)
+        $setupExit = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $savedPreference }
+    if ($setupExit -ne 0) { throw "Single-file installer package failed its dry run:`n$setupDryRun" }
+
     [pscustomobject]@{
         Archive = $archive
+        SingleFileInstaller = 'extracted and verified'
         TopLevelFolder = $roots[0].Name
         FilesVerified = $sumCount
         InstallerDryRun = 'passed'

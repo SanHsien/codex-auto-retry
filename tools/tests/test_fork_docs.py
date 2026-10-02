@@ -86,6 +86,34 @@ def test_fork_is_windows_only() -> None:
     assert not (ROOT / "README.zh-CN.md").exists()
 
 
+# 上游產品字串出現過的簡體專用字；同步上游後若測試變紅，執行 tools/convert_zh_hant.py。
+SIMPLIFIED_ONLY = set(
+    "与专业两严个为义书买产仅从优会传体关内册冲况净击则删务动区协单历压参双发变号启员响围图处备复头夹实对将尝尽属带应"
+    "开异弹强归当录彻径态总户执扫护拥择挡换据数断无旧时显暂机权条构标检气没测滚满点状独环现电监盖盘码确签简类紧纯线组"
+    "终经结绕给绝统继绪续绿缓编缩网群脑脚节荐装见规览触计认让议记设证词试话询该语误说请读调败账购贵赖跃转轮软载较输达"
+    "迁过运这进连适选递邮钟钥钮错键长闭问间队际随隐静顶项须预题额验骤"
+)
+
+
+def test_product_strings_are_traditional_chinese() -> None:
+    import convert_zh_hant
+
+    offenders = []
+    for path in convert_zh_hant.iter_files():
+        text = path.read_text(encoding="utf-8-sig")
+        text = re.sub(r"\\u([0-9a-fA-F]{4})", lambda match: chr(int(match.group(1), 16)), text)
+        for number, line in enumerate(text.splitlines(), 1):
+            if any(marker in line for marker in convert_zh_hant.KEEP_LINE_MARKERS):
+                continue
+            found = SIMPLIFIED_ONLY.intersection(line)
+            if found:
+                offenders.append(f"{path.relative_to(ROOT)}:{number}: {''.join(sorted(found))}")
+    assert offenders == []
+    names = [path.name for path in (ROOT / "release" / "windows").iterdir()]
+    assert [name for name in names if SIMPLIFIED_ONLY.intersection(name)] == []
+    assert 'lang="zh-Hant-TW"' in (ROOT / "scripts/source/ui/panel.html").read_text(encoding="utf-8")
+
+
 def test_gitignore_covers_user_data_and_reports() -> None:
     text = (ROOT / ".gitignore").read_text(encoding="utf-8")
     assert ".env" in text

@@ -10,6 +10,16 @@ English | [繁體中文](CHANGELOG.md)
 
 ## [Unreleased]
 
+## [0.7.12-fork.2] - 2026-10-03
+
+### Added
+- Single-file installer `Codex-Auto-Retry-<version>-windows-x64-setup.exe` (`scripts/installer/`): double-click to install; also supports `-uninstall`, `-remove-data`, `-safe-disable`, and `-extract`.
+- `tools/convert_zh_hant.py` converts upstream Simplified Chinese product strings to Traditional Chinese (Taiwan) and can be re-run after an upstream sync.
+
+### Changed
+- Tray, settings window, embedded panel, MCP tool descriptions, and installer prompts are now Traditional Chinese; the default fallback retry prompt changes from "继续" to "繼續" (existing configs are untouched).
+- `release/windows/` launchers are renamed to `安裝.cmd`, `解除安裝.cmd`, `啟動管理員.cmd`, `安全啟動Codex.vbs`, and `README-安裝說明.txt`.
+
 ### Fixed
 - `scripts/build-release.ps1` still listed the renamed `README_zh.md` in the payload, so no release archive could be built; it now ships `README.md` and `README.en.md`, guarded by a contract test.
 - Rebuild both `scripts/bin/` executables and `scripts/build-info.json` after removing `*_nonwindows.go`, so the source hash matches again.

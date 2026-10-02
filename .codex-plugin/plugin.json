@@ -1,6 +1,6 @@
 {
   "name": "codex-auto-retry",
-  "version": "0.7.12+codex.20260921072806",
+  "version": "0.7.12+fork.2",
   "description": "Automatically resumes Codex tasks after recoverable provider failures, with a Windows tray controller and an embedded Codex panel.",
   "author": {
     "name": "sybxxx (TQY Local Tools)"
@@ -26,9 +26,9 @@
       "Local"
     ],
     "defaultPrompt": [
-      "\u6253\u5f00 Codex Auto Retry \u7ba1\u7406\u9762\u677f\u3002",
-      "\u67e5\u770b\u81ea\u52a8\u91cd\u8bd5\u961f\u5217\u548c\u5012\u8ba1\u65f6\u3002",
-      "\u4fee\u6539 Codex Auto Retry \u7684\u540e\u5907\u91cd\u8bd5\u6587\u5b57\u3002"
+      "\u958b\u555f Codex Auto Retry \u7ba1\u7406\u9762\u677f\u3002",
+      "\u6aa2\u8996\u81ea\u52d5\u91cd\u8a66\u4f47\u5217\u548c\u5012\u6578\u8a08\u6642\u3002",
+      "\u4fee\u6539 Codex Auto Retry \u7684\u5f8c\u5099\u91cd\u8a66\u6587\u5b57\u3002"
     ]
   }
 }

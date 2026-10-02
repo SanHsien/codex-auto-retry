@@ -305,7 +305,7 @@ func TestSharedControllerResumesUnloadedTaskAndDesktopObservesRetry(t *testing.T
 	}()
 
 	result, err := newTestSharedController(fake, home).Dispatch(
-		context.Background(), threadID, "继续", testResumeSettings(), time.Now().UTC(),
+		context.Background(), threadID, "繼續", testResumeSettings(), time.Now().UTC(),
 		time.Now().Add(-time.Minute).UTC(), "", false, false, classEmptyResponse, home,
 	)
 	if err != nil {
@@ -365,7 +365,7 @@ func TestSharedControllerLoadsParentBeforeResumingUnloadedSubagent(t *testing.T)
 	fake.parentThreadID = parentThreadID
 
 	result, err := newTestSharedController(fake, home).Dispatch(
-		context.Background(), threadID, "继续", testResumeSettings(), time.Now().UTC(),
+		context.Background(), threadID, "繼續", testResumeSettings(), time.Now().UTC(),
 		time.Now().Add(-time.Minute).UTC(), "car-0123456789abcdef01234567", false, false,
 		classEmptyResponse, home,
 	)
@@ -395,7 +395,7 @@ func TestSharedControllerDoesNotResumeIntentionallyPausedGoal(t *testing.T) {
 	fake.markLoaded(threadID)
 	fake.goal = &appGoal{Status: "paused", UpdatedAt: json.RawMessage(`"2026-07-31T08:00:00Z"`)}
 	result, err := newTestSharedController(fake, home).Dispatch(
-		context.Background(), threadID, "继续", testResumeSettings(), time.Now().UTC(),
+		context.Background(), threadID, "繼續", testResumeSettings(), time.Now().UTC(),
 		time.Time{}, "", false, false, classEmptyResponse, home,
 	)
 	if err != nil {
@@ -419,7 +419,7 @@ func TestSharedControllerResumesGoalBlockedByProviderFailure(t *testing.T) {
 	fake.goal = &appGoal{Status: "blocked", UpdatedAt: json.RawMessage(`1785484800`)}
 
 	result, err := newTestSharedController(fake, home).Dispatch(
-		context.Background(), threadID, "继续", testResumeSettings(), failureAt,
+		context.Background(), threadID, "繼續", testResumeSettings(), failureAt,
 		failureAt.Add(-time.Minute), "", false, false, classServer, home,
 	)
 	if err != nil {
@@ -443,7 +443,7 @@ func TestSharedControllerPreservesGoalBlockedAfterFailure(t *testing.T) {
 	fake.goal = &appGoal{Status: "blocked", UpdatedAt: json.RawMessage(`1785484860`)}
 
 	result, err := newTestSharedController(fake, home).Dispatch(
-		context.Background(), threadID, "继续", testResumeSettings(), failureAt,
+		context.Background(), threadID, "繼續", testResumeSettings(), failureAt,
 		failureAt.Add(-time.Minute), "", false, false, classServer, home,
 	)
 	if err != nil {
@@ -464,7 +464,7 @@ func TestSharedControllerRetriesLaterConversationWithoutUnpausingGoal(t *testing
 	fake.goal = &appGoal{Status: "paused", UpdatedAt: json.RawMessage(`1785484800`)}
 
 	result, err := newTestSharedController(fake, home).Dispatch(
-		context.Background(), threadID, "继续", testResumeSettings(), turnStartedAt.Add(time.Minute),
+		context.Background(), threadID, "繼續", testResumeSettings(), turnStartedAt.Add(time.Minute),
 		turnStartedAt, "", false, false, classEmptyResponse, home,
 	)
 	if err != nil {
@@ -532,7 +532,7 @@ func TestSharedControllerRequiresOneCodexRestartForLegacyTransport(t *testing.T)
 		checker: staticDesktopChecker{state: desktopLegacyStdio},
 	}
 	result, err := controller.Dispatch(
-		context.Background(), "019fa94e-0103-7183-b405-36bd307b6db6", "继续", testResumeSettings(),
+		context.Background(), "019fa94e-0103-7183-b405-36bd307b6db6", "繼續", testResumeSettings(),
 		time.Now().UTC(), time.Time{}, "", false, false, classServer, `C:\Users\test\.codex`,
 	)
 	if err != nil || result.Outcome != outcomeRetryLater || result.Reason != "codex_restart_required" {
@@ -549,7 +549,7 @@ func TestSharedControllerUsesOfficialIPCForLegacyStdio(t *testing.T) {
 		officialIPC: ipc,
 	}
 	result, err := controller.Dispatch(
-		context.Background(), threadID, "继续", testResumeSettings(),
+		context.Background(), threadID, "繼續", testResumeSettings(),
 		time.Now().UTC(), time.Time{}, "", false, false, classServer, `C:\Users\test\.codex`,
 	)
 	if err != nil || result.Outcome != outcomeDispatched || result.Reason != "official_ipc_turn_started" {
@@ -592,7 +592,7 @@ func TestSharedControllerUsesOfficialIPCToWakeParentAndContinueExactChild(t *tes
 	}
 	eventID := "car-0123456789abcdef01234567"
 	result, err := controller.Dispatch(
-		context.Background(), childID, "继续", testResumeSettings(),
+		context.Background(), childID, "繼續", testResumeSettings(),
 		time.Now().UTC(), time.Time{}, eventID, false, false, classEmptyResponse, home,
 	)
 	if err != nil || result.Outcome != outcomeDispatched || result.Action != actionConversationContinue || !result.ParentNotified {
@@ -628,7 +628,7 @@ func TestSharedControllerReportsClosedCodexWithoutStartingARecovery(t *testing.T
 		checker: staticDesktopChecker{state: desktopStopped},
 	}
 	result, err := controller.Dispatch(
-		context.Background(), "019fa94e-0103-7183-b405-36bd307b6db7", "继续", testResumeSettings(),
+		context.Background(), "019fa94e-0103-7183-b405-36bd307b6db7", "繼續", testResumeSettings(),
 		time.Now().UTC(), time.Time{}, "", false, false, classServer, `C:\Users\test\.codex`,
 	)
 	if err != nil || result.Outcome != outcomeRetryLater || result.Reason != "codex_not_running" {

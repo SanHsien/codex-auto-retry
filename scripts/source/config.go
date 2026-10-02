@@ -39,7 +39,7 @@ type Config struct {
 
 const legacyRetryPrompt = "Continue the interrupted task from its current state. The previous turn ended because the model provider was temporarily unavailable. First inspect the existing conversation and workspace state, do not repeat completed side effects, then continue toward the user's latest request. Do not discuss the retry mechanism unless it affects the result."
 
-const defaultRetryPrompt = "继续"
+const defaultRetryPrompt = "繼續"
 
 const maxRetryPromptRunes = 500
 
@@ -280,7 +280,7 @@ const (
 
 func (c Config) retrySafetyWarning() string {
 	if c.MaxRecoveryAttempts > recommendedMaxRecoveryAttempts || c.MaxConsecutiveRetries > recommendedMaxConsecutiveRetries {
-		return fmt.Sprintf("重试上限偏激进（本次故障 %d 次、连续无进展 %d 次），建议不超过 %d/%d", c.MaxRecoveryAttempts, c.MaxConsecutiveRetries, recommendedMaxRecoveryAttempts, recommendedMaxConsecutiveRetries)
+		return fmt.Sprintf("重試上限偏激進（本次故障 %d 次、連續無進展 %d 次），建議不超過 %d/%d", c.MaxRecoveryAttempts, c.MaxConsecutiveRetries, recommendedMaxRecoveryAttempts, recommendedMaxConsecutiveRetries)
 	}
 	return ""
 }

@@ -10,13 +10,13 @@ Set-StrictMode -Version 2
 $pluginRoot = Split-Path -Parent $PSScriptRoot
 $releaseTemplate = Join-Path $pluginRoot 'release\windows'
 . (Join-Path $releaseTemplate 'common.ps1')
-$installLauncher = ([string][char]0x5b89) + ([char]0x88c5) + '.cmd'
-$uninstallLauncher = ([string][char]0x5378) + ([char]0x8f7d) + '.cmd'
-$installReadme = 'README-' + ([char]0x5b89) + ([char]0x88c5) + ([char]0x8bf4) + ([char]0x660e) + '.txt'
-$startupManagerLauncher = ([string][char]0x542f) + ([char]0x52a8) + ([char]0x7ba1) + ([char]0x7406) + ([char]0x5668) + '.cmd'
+$installLauncher = ([string][char]0x5b89) + ([char]0x88dd) + '.cmd'
+$uninstallLauncher = ([string][char]0x89e3) + ([char]0x9664) + ([char]0x5b89) + ([char]0x88dd) + '.cmd'
+$installReadme = 'README-' + ([char]0x5b89) + ([char]0x88dd) + ([char]0x8aaa) + ([char]0x660e) + '.txt'
+$startupManagerLauncher = ([string][char]0x555f) + ([char]0x52d5) + ([char]0x7ba1) + ([char]0x7406) + ([char]0x54e1) + '.cmd'
 $safeDisableLauncher = ([string][char]0x5b89) + ([char]0x5168) + ([char]0x505c) + ([char]0x7528) + '.cmd'
 $startupManagerVbs = 'startup-manager.vbs'
-$safeCodexLauncher = ([string][char]0x5b89) + ([char]0x5168) + ([char]0x542f) + ([char]0x52a8) + 'Codex.vbs'
+$safeCodexLauncher = ([string][char]0x5b89) + ([char]0x5168) + ([char]0x555f) + ([char]0x52d5) + 'Codex.vbs'
 
 $pluginManifestPath = Join-Path $pluginRoot '.codex-plugin\plugin.json'
 $pluginManifest = Read-JsonDocument -Path $pluginManifestPath
@@ -57,6 +57,8 @@ New-Item -ItemType Directory -Force -Path $outputPath | Out-Null
 $packageName = "Codex-Auto-Retry-$packageVersion-windows-x64"
 $archivePath = Join-Path $outputPath ($packageName + '.zip')
 $archiveHashPath = $archivePath + '.sha256.txt'
+$setupPath = Join-Path $outputPath ($packageName + '-setup.exe')
+$setupHashPath = $setupPath + '.sha256.txt'
 $stageParent = Join-Path ([System.IO.Path]::GetTempPath()) ('codex-auto-retry-release-' + [guid]::NewGuid().ToString('N'))
 $packageRoot = Join-Path $stageParent $packageName
 
@@ -146,12 +148,52 @@ try {
         [System.Text.Encoding]::ASCII
     )
 
+    # The single-file installer is the setup stub followed by the release ZIP;
+    # the stub reads the ZIP back from its own file at run time.
+    Write-Host '[Release] Building single-file installer...'
+    $setupStub = Join-Path $stageParent 'setup-stub.exe'
+    Push-Location (Join-Path $PSScriptRoot 'installer')
+    try {
+        $unformatted = @(& gofmt -l .)
+        if ($LASTEXITCODE -ne 0 -or $unformatted.Count -gt 0) { throw "Installer sources are not gofmt-clean: $($unformatted -join ', ')" }
+        & go vet ./...
+        if ($LASTEXITCODE -ne 0) { throw 'Installer vet failed.' }
+        & go test ./... -count=1
+        if ($LASTEXITCODE -ne 0) { throw 'Installer tests failed.' }
+        & go build -trimpath -ldflags '-s -w' -o $setupStub .
+        if ($LASTEXITCODE -ne 0) { throw 'Installer build failed.' }
+    }
+    finally {
+        Pop-Location
+    }
+    Assert-X64PeBinary -Path $setupStub
+    Remove-Item -LiteralPath $setupPath -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $setupHashPath -Force -ErrorAction SilentlyContinue
+    $setupStream = [System.IO.File]::Create($setupPath)
+    try {
+        foreach ($part in @($setupStub, $archivePath)) {
+            $partStream = [System.IO.File]::OpenRead($part)
+            try { $partStream.CopyTo($setupStream) } finally { $partStream.Dispose() }
+        }
+    }
+    finally {
+        $setupStream.Dispose()
+    }
+    $setupHash = (Get-FileHash -LiteralPath $setupPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    [System.IO.File]::WriteAllText(
+        $setupHashPath,
+        ($setupHash + '  ' + (Split-Path -Leaf $setupPath) + [Environment]::NewLine),
+        [System.Text.Encoding]::ASCII
+    )
+
     $archive = Get-Item -LiteralPath $archivePath
     [pscustomobject]@{
         Package = $archive.FullName
         Bytes = $archive.Length
         SHA256 = $archiveHash
         HashFile = $archiveHashPath
+        Setup = $setupPath
+        SetupSHA256 = $setupHash
         PluginVersion = $pluginVersion
         Target = 'Windows x64'
     }

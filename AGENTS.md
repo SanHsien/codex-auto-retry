@@ -21,6 +21,7 @@
 
 ## 技術與資料流
 
+- 單檔安裝程式：`scripts/installer/`（Go，無外部相依；由 `scripts/build-release.ps1` 接上發佈壓縮檔）。
 - 核心守護程式：`scripts/source/`（Go 撰寫，包含 RPC 命名管道、分類器、監護服務）。
 - 內嵌管理面板：`scripts/source/ui/`（純 TypeScript，打包後由 Go embed 嵌入二進位檔）。
 - 產品二進位檔：`scripts/bin/codex-auto-retry.exe` 與 `codex-auto-retry-mcp.exe`。
@@ -45,8 +46,9 @@
 2. `python tools/check_upstream_updates.py --strict`
 3. 逐筆判斷是否與繁中 README、Windows gate、發佈閘門或測試衝突。
 4. 可同步的提交用 merge；只需要部分修正時 cherry-pick 或最小重做。
-5. 跑 `pwsh -NoProfile -File tools\dev_check.ps1`
-6. 採用／略過寫進 `docs/DECISIONS.md`，驗證後才推進 `tools/upstream_baseline.json`
+5. 上游帶進新的中文字串時跑 `python tools\convert_zh_hant.py`，再跑 `pwsh -NoProfile -File scripts\build.ps1` 重建
+6. 跑 `pwsh -NoProfile -File tools\dev_check.ps1`
+7. 採用／略過寫進 `docs/DECISIONS.md`，驗證後才推進 `tools/upstream_baseline.json`
 
 Baseline 代表「已審查」，不代表「全部已合併」。
 

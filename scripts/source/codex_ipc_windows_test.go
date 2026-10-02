@@ -39,7 +39,7 @@ func TestOfficialIPCStartRequestIsSilentAndKeepsThreadSettings(t *testing.T) {
 		"conversationId": "019fa94e-0103-7183-b405-36bd307b6dbd",
 		"turnStart":      map[string]any{"request": request, "context": map[string]any{"responseItems": []any{}}},
 	})
-	if err != nil || strings.Contains(string(encoded), "继续") {
+	if err != nil || strings.Contains(string(encoded), "繼續") {
 		t.Fatalf("silent IPC request unexpectedly included retry prompt or failed to encode: %v", err)
 	}
 }

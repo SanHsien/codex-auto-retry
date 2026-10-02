@@ -63,11 +63,11 @@ Long-running Codex work can be interrupted after tools have already executed or 
 
 ## Quick Start
 
-1. **Download**: Grab the latest Windows x64 ZIP from [Releases](https://github.com/sybxxx/codex-auto-retry/releases/latest).
-2. **Extract**: Extract it to a standard local folder (do not run directly from inside the archive preview).
-3. **Install**: Fully close Codex, then double-click `安装.cmd`. The installer verifies the package and starts the watchdog service.
-4. **Verify**: Open Codex and create a new task. The watchdog will automatically detect active tasks. You can also say `打开 Codex Auto Retry 管理面板` to open the embedded control panel.
-5. See [Windows installation notes](release/windows/README-安装说明.txt) for route verification, shared backend details, and safe-launch behavior.
+1. **Download**: Get this fork's Traditional Chinese build from [Releases](https://github.com/SanHsien/codex-auto-retry/releases/latest): either the single-file installer `Codex-Auto-Retry-<version>-windows-x64-setup.exe` or the ZIP.
+2. **Extract** (ZIP only): Extract it to a standard local folder (do not run directly from inside the archive preview).
+3. **Install**: Fully close Codex, then double-click the setup executable, or `安裝.cmd` inside the extracted ZIP. The installer verifies the package and starts the watchdog service.
+4. **Verify**: Open Codex and create a new task. The watchdog will automatically detect active tasks. You can also say `開啟 Codex Auto Retry 管理面板` to open the embedded control panel.
+5. See [Windows installation notes](release/windows/README-安裝說明.txt) for route verification, shared backend details, and safe-launch behavior.
 
 ---
 
@@ -78,7 +78,7 @@ Long-running Codex work can be interrupted after tools have already executed or 
 - **In-Process Resumption**: Rejoins the exact failed task through the Codex App process that is already running. Codex Desktop and the watchdog are two clients of one local shared app-server, so recovery does not open a task link, focus Codex, change the task currently on screen, or create a hidden `codex exec resume` task.
 - **Thread Settings Integrity**: The official IPC recovery request preserves the current collaboration-mode model and reasoning settings (required by modern Codex Desktop). It restores the failed task with its latest working directory, workspace roots, model, provider, service tier, reasoning settings, personality, approval routing, and effective permission profile instead of applying generic App defaults.
 - **Clean Dialogue**: In a normal conversation, it starts an empty-input continuation in that same task. The original request and completed tool results stay in context, while no new user-message bubble is added and the composer draft is untouched.
-- **Fallback Compatibility**: Uses the configured fallback retry text (default: `继续` / `Continue`) only as a narrow compatibility fallback when Codex explicitly rejects empty-input turns. It never rolls back and resends the failed turn, preventing duplicate tool execution.
+- **Fallback Compatibility**: Uses the configured fallback retry text (default: `繼續`) only as a narrow compatibility fallback when Codex explicitly rejects empty-input turns. It never rolls back and resends the failed turn, preventing duplicate tool execution.
 - **Rollout Schema Support**: Supports current Codex rollout names in both `thread-id.jsonl` and `thread-id_turn-id.jsonl` forms. The persistent thread ID is kept as the queue key; older turn-keyed state is migrated and duplicate entries for the same task are merged on startup.
 - **Concurrency**: Keeps separate retry state for every task and can dispatch up to four due tasks independently by default. If a failed task is already running, its retry remains queued and will re-check later instead of canceling.
 
@@ -100,11 +100,11 @@ Long-running Codex work can be interrupted after tools have already executed or 
 
 To prevent runaway retry loops and excessive resource consumption, two independent safety limits are enforced:
 
-1. **`本次故障恢复` (`Recoveries This Outage`)**: Bounds all automatic recovery attempts during a single persistent outage (default: 15, configurable from 1 to 1000).
-2. **`连续无进展` (`Consecutive No Progress`)**: Bounds consecutive retries that produce neither a visible assistant reply nor a completed tool result (default: 5, configurable from 1 to 100).
+1. **`本次故障恢復` (`Recoveries This Outage`)**: Bounds all automatic recovery attempts during a single persistent outage (default: 15, configurable from 1 to 1000).
+2. **`連續無進展` (`Consecutive No Progress`)**: Bounds consecutive retries that produce neither a visible assistant reply nor a completed tool result (default: 5, configurable from 1 to 100).
 
 - **Reset Rules**: A successful completion or a new user turn clears both counters; visible progress clears only the consecutive no-progress count.
-- **Exhaustion Handling**: When an active goal reaches either limit through repeated empty replies, the watchdog retains the exhausted entry, marks that goal as `blocked`, and notifies: `目标连续空回复达到上限，目标恢复已停止` (*Goal consecutive empty-reply limit reached, goal recovery stopped*).
+- **Exhaustion Handling**: When an active goal reaches either limit through repeated empty replies, the watchdog retains the exhausted entry, marks that goal as `blocked`, and notifies: `目標連續空回覆達到上限，目標恢復已停止` (*Goal consecutive empty-reply limit reached, goal recovery stopped*).
 - **Backoff Strategies**: Supports fixed, linear, or doubling (exponential) delays capped at a configurable maximum. Linear waits add a configurable number of seconds each time. Increasing waits follow the consecutive no-progress count, so visible progress resets the delay sequence.
 - **Turn Correlation**: Correlates the new `task_started` turn ID with its matching `task_complete`. An unrelated successful turn cannot falsely mark a retry as recovered.
 
@@ -158,7 +158,7 @@ The settings window allows configuring:
 ### Embedded Management Panel (MCP)
 
 Users can open the management panel directly inside Codex by asking:
-> `打开 Codex Auto Retry 管理面板` *(Open Codex Auto Retry Management Panel)*
+> `開啟 Codex Auto Retry 管理面板` *(Open Codex Auto Retry Management Panel)*
 
 <p align="center">
   <img src="assets/panel.png" alt="Codex Embedded Management Panel (MCP)" width="620" />
@@ -186,22 +186,24 @@ Built with vanilla TypeScript and embedded into the Go MCP binary via Go `embed`
 
 ### End-User Installation
 
-1. Download and extract the self-contained Windows x64 release ZIP.
-2. Fully close Codex App, then double-click `安装.cmd`.
+1. Download the single-file installer (`...-setup.exe`) or download and extract the self-contained Windows x64 release ZIP.
+2. Fully close Codex App, then double-click the setup executable or `安裝.cmd`. Both run the same `deploy.ps1`; the setup executable only unpacks the ZIP into a temporary folder first. The build is not code-signed, so Windows SmartScreen may warn about an unknown publisher; compare the SHA-256 on the release page.
 3. The installer verifies file hashes via SHA-256, registers current-user startup, deploys the local watchdog under `%LOCALAPPDATA%\CodexAutoRetry`, and registers the Codex plugin.
 4. Neither administrator rights nor Go/Node.js dependencies are required.
 
-> `release\windows\` in the source tree is only the installer template; it has no `release-manifest.json` or `payload\`, so running it directly fails with `release-manifest.json is missing`. To install from source, run `pwsh -NoProfile -File scripts\build-release.ps1` (requires Go and Node.js), extract the generated `Codex-Auto-Retry-<version>-windows-x64.zip`, and run `安装.cmd` from that folder.
+> `release\windows\` in the source tree is only the installer template; it has no `release-manifest.json` or `payload\`, so running it directly fails with `release-manifest.json is missing`. To install from source, run `pwsh -NoProfile -File scripts\build-release.ps1` (requires Go and Node.js), which writes the ZIP and the single-file installer to `%USERPROFILE%\releases\codex-auto-retry\`.
 
-The one-click installer shows a Chinese Retry/Cancel prompt while Codex is running. Save your work, exit Codex including its tray entry, then select **Retry**. Cancellation or a five-minute timeout leaves the installed plugin/runtime unchanged. The installer never force-closes Codex; direct `deploy.ps1` calls retain immediate rejection unless `-WaitForCodexExit` is supplied.
+The one-click installer shows a Traditional Chinese Retry/Cancel prompt while Codex is running. Save your work, exit Codex including its tray entry, then select **Retry**. Cancellation or a five-minute timeout leaves the installed plugin/runtime unchanged. The installer never force-closes Codex; direct `deploy.ps1` calls retain immediate rejection unless `-WaitForCodexExit` is supplied.
 
 Plugin-list support is checked before replacement; final verification requires the exact installed version. CLI warnings do not turn successful commands into failures. If verification fails, rollback restores plugin and runtime files together and leaves retries stopped. Incomplete rollback retains its backup and journal. Error diagnostics expose only exit codes and safe categories, not credentials or raw output.
 
 ### Administrative & Break-Glass Tools
 
-- `启动管理器.cmd`: Launches a windowed startup manager (without leaving a command console) showing exact startup commands, supervisor status, heartbeat, and Windows `StartupApproved` status.
+These launchers are in the ZIP root. With the single-file installer use `setup.exe -uninstall` (add `-remove-data` for a full cleanup), `setup.exe -safe-disable`, or `setup.exe -extract <folder>` to unpack the whole package.
+
+- `啟動管理員.cmd`: Launches a windowed startup manager (without leaving a command console) showing exact startup commands, supervisor status, heartbeat, and Windows `StartupApproved` status.
 - `安全停用.cmd`: One-click emergency script that immediately disables shared mode, clears plugin-owned registry values, and restores Codex to official direct execution.
-- `卸载.cmd`: Cleanly uninstalls the watchdog and plugin while preserving user settings and logs by default. Run `.\uninstall-release.ps1 -RemoveData` to perform a full cleanup.
+- `解除安裝.cmd`: Cleanly uninstalls the watchdog and plugin while preserving user settings and logs by default. Run `.\uninstall-release.ps1 -RemoveData` to perform a full cleanup.
 
 <p align="center">
   <img src="assets/startup_manager.png" alt="Codex Auto Retry Startup Manager" width="560" />

@@ -66,7 +66,7 @@ and exit. This is not a second watchdog or a separate retry engine.
   failures by default instead of refreshing the countdown forever.
   `codex_restart_required` means an older Desktop build has no verified recovery
   route and the user must fully exit Codex and reopen it through
-  `安全启动Codex.vbs` or the startup manager's safe-launch button. Current
+  `安全啟動Codex.vbs` or the startup manager's safe-launch button. Current
   Windows Desktop builds may instead report `official_ipc_ready`: the watchdog
   has verified the official named-pipe router. Dispatch must still discover the
   exact task owner before submitting an empty-input recovery request, without
@@ -94,7 +94,7 @@ compatibility fallback text.
   plugin-owned endpoint and stops only the plugin-owned server.
 
 - Use `set_retry_prompt` to change only the fallback text. The default is
-  `继续`, the maximum is 500 characters, and changes apply without restarting
+  `繼續`, the maximum is 500 characters, and changes apply without restarting
   the watchdog. Normal retries do not send this text when silent continuation
   is supported.
 - Use `set_retry_settings` to change the fallback text, both retry limits,
@@ -214,14 +214,14 @@ is active; clear the value deliberately before re-enabling shared mode.
 
 ## Startup Manager And Remove
 
-The release includes `启动管理器.cmd`. Use it when Windows Explorer does not
+The release includes `啟動管理員.cmd`. Use it when Windows Explorer does not
 show the full `HKCU\...\Run` command: it reports the exact startup entry,
 supervisor/worker process chain, heartbeat, shared mode, endpoint, and stale
 state, and provides start, stop, enable, disable, safe-disable, and uninstall
 actions. `安全停用.cmd` performs only the break-glass shared-backend cleanup.
 Both tools operate only on paths and state records owned by this plugin.
 
-Complete removal still uses the release's `卸载.cmd` or
+Complete removal still uses the release's `解除安裝.cmd` or
 `uninstall-release.ps1`; the graphical manager's default uninstall preserves
 runtime settings/state/logs, while its destructive option asks for confirmation.
 The command-line destructive path requires `-RemoveData -NoPrompt` explicitly.
@@ -313,7 +313,7 @@ the environment change, and never removes chat data or a user-owned
 `CODEX_API_KEY`. A worker restart adopts a healthy owned endpoint. If a live
 Codex Desktop is still using the shared server, cleanup is deferred and the
 worker retries it after Desktop closes; dead owned state is removed immediately.
-Stale PID or heartbeat data must be shown as `后台服务未运行`, never as healthy
+Stale PID or heartbeat data must be shown as `背景服務未執行`, never as healthy
 `running`.
 
 The optional shared app-server has a monitor-only 4096 MB private-memory limit.

@@ -199,13 +199,13 @@ function render(next: ManagementSnapshot): void {
   elements.pauseToggle.checked = !next.paused;
   elements.sharedAppServerToggle.checked = next.shared_app_server_requested ?? next.shared_app_server_enabled;
   elements.sharedAppServerDescription.textContent = next.shared_app_server_enabled
-    ? `正在使用插件拥有且已通过健康检查的后台（端口 ${next.shared_app_server_port}）`
-    : next.shared_app_server_requested ? "共享后台暂不可用，启用偏好已保留；安全启动入口会尝试恢复" : "默认关闭，不影响 Codex 官方后台";
-  elements.sharedAppServerPort.textContent = next.shared_app_server_port > 0 ? `端口 ${next.shared_app_server_port}` : "";
+    ? `正在使用外掛擁有且已通過健康檢查的後端（埠 ${next.shared_app_server_port}）`
+    : next.shared_app_server_requested ? "共用後端暫不可用，啟用偏好已保留；安全啟動入口會嘗試恢復" : "預設關閉，不影響 Codex 官方後端";
+  elements.sharedAppServerPort.textContent = next.shared_app_server_port > 0 ? `埠 ${next.shared_app_server_port}` : "";
   const startupApprovalLabels: Record<ManagementSnapshot["startup_approved"], string> = {
-    enabled: "Windows 登录启动：已启用",
-    disabled: "Windows 登录启动：已禁用",
-    unknown: "Windows 登录启动：状态未知",
+    enabled: "Windows 登入啟動：已啟用",
+    disabled: "Windows 登入啟動：已停用",
+    unknown: "Windows 登入啟動：狀態未知",
   };
   elements.startupApprovalStatus.textContent = startupApprovalLabels[next.startup_approved] ?? startupApprovalLabels.unknown;
   elements.startupApprovalStatus.dataset.state = next.startup_approved;
@@ -221,67 +221,67 @@ function render(next: ManagementSnapshot): void {
 function renderService(next: ManagementSnapshot): void {
   const dot = document.createElement("span");
   dot.className = "status-dot";
-  let label = "未运行";
-  let detail = "未检测到有效心跳";
+  let label = "未執行";
+  let detail = "未偵測到有效心跳";
   if (next.controller_state === "memory_limit_exceeded") {
-    label = "内存保护已停止";
-    detail = `后台内存 ${next.memory_usage_mb ?? 0} MB，已超过上限 ${next.memory_limit_mb} MB`;
+    label = "記憶體保護已停止";
+    detail = `後端記憶體 ${next.memory_usage_mb ?? 0} MB，已超過上限 ${next.memory_limit_mb} MB`;
     dot.classList.add("status-dot-danger");
   } else if (next.running && next.controller_state === "codex_restart_required") {
-    label = "Codex 未接入共享后台";
-    detail = "共享后台已启动，但当前 Codex 仍使用官方后台；请使用安全启动 Codex 入口";
+    label = "Codex 未接入共用後端";
+    detail = "共用後端已啟動，但目前 Codex 仍使用官方後端；請使用安全啟動 Codex 入口";
     dot.classList.add("status-dot-warning");
   } else if (next.running && next.controller_state === "official_ipc_ready") {
-    label = "Codex 已接入官方恢复通道";
-    detail = "新版 Codex 使用官方 IPC，自动恢复请求会转交当前任务所有者";
+    label = "Codex 已接入官方恢復通道";
+    detail = "新版 Codex 使用官方 IPC，自動恢復請求會轉交目前任務擁有者";
     dot.classList.add("status-dot-positive");
   } else if (next.running && next.controller_state === "codex_not_running") {
-    label = "Codex 已退出";
-    detail = "相关任务已停止自动重试；启动 Codex 后可手动重新开始";
+    label = "Codex 已結束";
+    detail = "相關任務已停止自動重試；啟動 Codex 後可手動重新開始";
     dot.classList.add("status-dot-danger");
   } else if (next.running && next.controller_state === "shared_app_server_disabled") {
-    label = next.shared_app_server_requested ? "共享后台暂不可用" : "共享后台已关闭";
-    detail = "Codex 继续使用官方后台；打开共享后台后才会执行静默恢复";
+    label = next.shared_app_server_requested ? "共用後端暫不可用" : "共用後端已關閉";
+    detail = "Codex 繼續使用官方後端；開啟共用後端後才會執行靜默恢復";
     dot.classList.add("status-dot-warning");
   } else if (next.running && next.controller_state === "shared_app_server_port_reserved") {
-    label = "端口被 Windows 保留";
-    detail = "共享后台未启动，自动重试已停止；更换端口后再启用共享后台";
+    label = "埠被 Windows 保留";
+    detail = "共用後端未啟動，自動重試已停止；更換埠後再啟用共用後端";
     dot.classList.add("status-dot-danger");
   } else if (next.running && next.controller_state === "shared_app_server_port_conflict") {
-    label = "共享端口正在迁移";
-    detail = `首选端口不可用；启用共享后台时会选择安全的本机端口（当前配置 ${next.shared_app_server_port}）`;
+    label = "共用埠正在遷移";
+    detail = `偏好埠不可用；啟用共用後端時會選擇安全的本機埠（目前設定 ${next.shared_app_server_port}）`;
     dot.classList.add("status-dot-danger");
   } else if (next.running && next.controller_state === "shared_app_server_migration_deferred") {
-    label = "等待 Codex 关闭";
-    detail = "共享后台清理或迁移已延后，避免中断当前 Codex 会话";
+    label = "等待 Codex 關閉";
+    detail = "共用後端清理或遷移已延後，避免中斷目前 Codex 會話";
     dot.classList.add("status-dot-warning");
   } else if (next.running && next.controller_state === "shared_app_server_environment_conflict") {
-    label = "共享后台环境冲突";
-    detail = "检测到 CODEX_APP_SERVER_WS_URL 已指向其他地址，插件未覆盖；请清理冲突值后再启用共享后台";
+    label = "共用後端環境衝突";
+    detail = "偵測到 CODEX_APP_SERVER_WS_URL 已指向其他位址，外掛未覆蓋；請清理衝突值後再啟用共用後端";
     dot.classList.add("status-dot-danger");
   } else if (next.running && next.controller_state === "shared_app_server_ownership_unknown") {
-    label = "共享后台归属未知";
-    detail = "插件无法确认后台进程归属，已停止自动清理；请先关闭 Codex 并人工核对后再恢复共享后台";
+    label = "共用後端歸屬未知";
+    detail = "外掛無法確認背景行程歸屬，已停止自動清理；請先關閉 Codex 並人工核對後再恢復共用後端";
     dot.classList.add("status-dot-danger");
   } else if (next.running && next.controller_state === "shared_app_server_config_invalid") {
-    label = "共享后台配置不兼容";
-    detail = "已自动切回 Codex 官方后台，避免错误配置继续影响对话";
+    label = "共用後端設定不相容";
+    detail = "已自動切回 Codex 官方後端，避免錯誤設定繼續影響對話";
     dot.classList.add("status-dot-danger");
   } else if (next.running && next.controller_state === "shared_app_server_memory_limit_exceeded") {
-    label = "共享后台内存保护";
-    detail = `共享后台已停止接管（${next.shared_app_server_memory_usage_mb ?? 0} MB/${next.shared_app_server_memory_limit_mb ?? 0} MB），未强制关闭 Codex`;
+    label = "共用後端記憶體保護";
+    detail = `共用後端已停止接管（${next.shared_app_server_memory_usage_mb ?? 0} MB/${next.shared_app_server_memory_limit_mb ?? 0} MB），未強制關閉 Codex`;
     dot.classList.add("status-dot-warning");
   } else if (next.running && next.controller_state && !["ready", "starting", "official_ipc_ready"].includes(next.controller_state)) {
-    label = "恢复通道异常";
-    detail = `自动重试已停止继续空转：${controllerStateLabel(next.controller_state)}`;
+    label = "恢復通道異常";
+    detail = `自動重試已停止繼續空轉：${controllerStateLabel(next.controller_state)}`;
     dot.classList.add("status-dot-danger");
   } else if (next.running && next.paused) {
-    label = "已暂停";
-    detail = "监控保持运行，新重试暂不执行";
+    label = "已暫停";
+    detail = "監控保持執行，新重試暫不執行";
     dot.classList.add("status-dot-warning");
   } else if (next.running) {
-    label = "运行中";
-    detail = `正在监控 ${next.watched_roots} 个会话位置`;
+    label = "執行中";
+    detail = `正在監控 ${next.watched_roots} 個會話位置`;
     dot.classList.add("status-dot-positive");
   } else {
     dot.classList.add("status-dot-danger");
@@ -289,18 +289,18 @@ function renderService(next: ManagementSnapshot): void {
   elements.serviceStatus.replaceChildren(dot, document.createTextNode(label));
   elements.serviceLine.textContent = detail;
   if (next.running && next.automatic_recovery_supported === false && next.recovery_capability_reason === "official_stdio_not_externally_controllable") {
-    elements.serviceLine.textContent = `${detail}；当前为只监控模式，尚未发送自动恢复请求`;
+    elements.serviceLine.textContent = `${detail}；目前為只監控模式，尚未傳送自動恢復請求`;
   }
   if (next.memory_guard_triggered) {
-    elements.serviceLine.textContent = `${detail}；内存保护已触发（${next.memory_usage_mb ?? 0} MB/${next.memory_limit_mb} MB）`;
+    elements.serviceLine.textContent = `${detail}；記憶體保護已觸發（${next.memory_usage_mb ?? 0} MB/${next.memory_limit_mb} MB）`;
   }
   if (next.shared_app_server_memory_guard_triggered) {
-    elements.serviceLine.textContent = `${elements.serviceLine.textContent}；共享后台内存保护已触发（${next.shared_app_server_memory_usage_mb ?? 0} MB/${next.shared_app_server_memory_limit_mb ?? 0} MB），未强制关闭 Codex`;
+    elements.serviceLine.textContent = `${elements.serviceLine.textContent}；共用後端記憶體保護已觸發（${next.shared_app_server_memory_usage_mb ?? 0} MB/${next.shared_app_server_memory_limit_mb ?? 0} MB），未強制關閉 Codex`;
   }
   if (next.retry_safety_warning) {
     elements.serviceLine.textContent = `${elements.serviceLine.textContent}；${next.retry_safety_warning}`;
   }
-  elements.pauseDescription.textContent = next.paused ? "已暂停新重试" : "运行中";
+  elements.pauseDescription.textContent = next.paused ? "已暫停新重試" : "執行中";
 }
 
 function renderMetrics(next: ManagementSnapshot): void {
@@ -310,21 +310,21 @@ function renderMetrics(next: ManagementSnapshot): void {
     .filter((retry) => retry.state === "pending" && retry.due_at)
     .sort((a, b) => Date.parse(a.due_at ?? "") - Date.parse(b.due_at ?? ""));
   if (next.paused && pending.length > 0) {
-    elements.nextRetry.textContent = "等待恢复";
+    elements.nextRetry.textContent = "等待恢復";
   } else if (pending.length > 0) {
     elements.nextRetry.dataset.dueAt = pending[0].due_at ?? "";
     updateCountdownElement(elements.nextRetry);
   } else if (next.active_retries > 0) {
-    elements.nextRetry.textContent = "正在重试";
+    elements.nextRetry.textContent = "正在重試";
     delete elements.nextRetry.dataset.dueAt;
   } else {
     elements.nextRetry.textContent = "--";
     delete elements.nextRetry.dataset.dueAt;
   }
   if (total === 0) {
-    elements.queueSummary.textContent = "当前没有等待中的任务";
+    elements.queueSummary.textContent = "目前沒有等待中的任務";
   } else {
-    elements.queueSummary.textContent = `${next.pending_retries} 个等待中，${next.active_retries} 个执行中，${next.stopped_retries} 个已停止`;
+    elements.queueSummary.textContent = `${next.pending_retries} 個等待中，${next.active_retries} 個執行中，${next.stopped_retries} 個已停止`;
   }
 }
 
@@ -333,7 +333,7 @@ function renderQueue(next: ManagementSnapshot): void {
   if (next.retries.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.append(icon("activity"), document.createTextNode("队列为空"));
+    empty.append(icon("activity"), document.createTextNode("佇列為空"));
     elements.queueList.append(empty);
     return;
   }
@@ -361,11 +361,11 @@ function createQueueItem(retry: ManagedRetry, paused: boolean): HTMLElement {
   const meta = document.createElement("div");
   meta.className = "queue-meta";
   const recovery = retry.max_recovery_attempts
-    ? `本次故障恢复 ${retry.recovery_attempt}/${retry.max_recovery_attempts}`
-    : `本次故障恢复 ${retry.recovery_attempt}`;
+    ? `本次故障恢復 ${retry.recovery_attempt}/${retry.max_recovery_attempts}`
+    : `本次故障恢復 ${retry.recovery_attempt}`;
   const consecutive = retry.max_consecutive_retries
-    ? `连续无进展 ${retry.consecutive_retry}/${retry.max_consecutive_retries}`
-    : `连续无进展 ${retry.consecutive_retry}`;
+    ? `連續無進展 ${retry.consecutive_retry}/${retry.max_consecutive_retries}`
+    : `連續無進展 ${retry.consecutive_retry}`;
   const stateLabel = retry.state === "pending"
     ? "等待中"
     : retry.state === "stopped"
@@ -387,12 +387,12 @@ function createQueueItem(retry: ManagedRetry, paused: boolean): HTMLElement {
   if (retry.state === "pending" && retry.due_at) {
     primary.dataset.dueAt = retry.due_at;
     updateCountdownElement(primary);
-    secondary.textContent = paused ? "恢复后执行" : "后重试";
+    secondary.textContent = paused ? "恢復後執行" : "後重試";
   } else if (retry.state === "stopped") {
     primary.textContent = "已停止";
     secondary.textContent = stopReasonLabel(retry);
   } else {
-    primary.textContent = retry.state === "running" ? "执行中" : "启动中";
+    primary.textContent = retry.state === "running" ? "執行中" : "啟動中";
     secondary.textContent = actionLabel(retry.action);
   }
   state.append(primary, secondary);
@@ -400,13 +400,13 @@ function createQueueItem(retry: ManagedRetry, paused: boolean): HTMLElement {
   const actions = document.createElement("div");
   actions.className = "queue-actions";
   if (retry.can_retry_now) {
-    actions.append(actionButton("play", "立即重试", "retry-action", () => runThreadAction("retry_now", retry.thread_id)));
+    actions.append(actionButton("play", "立即重試", "retry-action", () => runThreadAction("retry_now", retry.thread_id)));
   }
   if (retry.can_cancel) {
-    actions.append(actionButton("x", "取消这次重试", "cancel-action", () => runThreadAction("cancel_retry", retry.thread_id)));
+    actions.append(actionButton("x", "取消這次重試", "cancel-action", () => runThreadAction("cancel_retry", retry.thread_id)));
   }
   if (retry.can_restart) {
-    actions.append(actionButton("rotate-ccw", "重新开始计数并重试", "retry-action", () => runThreadAction("restart_retry", retry.thread_id)));
+    actions.append(actionButton("rotate-ccw", "重新開始計數並重試", "retry-action", () => runThreadAction("restart_retry", retry.thread_id)));
   }
   row.append(main, state, actions);
   return row;
@@ -442,7 +442,7 @@ function renderScanTime(next: ManagementSnapshot): void {
     return;
   }
   const date = new Date(next.last_scan_at);
-  elements.scanTime.textContent = `扫描于 ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
+  elements.scanTime.textContent = `掃描於 ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
 }
 
 function updateCountdowns(): void {
@@ -464,142 +464,142 @@ function formatDuration(totalSeconds: number): string {
   const seconds = totalSeconds % 60;
   if (minutes < 60) return `${minutes} 分 ${String(seconds).padStart(2, "0")} 秒`;
   const hours = Math.floor(minutes / 60);
-  return `${hours} 时 ${String(minutes % 60).padStart(2, "0")} 分`;
+  return `${hours} 時 ${String(minutes % 60).padStart(2, "0")} 分`;
 }
 
 function classLabel(value: FailureClass): string {
   const labels: Record<FailureClass, string> = {
-    transient: "连接中断",
-    rate_limit: "请求限流",
-    server: "供应商故障",
-    auth_transient: "登录服务暂不可用",
-    auth_limited: "登录异常",
-    empty_response: "模型空回复",
+    transient: "連線中斷",
+    rate_limit: "請求限流",
+    server: "供應商故障",
+    auth_transient: "登入服務暫不可用",
+    auth_limited: "登入異常",
+    empty_response: "模型空回覆",
     unknown: "未知故障",
-    none: "未分类",
+    none: "未分類",
   };
   return labels[value] ?? "未知故障";
 }
 
 function actionLabel(value?: string): string {
   const labels: Record<string, string> = {
-    dispatching: "准备恢复",
-    goal_resume: "目标恢复",
-    goal_active: "目标运行",
-    conversation_continue: "对话继续",
-    subagent_continue: "子 Agent 恢复",
-    goal_block: "目标停止",
+    dispatching: "準備恢復",
+    goal_resume: "目標恢復",
+    goal_active: "目標執行",
+    conversation_continue: "對話繼續",
+    subagent_continue: "子 Agent 恢復",
+    goal_block: "目標停止",
   };
-  return value ? (labels[value] ?? "正在处理") : "正在处理";
+  return value ? (labels[value] ?? "正在處理") : "正在處理";
 }
 
 function stopReasonLabel(retry: ManagedRetry): string {
   if (retry.stop_reason === "auth_attempt_limit") {
-    return "触发登录异常专用上限";
+    return "觸發登入異常專用上限";
   }
   if (retry.stop_reason === "codex_not_running") {
-    return "Codex 已退出，自动重试已停止";
+    return "Codex 已結束，自動重試已停止";
   }
   if (retry.stop_reason === "shared_app_server_disabled") {
-    return "共享后台模式已关闭，Codex 仍使用官方后台";
+    return "共用後端模式已關閉，Codex 仍使用官方後端";
   }
   if (retry.stop_reason === "codex_restart_required") {
-    return "通过安全启动 Codex 入口重新打开后接入共享后台";
+    return "透過安全啟動 Codex 入口重新開啟後接入共用後端";
   }
   if (retry.stop_reason === "codex_home_not_shared") {
-    return "此任务不在当前 Codex 的共享会话目录中";
+    return "此任務不在目前 Codex 的共用會話目錄中";
   }
   if (retry.stop_reason === "shared_app_server_port_conflict") {
-    return "首选恢复端口不可用，等待安全迁移";
+    return "偏好恢復埠不可用，等待安全遷移";
   }
   if (retry.stop_reason === "shared_app_server_port_reserved") {
-    return "后台恢复端口被 Windows 保留";
+    return "後端恢復埠被 Windows 保留";
   }
   if (retry.stop_reason === "shared_app_server_environment_conflict") {
-    return "共享后台环境变量已被其他值占用";
+    return "共用後端環境變數已被其他值佔用";
   }
   if (retry.stop_reason === "shared_app_server_ownership_unknown") {
-    return "共享后台归属无法确认，需人工清理";
+    return "共用後端歸屬無法確認，需人工清理";
   }
   if (retry.stop_reason === "shared_app_server_config_invalid") {
-    return "共享后台配置与当前 Codex 不兼容，已自动切回官方后台";
+    return "共用後端設定與目前 Codex 不相容，已自動切回官方後端";
   }
   if (retry.stop_reason === "shared_app_server_migration_deferred") {
-    return "等待 Codex 关闭后完成后台迁移";
+    return "等待 Codex 關閉後完成後端遷移";
   }
   if (retry.stop_reason?.startsWith("controller_") || retry.stop_reason?.startsWith("codex_background_") || retry.stop_reason === "app_server_request_failed") {
-    return "后台恢复通道连续失败，已停止空转";
+    return "後端恢復通道連續失敗，已停止空轉";
   }
   if (retry.stop_reason === "goal_empty_response_limit_block_failed") {
-    return `目标连续空回复达到上限，恢复已停止，但自动设为受阻失败`;
+    return `目標連續空回覆達到上限，恢復已停止，但自動設為受阻失敗`;
   }
   if (retry.stop_reason === "goal_empty_response_limit") {
-    return `目标连续空回复达到上限，目标恢复已停止`;
+    return `目標連續空回覆達到上限，目標恢復已停止`;
   }
   if (retry.stop_reason === "consecutive_retry_limit") {
-    return `无进展 ${retry.consecutive_retry}/${retry.max_consecutive_retries ?? retry.consecutive_retry} 达上限`;
+    return `無進展 ${retry.consecutive_retry}/${retry.max_consecutive_retries ?? retry.consecutive_retry} 達上限`;
   }
   if (retry.stop_reason === "recovery_time_limit") {
-    return "自动恢复运行时间达到 30 分钟上限";
+    return "自動恢復執行時間達到 30 分鐘上限";
   }
-  return `本次恢复 ${retry.recovery_attempt}/${retry.max_recovery_attempts ?? retry.recovery_attempt} 达上限`;
+  return `本次恢復 ${retry.recovery_attempt}/${retry.max_recovery_attempts ?? retry.recovery_attempt} 達上限`;
 }
 
 function stoppedStateLabel(retry: ManagedRetry): string {
   switch (retry.stop_reason) {
     case "auth_attempt_limit":
-      return "登录异常专用上限";
+      return "登入異常專用上限";
     case "shared_app_server_disabled":
-      return "共享后台已关闭";
+      return "共用後端已關閉";
     case "codex_not_running":
-      return "Codex 已退出";
+      return "Codex 已結束";
     case "codex_restart_required":
-      return "等待安全启动 Codex";
+      return "等待安全啟動 Codex";
     case "codex_ipc_goal_control_unsupported":
-      return "官方 IPC 暂不支持目标停止";
+      return "官方 IPC 暫不支援目標停止";
     case "subagent_recovery_event_unavailable":
-      return "子 Agent 恢复事件不可用";
+      return "子 Agent 恢復事件不可用";
     case "subagent_parent_owner_unavailable":
-      return "父任务所有者不可用";
+      return "父任務擁有者不可用";
     case "subagent_parent_recovery_failed":
-      return "父任务恢复事件失败";
+      return "父任務恢復事件失敗";
     case "codex_home_not_shared":
-      return "任务目录未接入";
+      return "任務目錄未接入";
     case "shared_app_server_port_conflict":
-      return "恢复端口冲突";
+      return "恢復埠衝突";
     case "shared_app_server_port_reserved":
-      return "端口被 Windows 保留";
+      return "埠被 Windows 保留";
     case "shared_app_server_environment_conflict":
-      return "共享后台环境冲突";
+      return "共用後端環境衝突";
     case "shared_app_server_ownership_unknown":
-      return "共享后台归属未知";
+      return "共用後端歸屬未知";
     case "shared_app_server_migration_deferred":
-      return "等待 Codex 关闭";
+      return "等待 Codex 關閉";
     default:
-      return "达到上限";
+      return "達到上限";
   }
 }
 
 function controllerStateLabel(value: string): string {
   const labels: Record<string, string> = {
-    codex_restart_required: "需要安全启动 Codex",
+    codex_restart_required: "需要安全啟動 Codex",
     official_ipc_ready: "新版 Codex 官方 IPC 已接入",
-    codex_ipc_goal_control_unsupported: "官方 IPC 暂不支持目标停止，恢复已停止",
-    subagent_recovery_event_unavailable: "无法确认子 Agent 的恢复事件",
-    subagent_parent_owner_unavailable: "无法确认父任务所有者",
-    subagent_parent_recovery_failed: "父任务恢复事件提交失败",
-    codex_not_running: "Codex 已退出，自动重试已停止",
-    shared_app_server_disabled: "共享后台模式已关闭，Codex 使用官方后台",
-    codex_home_not_shared: "任务目录未接入共享通道",
-    shared_app_server_port_conflict: "共享端口被占用",
-    shared_app_server_port_reserved: "共享端口被 Windows 保留",
-    shared_app_server_environment_conflict: "CODEX_APP_SERVER_WS_URL 已被其他值占用",
-    shared_app_server_ownership_unknown: "共享后台归属无法确认，需人工清理",
-    shared_app_server_migration_deferred: "等待 Codex 关闭后完成后台迁移",
-    shared_app_server_config_invalid: "共享后台配置与当前 Codex 不兼容，已切回官方后台",
-    codex_background_channel_unavailable: "共享通道不可用",
-    codex_background_dispatch_failed: "恢复请求失败",
-    controller_timeout: "恢复请求超时",
+    codex_ipc_goal_control_unsupported: "官方 IPC 暫不支援目標停止，恢復已停止",
+    subagent_recovery_event_unavailable: "無法確認子 Agent 的恢復事件",
+    subagent_parent_owner_unavailable: "無法確認父任務擁有者",
+    subagent_parent_recovery_failed: "父任務恢復事件提交失敗",
+    codex_not_running: "Codex 已結束，自動重試已停止",
+    shared_app_server_disabled: "共用後端模式已關閉，Codex 使用官方後端",
+    codex_home_not_shared: "任務目錄未接入共用通道",
+    shared_app_server_port_conflict: "共用埠被佔用",
+    shared_app_server_port_reserved: "共用埠被 Windows 保留",
+    shared_app_server_environment_conflict: "CODEX_APP_SERVER_WS_URL 已被其他值佔用",
+    shared_app_server_ownership_unknown: "共用後端歸屬無法確認，需人工清理",
+    shared_app_server_migration_deferred: "等待 Codex 關閉後完成後端遷移",
+    shared_app_server_config_invalid: "共用後端設定與目前 Codex 不相容，已切回官方後端",
+    codex_background_channel_unavailable: "共用通道不可用",
+    codex_background_dispatch_failed: "恢復請求失敗",
+    controller_timeout: "恢復請求逾時",
     controller_unavailable: "控制器不可用",
   };
   return labels[value] ?? value;
@@ -610,8 +610,8 @@ function updatePromptState(): void {
   const count = Array.from(value).length;
   elements.promptCount.textContent = String(count);
   let error = "";
-  if (!value.trim()) error = "重试文字不能为空";
-  else if (count > 500) error = "最多 500 个字符";
+  if (!value.trim()) error = "重試文字不能為空";
+  else if (count > 500) error = "最多 500 個字元";
   elements.promptError.textContent = error;
   elements.savePrompt.disabled = Boolean(error) || value === savedPrompt || busyCount > 0;
   const strategy = selectedDelayStrategy();
@@ -624,24 +624,24 @@ function updatePromptState(): void {
   const memoryLimit = Number(elements.memoryLimit.value);
   let settingsError = "";
   if (!Number.isInteger(recoveryAttempts) || recoveryAttempts < 1 || recoveryAttempts > 1000) {
-    settingsError = "本次故障恢复上限应为 1 到 1000";
+    settingsError = "本次故障恢復上限應為 1 到 1000";
   } else if (!Number.isInteger(authAttempts) || authAttempts < 1 || authAttempts > 1000) {
-    settingsError = "登录异常恢复上限应为 1 到 1000";
+    settingsError = "登入異常恢復上限應為 1 到 1000";
   } else if (!Number.isInteger(consecutiveRetries) || consecutiveRetries < 1 || consecutiveRetries > 100) {
-    settingsError = "连续无进展重试上限应为 1 到 100";
+    settingsError = "連續無進展重試上限應為 1 到 100";
   } else if (!Number.isInteger(memoryLimit) || memoryLimit < 128 || memoryLimit > 65536) {
-    settingsError = "内存上限应为 128 到 65536 MB";
+    settingsError = "記憶體上限應為 128 到 65536 MB";
   } else if ((strategy !== "fixed" && strategy !== "linear" && strategy !== "exponential")
     || !Number.isInteger(initialDelay) || initialDelay < 1 || initialDelay > 3600
     || !Number.isInteger(maxDelay) || maxDelay < 1 || maxDelay > 86400
     || !Number.isInteger(delayIncrement) || delayIncrement < 1 || delayIncrement > 3600) {
-    settingsError = "等待时间设置超出范围";
+    settingsError = "等待時間設定超出範圍";
   } else if (strategy !== "fixed" && maxDelay < initialDelay) {
-    settingsError = "递增等待时，最大等待不能小于首次等待";
+    settingsError = "遞增等待時，最大等待不能小於首次等待";
   }
   elements.maxDelay.disabled = strategy === "fixed";
   elements.delayIncrement.disabled = strategy !== "linear";
-  elements.initialDelayLabel.textContent = strategy === "fixed" ? "固定间隔（秒）" : "首次等待（秒）";
+  elements.initialDelayLabel.textContent = strategy === "fixed" ? "固定間隔（秒）" : "首次等待（秒）";
   elements.settingsError.textContent = settingsError;
   updateDelayPreview(strategy, initialDelay, maxDelay, delayIncrement, consecutiveRetries);
   elements.saveSettings.disabled = Boolean(error) || Boolean(settingsError)
@@ -711,8 +711,8 @@ function updateDelayPreview(
 
 function formatPreviewDelay(seconds: number): string {
   if (seconds < 60) return `${seconds} 秒`;
-  if (seconds % 3600 === 0) return `${seconds / 3600} 小时`;
-  if (seconds % 60 === 0) return `${seconds / 60} 分钟`;
+  if (seconds % 3600 === 0) return `${seconds / 3600} 小時`;
+  if (seconds % 60 === 0) return `${seconds / 60} 分鐘`;
   return `${seconds} 秒`;
 }
 
@@ -731,7 +731,7 @@ function setBusy(active: boolean): void {
 
 async function callTool(name: string, args: Record<string, unknown> = {}, quiet = false): Promise<void> {
   if (!app) {
-    showNotice("管理面板尚未连接", true);
+    showNotice("管理面板尚未連線", true);
     return;
   }
   if (quiet) {
@@ -744,7 +744,7 @@ async function callTool(name: string, args: Record<string, unknown> = {}, quiet 
     const result = (await app.callServerTool({ name, arguments: args })) as ToolResult;
     const next = extractSnapshot(result);
     if (next) render(next);
-    else if (result.isError) throw new Error(result.content?.find((item) => item.text)?.text ?? "操作失败");
+    else if (result.isError) throw new Error(result.content?.find((item) => item.text)?.text ?? "操作失敗");
   } catch (error) {
     if (name === "set_shared_app_server_enabled") {
       // A failed health check may still have persisted the user's preference.
@@ -756,7 +756,7 @@ async function callTool(name: string, args: Record<string, unknown> = {}, quiet 
     if (name === "set_shared_app_server_enabled" && snapshot) {
       elements.sharedAppServerToggle.checked = snapshot.shared_app_server_requested ?? snapshot.shared_app_server_enabled;
     }
-    if (!quiet) showNotice(error instanceof Error ? error.message : "操作失败", true);
+    if (!quiet) showNotice(error instanceof Error ? error.message : "操作失敗", true);
   } finally {
     if (quiet) {
       statusPollInFlight = false;
@@ -786,8 +786,8 @@ elements.pauseToggle.addEventListener("change", () => void callTool("set_auto_re
   elements.sharedAppServerToggle.addEventListener("change", () => {
   const enabled = elements.sharedAppServerToggle.checked;
   elements.sharedAppServerDescription.textContent = enabled
-    ? `正在使用插件拥有且已通过健康检查的后台（端口 ${snapshot?.shared_app_server_port ?? ""}）`
-    : "默认关闭，不影响 Codex 官方后台";
+    ? `正在使用外掛擁有且已通過健康檢查的後端（埠 ${snapshot?.shared_app_server_port ?? ""}）`
+    : "預設關閉，不影響 Codex 官方後端";
   void callTool("set_shared_app_server_enabled", { enabled });
 });
 elements.retryPrompt.addEventListener("input", updatePromptState);
@@ -813,7 +813,7 @@ if (new URLSearchParams(window.location.search).has("preview")) {
   render(previewSnapshot());
 } else {
   app = new App({ name: "Codex Auto Retry", version: "0.7.12" });
-  app.onerror = (error) => showNotice(error instanceof Error ? error.message : "连接失败", true);
+  app.onerror = (error) => showNotice(error instanceof Error ? error.message : "連線失敗", true);
   app.onhostcontextchanged = handleHostContext;
   app.ontoolresult = (result) => {
     const next = extractSnapshot(result as ToolResult);
@@ -825,7 +825,7 @@ if (new URLSearchParams(window.location.search).has("preview")) {
       if (context) handleHostContext(context);
       return callTool("get_auto_retry_status");
     })
-    .catch((error) => showNotice(error instanceof Error ? error.message : "连接失败", true));
+    .catch((error) => showNotice(error instanceof Error ? error.message : "連線失敗", true));
 }
 
 function previewSnapshot(): ManagementSnapshot {
@@ -838,7 +838,7 @@ function previewSnapshot(): ManagementSnapshot {
     shared_app_server_enabled: false,
     startup_approved: "enabled",
     shared_app_server_port: 49621,
-    retry_prompt: "继续",
+    retry_prompt: "繼續",
     max_recovery_attempts: 15,
     max_consecutive_retries: 5,
     memory_limit_mb: 1024,
@@ -861,7 +861,7 @@ function previewSnapshot(): ManagementSnapshot {
     retries: [
       {
         thread_id: "019f9d5d-9c82-75b1-b7c0-20a658af0423",
-        label: "任务 019f9d5d",
+        label: "任務 019f9d5d",
         state: "running",
         class: "server",
         seconds_remaining: 0,
@@ -876,7 +876,7 @@ function previewSnapshot(): ManagementSnapshot {
       },
       {
         thread_id: "019f9d5d-9c82-75b1-b7c0-20a658af0424",
-        label: "任务 019f9d5e",
+        label: "任務 019f9d5e",
         state: "pending",
         class: "rate_limit",
         due_at: new Date(now + 42_000).toISOString(),
@@ -891,7 +891,7 @@ function previewSnapshot(): ManagementSnapshot {
       },
       {
         thread_id: "019f9d5d-9c82-75b1-b7c0-20a658af0425",
-        label: "任务 019f9d5f",
+        label: "任務 019f9d5f",
         state: "pending",
         class: "transient",
         due_at: new Date(now + 126_000).toISOString(),
@@ -906,7 +906,7 @@ function previewSnapshot(): ManagementSnapshot {
       },
       {
         thread_id: "019f9d5d-9c82-75b1-b7c0-20a658af0426",
-        label: "任务 019f9d60",
+        label: "任務 019f9d60",
         state: "stopped",
         class: "server",
         seconds_remaining: 0,

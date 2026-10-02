@@ -106,9 +106,9 @@ func newManagementMCPServer(service *managementService) *mcp.Server {
 	mcp.AddTool(server, &mcp.Tool{
 		Meta:        managementToolMeta(),
 		Name:        "get_auto_retry_status",
-		Title:       "查看自动重试",
-		Description: "查看 Codex 自动重试服务、倒计时、队列和当前设置，并显示管理面板。",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: boolPointer(false), Title: "查看自动重试"},
+		Title:       "檢視自動重試",
+		Description: "檢視 Codex 自動重試服務、倒數計時、佇列和目前設定，並顯示管理面板。",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: boolPointer(false), Title: "檢視自動重試"},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, _ emptyToolInput) (*mcp.CallToolResult, ManagementSnapshot, error) {
 		snapshot, err := service.snapshot(time.Now().UTC())
 		return nil, snapshot, err
@@ -117,9 +117,9 @@ func newManagementMCPServer(service *managementService) *mcp.Server {
 	mcp.AddTool(server, &mcp.Tool{
 		Meta:        managementToolMeta(),
 		Name:        "set_retry_prompt",
-		Title:       "修改后备重试文字",
-		Description: "修改静默续接不受支持时使用的后备文字；正常情况下不会新增可见消息，目标模式仍使用原生恢复。",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPointer(false), IdempotentHint: true, OpenWorldHint: boolPointer(false), Title: "修改重试文字"},
+		Title:       "修改後備重試文字",
+		Description: "修改靜默續接不受支援時使用的後備文字；正常情況下不會新增可見訊息，目標模式仍使用原生恢復。",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPointer(false), IdempotentHint: true, OpenWorldHint: boolPointer(false), Title: "修改重試文字"},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input setRetryPromptInput) (*mcp.CallToolResult, ManagementSnapshot, error) {
 		snapshot, err := service.setRetryPrompt(input.Prompt, time.Now().UTC())
 		return nil, snapshot, err
@@ -128,9 +128,9 @@ func newManagementMCPServer(service *managementService) *mcp.Server {
 	mcp.AddTool(server, &mcp.Tool{
 		Meta:        managementToolMeta(),
 		Name:        "set_retry_settings",
-		Title:       "修改自动重试设置",
-		Description: "同时修改后备重试文字、连续无进展重试上限、单次故障恢复上限、固定、翻倍或线性等待策略，以及插件达到上限时的通知设置。",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPointer(false), IdempotentHint: true, OpenWorldHint: boolPointer(false), Title: "修改自动重试设置"},
+		Title:       "修改自動重試設定",
+		Description: "同時修改後備重試文字、連續無進展重試上限、單次故障恢復上限、固定、翻倍或線性等待策略，以及外掛達到上限時的通知設定。",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPointer(false), IdempotentHint: true, OpenWorldHint: boolPointer(false), Title: "修改自動重試設定"},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input setRetrySettingsInput) (*mcp.CallToolResult, ManagementSnapshot, error) {
 		settings := RetrySettings{
 			RetryPrompt:           input.RetryPrompt,
@@ -153,9 +153,9 @@ func newManagementMCPServer(service *managementService) *mcp.Server {
 	mcp.AddTool(server, &mcp.Tool{
 		Meta:        managementToolMeta(),
 		Name:        "set_auto_retry_paused",
-		Title:       "暂停或恢复自动重试",
-		Description: "暂停或恢复新的自动重试；已开始的 Codex 任务不会被强制终止。",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPointer(false), IdempotentHint: true, OpenWorldHint: boolPointer(false), Title: "暂停或恢复自动重试"},
+		Title:       "暫停或恢復自動重試",
+		Description: "暫停或恢復新的自動重試；已開始的 Codex 任務不會被強制終止。",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPointer(false), IdempotentHint: true, OpenWorldHint: boolPointer(false), Title: "暫停或恢復自動重試"},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input setPausedInput) (*mcp.CallToolResult, ManagementSnapshot, error) {
 		snapshot, err := service.setPaused(input.Paused, time.Now().UTC())
 		return nil, snapshot, err
@@ -164,9 +164,9 @@ func newManagementMCPServer(service *managementService) *mcp.Server {
 	mcp.AddTool(server, &mcp.Tool{
 		Meta:        managementToolMeta(),
 		Name:        "set_shared_app_server_enabled",
-		Title:       "启用或关闭共享后台",
-		Description: "显式启用或关闭可选的共享 Codex 后台。启用前会检查回环端口、WebSocket 握手、可执行文件和进程归属；失败时不会修改 Codex 环境。",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPointer(false), IdempotentHint: true, OpenWorldHint: boolPointer(false), Title: "共享后台模式"},
+		Title:       "啟用或關閉共用後端",
+		Description: "明確啟用或關閉可選的共用 Codex 後端。啟用前會檢查迴路埠、WebSocket 交握、執行檔和行程歸屬；失敗時不會修改 Codex 環境。",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPointer(false), IdempotentHint: true, OpenWorldHint: boolPointer(false), Title: "共用後端模式"},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input setSharedAppServerInput) (*mcp.CallToolResult, ManagementSnapshot, error) {
 		snapshot, err := service.setSharedAppServerEnabled(input.Enabled, time.Now().UTC())
 		return nil, snapshot, err
@@ -175,9 +175,9 @@ func newManagementMCPServer(service *managementService) *mcp.Server {
 	mcp.AddTool(server, &mcp.Tool{
 		Meta:        managementToolMeta(),
 		Name:        "retry_now",
-		Title:       "立即重试",
-		Description: "让队列中指定 Codex 任务尽快重试；暂停期间会保持待处理，恢复后执行。",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPointer(false), OpenWorldHint: boolPointer(false), Title: "立即重试"},
+		Title:       "立即重試",
+		Description: "讓佇列中指定 Codex 任務儘快重試；暫停期間會保持待處理，恢復後執行。",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPointer(false), OpenWorldHint: boolPointer(false), Title: "立即重試"},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input threadControlInput) (*mcp.CallToolResult, ManagementSnapshot, error) {
 		snapshot, err := service.retryNow(input.ThreadID, time.Now().UTC())
 		return nil, snapshot, err
@@ -186,9 +186,9 @@ func newManagementMCPServer(service *managementService) *mcp.Server {
 	mcp.AddTool(server, &mcp.Tool{
 		Meta:        managementToolMeta(),
 		Name:        "cancel_retry",
-		Title:       "取消等待中的重试",
-		Description: "取消队列中指定任务尚未开始的重试；已经开始的 Codex 任务不会被中止。",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPointer(false), IdempotentHint: true, OpenWorldHint: boolPointer(false), Title: "取消等待中的重试"},
+		Title:       "取消等待中的重試",
+		Description: "取消佇列中指定任務尚未開始的重試；已經開始的 Codex 任務不會被中止。",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPointer(false), IdempotentHint: true, OpenWorldHint: boolPointer(false), Title: "取消等待中的重試"},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input threadControlInput) (*mcp.CallToolResult, ManagementSnapshot, error) {
 		snapshot, err := service.cancelRetry(input.ThreadID, time.Now().UTC())
 		return nil, snapshot, err
@@ -197,9 +197,9 @@ func newManagementMCPServer(service *managementService) *mcp.Server {
 	mcp.AddTool(server, &mcp.Tool{
 		Meta:        managementToolMeta(),
 		Name:        "restart_retry",
-		Title:       "重新开始重试",
-		Description: "为已经达到任一重试上限的任务重新开始两个计数并立即重试。",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPointer(false), OpenWorldHint: boolPointer(false), Title: "重新开始重试"},
+		Title:       "重新開始重試",
+		Description: "為已經達到任一重試上限的任務重新開始兩個計數並立即重試。",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPointer(false), OpenWorldHint: boolPointer(false), Title: "重新開始重試"},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input threadControlInput) (*mcp.CallToolResult, ManagementSnapshot, error) {
 		snapshot, err := service.restartRetry(input.ThreadID, time.Now().UTC())
 		return nil, snapshot, err

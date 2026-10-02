@@ -75,94 +75,94 @@ if (Test-Path -LiteralPath $uiLangPath) {
 }
 
 $script:i18n = @{
-    'form_title'              = @{ zh = 'Codex Auto Retry 设置'; en = 'Codex Auto Retry Settings' }
+    'form_title'              = @{ zh = 'Codex Auto Retry 設定'; en = 'Codex Auto Retry Settings' }
     'lang_button'             = @{ zh = 'English'; en = '中文' }
-    'status_group'            = @{ zh = '当前状态'; en = 'Current Status' }
-    'status_loading'          = @{ zh = '正在读取…'; en = 'Loading...' }
-    'status_not_running'      = @{ zh = '后台服务未运行'; en = 'Service Not Running' }
-    'status_disconnected'     = @{ zh = 'Codex 未接入共享后台'; en = 'Codex Not Connected' }
-    'status_disconnected_hint' = @{ zh = '共享后台已启动；请使用安全启动入口重启 Codex。'; en = 'Shared backend is running; relaunch Codex with the safe launcher.' }
-    'startup_approval_enabled' = @{ zh = '登录启动已启用'; en = 'Sign-in startup enabled' }
-    'startup_approval_disabled' = @{ zh = '登录启动已禁用'; en = 'Sign-in startup disabled' }
-    'startup_approval_unknown' = @{ zh = '登录启动状态未知'; en = 'Sign-in startup unknown' }
-    'status_exited'           = @{ zh = 'Codex 已退出，重试已停止'; en = 'Codex Exited (Stopped)' }
-    'status_shared_temp_unavail' = @{ zh = '共享后台暂不可用'; en = 'Shared Backend Unavailable' }
-    'status_shared_disabled'  = @{ zh = '共享后台已关闭'; en = 'Shared Backend Disabled' }
-    'status_port_reserved'    = @{ zh = '共享端口被 Windows 保留，重试未执行'; en = 'Port Reserved by Windows' }
-    'status_port_conflict'    = @{ zh = '首选共享端口不可用，启用时将自动选择安全端口'; en = 'Port Conflict (Auto-Selecting)' }
-    'status_migration_deferred' = @{ zh = '等待 Codex 关闭后完成共享后台迁移'; en = 'Waiting for Codex to Exit' }
-    'status_config_invalid'   = @{ zh = '共享后台配置不兼容，已切回官方后台'; en = 'Shared Config Reverted' }
-    'status_paused'           = @{ zh = '已暂停'; en = 'Paused' }
-    'status_running'          = @{ zh = '运行中'; en = 'Running' }
-    'queue_summary'           = @{ zh = '队列：{0} 等待 / {1} 执行 / {2} 停止'; en = 'Queue: {0} wait / {1} run / {2} stop' }
-    'next_waiting_service'    = @{ zh = '下次重试：等待服务启动'; en = 'Next Retry: Waiting for Service' }
-    'next_waiting_resume'     = @{ zh = '下次重试：等待恢复'; en = 'Next Retry: Waiting for Resume' }
-    'next_seconds'            = @{ zh = '下次重试：{0} 秒'; en = 'Next Retry: {0}s' }
-    'next_running'            = @{ zh = '下次重试：正在执行'; en = 'Next Retry: Running' }
-    'next_none'               = @{ zh = '下次重试：--'; en = 'Next Retry: --' }
-    'last_scan'               = @{ zh = '最近扫描：'; en = 'Last Scan: ' }
-    'queue_group'             = @{ zh = '任务队列（仅显示任务编号，不读取对话内容）'; en = 'Task Queue (Task IDs only, conversation content not read)' }
-    'col_task'                = @{ zh = '任务'; en = 'Task' }
-    'col_status'              = @{ zh = '状态'; en = 'Status' }
-    'col_countdown'           = @{ zh = '倒计时'; en = 'Countdown' }
-    'col_recovery'            = @{ zh = '本次恢复'; en = 'Recoveries' }
-    'col_consecutive'         = @{ zh = '连续重试'; en = 'Repeats' }
-    'col_class'               = @{ zh = '故障类型'; en = 'Type' }
-    'btn_retry_now'           = @{ zh = '立即重试'; en = 'Retry Now' }
+    'status_group'            = @{ zh = '目前狀態'; en = 'Current Status' }
+    'status_loading'          = @{ zh = '正在讀取…'; en = 'Loading...' }
+    'status_not_running'      = @{ zh = '背景服務未執行'; en = 'Service Not Running' }
+    'status_disconnected'     = @{ zh = 'Codex 未接入共用後端'; en = 'Codex Not Connected' }
+    'status_disconnected_hint' = @{ zh = '共用後端已啟動；請使用安全啟動入口重新啟動 Codex。'; en = 'Shared backend is running; relaunch Codex with the safe launcher.' }
+    'startup_approval_enabled' = @{ zh = '登入啟動已啟用'; en = 'Sign-in startup enabled' }
+    'startup_approval_disabled' = @{ zh = '登入啟動已停用'; en = 'Sign-in startup disabled' }
+    'startup_approval_unknown' = @{ zh = '登入啟動狀態未知'; en = 'Sign-in startup unknown' }
+    'status_exited'           = @{ zh = 'Codex 已結束，重試已停止'; en = 'Codex Exited (Stopped)' }
+    'status_shared_temp_unavail' = @{ zh = '共用後端暫不可用'; en = 'Shared Backend Unavailable' }
+    'status_shared_disabled'  = @{ zh = '共用後端已關閉'; en = 'Shared Backend Disabled' }
+    'status_port_reserved'    = @{ zh = '共用埠被 Windows 保留，重試未執行'; en = 'Port Reserved by Windows' }
+    'status_port_conflict'    = @{ zh = '偏好共用埠不可用，啟用時將自動選擇安全埠'; en = 'Port Conflict (Auto-Selecting)' }
+    'status_migration_deferred' = @{ zh = '等待 Codex 關閉後完成共用後端遷移'; en = 'Waiting for Codex to Exit' }
+    'status_config_invalid'   = @{ zh = '共用後端設定不相容，已切回官方後端'; en = 'Shared Config Reverted' }
+    'status_paused'           = @{ zh = '已暫停'; en = 'Paused' }
+    'status_running'          = @{ zh = '執行中'; en = 'Running' }
+    'queue_summary'           = @{ zh = '佇列：{0} 等待 / {1} 執行 / {2} 停止'; en = 'Queue: {0} wait / {1} run / {2} stop' }
+    'next_waiting_service'    = @{ zh = '下次重試：等待服務啟動'; en = 'Next Retry: Waiting for Service' }
+    'next_waiting_resume'     = @{ zh = '下次重試：等待恢復'; en = 'Next Retry: Waiting for Resume' }
+    'next_seconds'            = @{ zh = '下次重試：{0} 秒'; en = 'Next Retry: {0}s' }
+    'next_running'            = @{ zh = '下次重試：正在執行'; en = 'Next Retry: Running' }
+    'next_none'               = @{ zh = '下次重試：--'; en = 'Next Retry: --' }
+    'last_scan'               = @{ zh = '最近掃描：'; en = 'Last Scan: ' }
+    'queue_group'             = @{ zh = '任務佇列（僅顯示任務編號，不讀取對話內容）'; en = 'Task Queue (Task IDs only, conversation content not read)' }
+    'col_task'                = @{ zh = '任務'; en = 'Task' }
+    'col_status'              = @{ zh = '狀態'; en = 'Status' }
+    'col_countdown'           = @{ zh = '倒數計時'; en = 'Countdown' }
+    'col_recovery'            = @{ zh = '本次恢復'; en = 'Recoveries' }
+    'col_consecutive'         = @{ zh = '連續重試'; en = 'Repeats' }
+    'col_class'               = @{ zh = '故障類型'; en = 'Type' }
+    'btn_retry_now'           = @{ zh = '立即重試'; en = 'Retry Now' }
     'btn_cancel_retry'        = @{ zh = '取消等待'; en = 'Cancel Wait' }
-    'btn_restart_retry'       = @{ zh = '重新开始'; en = 'Restart' }
-    'btn_safe_launch'         = @{ zh = '安全启动 Codex'; en = 'Safe Launch Codex' }
-    'safe_launch_running'     = @{ zh = '正在等待 Codex 关闭并通过安全入口启动…'; en = 'Waiting for Codex to close, then launching safely...' }
-    'safe_launch_done'        = @{ zh = '已请求安全启动 Codex，请稍候刷新状态。'; en = 'Safe Codex launch requested; status will refresh shortly.' }
-    'safe_launch_failed'      = @{ zh = '安全启动失败，请确认 Codex 已完全退出。'; en = 'Safe launch failed; confirm that Codex is fully closed.' }
-    'safe_launch_missing'     = @{ zh = '找不到安全启动脚本，请重新安装插件。'; en = 'Safe launcher is missing; reinstall the plugin.' }
-    'safe_launch_disabled'    = @{ zh = '请先启用共享 Codex 后台。'; en = 'Enable the shared Codex backend first.' }
-    'settings_group'          = @{ zh = '自动重试设置'; en = 'Auto Retry Settings' }
-    'check_enabled'           = @{ zh = '启用自动重试'; en = 'Enable Auto Retry' }
-    'check_shared'            = @{ zh = '启用共享 Codex 后台（健康检查）'; en = 'Enable Shared Codex Backend' }
-    'shared_port_prefix'      = @{ zh = '当前共享端口：'; en = 'Shared Port: ' }
-    'check_notifications'     = @{ zh = '达到重试上限时显示插件通知'; en = 'Show Alert on Retry Limit' }
-    'label_prompt'            = @{ zh = '后备重试文字'; en = 'Fallback Retry Prompt' }
-    'label_recovery'          = @{ zh = '本次故障恢复上限'; en = 'Outage Recovery Limit' }
-    'label_consecutive'       = @{ zh = '连续无进展重试上限'; en = 'No-Progress Limit' }
-    'label_auth_limit'         = @{ zh = '登录异常恢复上限'; en = 'Auth Error Limit' }
-    'label_memory'            = @{ zh = '内存保护上限（MB）'; en = 'Memory Limit (MB)' }
+    'btn_restart_retry'       = @{ zh = '重新開始'; en = 'Restart' }
+    'btn_safe_launch'         = @{ zh = '安全啟動 Codex'; en = 'Safe Launch Codex' }
+    'safe_launch_running'     = @{ zh = '正在等待 Codex 關閉並透過安全入口啟動…'; en = 'Waiting for Codex to close, then launching safely...' }
+    'safe_launch_done'        = @{ zh = '已請求安全啟動 Codex，請稍候重新整理狀態。'; en = 'Safe Codex launch requested; status will refresh shortly.' }
+    'safe_launch_failed'      = @{ zh = '安全啟動失敗，請確認 Codex 已完全結束。'; en = 'Safe launch failed; confirm that Codex is fully closed.' }
+    'safe_launch_missing'     = @{ zh = '找不到安全啟動指令碼，請重新安裝外掛。'; en = 'Safe launcher is missing; reinstall the plugin.' }
+    'safe_launch_disabled'    = @{ zh = '請先啟用共用 Codex 後端。'; en = 'Enable the shared Codex backend first.' }
+    'settings_group'          = @{ zh = '自動重試設定'; en = 'Auto Retry Settings' }
+    'check_enabled'           = @{ zh = '啟用自動重試'; en = 'Enable Auto Retry' }
+    'check_shared'            = @{ zh = '啟用共用 Codex 後端（健康檢查）'; en = 'Enable Shared Codex Backend' }
+    'shared_port_prefix'      = @{ zh = '目前共用埠：'; en = 'Shared Port: ' }
+    'check_notifications'     = @{ zh = '達到重試上限時顯示外掛通知'; en = 'Show Alert on Retry Limit' }
+    'label_prompt'            = @{ zh = '後備重試文字'; en = 'Fallback Retry Prompt' }
+    'label_recovery'          = @{ zh = '本次故障恢復上限'; en = 'Outage Recovery Limit' }
+    'label_consecutive'       = @{ zh = '連續無進展重試上限'; en = 'No-Progress Limit' }
+    'label_auth_limit'         = @{ zh = '登入異常恢復上限'; en = 'Auth Error Limit' }
+    'label_memory'            = @{ zh = '記憶體保護上限（MB）'; en = 'Memory Limit (MB)' }
     'label_strategy'          = @{ zh = '等待策略'; en = 'Wait Strategy' }
-    'strategy_exponential'    = @{ zh = '翻倍递增'; en = 'Exponential' }
-    'strategy_linear'         = @{ zh = '等差递增'; en = 'Linear' }
-    'strategy_fixed'          = @{ zh = '固定间隔'; en = 'Fixed Interval' }
+    'strategy_exponential'    = @{ zh = '翻倍遞增'; en = 'Exponential' }
+    'strategy_linear'         = @{ zh = '等差遞增'; en = 'Linear' }
+    'strategy_fixed'          = @{ zh = '固定間隔'; en = 'Fixed Interval' }
     'label_initial_delay'     = @{ zh = '首次等待（秒）'; en = 'Initial Wait (s)' }
-    'label_fixed_interval'    = @{ zh = '固定间隔（秒）'; en = 'Fixed Interval (s)' }
+    'label_fixed_interval'    = @{ zh = '固定間隔（秒）'; en = 'Fixed Interval (s)' }
     'label_max_delay'         = @{ zh = '最大等待（秒）'; en = 'Max Wait (s)' }
     'label_increment'         = @{ zh = '每次增加（秒）'; en = 'Increment (s)' }
     'wait_seq_prefix'         = @{ zh = '等待序列：'; en = 'Wait Sequence: ' }
     'unit_second'             = @{ zh = ' 秒'; en = 's' }
-    'unit_minute'             = @{ zh = ' 分钟'; en = 'm' }
-    'unit_hour'               = @{ zh = ' 小时'; en = 'h' }
-    'btn_save'                = @{ zh = '保存设置'; en = 'Save Settings' }
-    'btn_close'               = @{ zh = '关闭'; en = 'Close' }
-    'busy_checking'           = @{ zh = '检查中…'; en = 'Checking...' }
-    'busy_notice'             = @{ zh = '正在执行设置检查，请稍候…'; en = 'Checking settings, please wait...' }
-    'save_saved'              = @{ zh = '设置已保存，将在下一次扫描时生效。'; en = 'Settings saved; will take effect on next scan.' }
-    'save_checking_health'    = @{ zh = '正在执行共享后台健康检查，Codex 仍保持原后台…'; en = 'Running shared backend health check; Codex remains on official backend...' }
-    'save_closing_shared'     = @{ zh = '正在关闭共享后台并恢复官方后台…'; en = 'Disabling shared backend and reverting to official backend...' }
-    'save_saving'             = @{ zh = '正在保存设置…'; en = 'Saving settings...' }
-    'save_timeout'            = @{ zh = '设置检查超时，Codex 后台未切换，设置未保存。'; en = 'Settings check timed out; Codex backend not changed, settings not saved.' }
-    'save_validation_failed'  = @{ zh = '设置校验失败'; en = 'Settings validation failed' }
-    'save_fail_reserved'      = @{ zh = '保存失败：端口 {0} 被 Windows 保留，共享后台未启用。'; en = 'Save failed: Port {0} is reserved by Windows; shared backend not enabled.' }
-    'save_fail_conflict'      = @{ zh = '保存失败：端口 {0} 被其他程序占用，共享后台未启用。'; en = 'Save failed: Port {0} is in use; shared backend not enabled.' }
-    'save_fail_timeout'       = @{ zh = '保存超时：共享后台健康检查未完成，Codex 仍使用原后台。'; en = 'Save timed out: Health check did not finish; Codex remains on official backend.' }
-    'save_fail_health'        = @{ zh = '保存失败：共享后台健康检查未通过，Codex 仍使用原后台。'; en = 'Save failed: Health check did not pass; Codex remains on official backend.' }
-    'save_fail_close'         = @{ zh = '保存失败：共享后台未能关闭，设置未完成。'; en = 'Save failed: Shared backend could not be disabled.' }
-    'save_fail_range'         = @{ zh = '保存失败，请检查设置范围。'; en = 'Save failed: please verify settings range.' }
-    'msg_prompt_empty'        = @{ zh = '后备重试文字不能为空。'; en = 'Fallback retry prompt cannot be empty.' }
-    'msg_max_less_initial'    = @{ zh = '最大等待时间不能小于首次等待时间。'; en = 'Maximum wait time cannot be less than initial wait time.' }
-    'msg_action_failed'       = @{ zh = '操作没有生效，任务状态可能已经改变。'; en = 'Action did not take effect; task state may have changed.' }
-    'memory_guard_msg'        = @{ zh = '设置窗口私有内存已达到 {0} MB，超过上限 {1} MB。窗口将关闭，Codex 任务数据未被删除。'; en = 'Settings window memory reached {0} MB, exceeding limit of {1} MB. Window will close; Codex task data is preserved.' }
-    'memory_guard_title'      = @{ zh = 'Codex Auto Retry 内存保护'; en = 'Codex Auto Retry Memory Guard' }
-    'layout_overlap_err'      = @{ zh = '设置布局发生遮挡：'; en = 'Layout overlap detected: ' }
-    'layout_bounds_err'       = @{ zh = '设置输入框超出可见区域。'; en = 'Control bounds exceed visible area.' }
-    'config_read_err'         = @{ zh = '无法读取自动重试设置。'; en = 'Cannot read auto-retry settings.' }
+    'unit_minute'             = @{ zh = ' 分鐘'; en = 'm' }
+    'unit_hour'               = @{ zh = ' 小時'; en = 'h' }
+    'btn_save'                = @{ zh = '儲存設定'; en = 'Save Settings' }
+    'btn_close'               = @{ zh = '關閉'; en = 'Close' }
+    'busy_checking'           = @{ zh = '檢查中…'; en = 'Checking...' }
+    'busy_notice'             = @{ zh = '正在執行設定檢查，請稍候…'; en = 'Checking settings, please wait...' }
+    'save_saved'              = @{ zh = '設定已儲存，將在下一次掃描時生效。'; en = 'Settings saved; will take effect on next scan.' }
+    'save_checking_health'    = @{ zh = '正在執行共用後端健康檢查，Codex 仍保持原後端…'; en = 'Running shared backend health check; Codex remains on official backend...' }
+    'save_closing_shared'     = @{ zh = '正在關閉共用後端並恢復官方後端…'; en = 'Disabling shared backend and reverting to official backend...' }
+    'save_saving'             = @{ zh = '正在儲存設定…'; en = 'Saving settings...' }
+    'save_timeout'            = @{ zh = '設定檢查逾時，Codex 後端未切換，設定未儲存。'; en = 'Settings check timed out; Codex backend not changed, settings not saved.' }
+    'save_validation_failed'  = @{ zh = '設定驗證失敗'; en = 'Settings validation failed' }
+    'save_fail_reserved'      = @{ zh = '儲存失敗：埠 {0} 被 Windows 保留，共用後端未啟用。'; en = 'Save failed: Port {0} is reserved by Windows; shared backend not enabled.' }
+    'save_fail_conflict'      = @{ zh = '儲存失敗：埠 {0} 被其他程式佔用，共用後端未啟用。'; en = 'Save failed: Port {0} is in use; shared backend not enabled.' }
+    'save_fail_timeout'       = @{ zh = '儲存逾時：共用後端健康檢查未完成，Codex 仍使用原後端。'; en = 'Save timed out: Health check did not finish; Codex remains on official backend.' }
+    'save_fail_health'        = @{ zh = '儲存失敗：共用後端健康檢查未通過，Codex 仍使用原後端。'; en = 'Save failed: Health check did not pass; Codex remains on official backend.' }
+    'save_fail_close'         = @{ zh = '儲存失敗：共用後端未能關閉，設定未完成。'; en = 'Save failed: Shared backend could not be disabled.' }
+    'save_fail_range'         = @{ zh = '儲存失敗，請檢查設定範圍。'; en = 'Save failed: please verify settings range.' }
+    'msg_prompt_empty'        = @{ zh = '後備重試文字不能為空。'; en = 'Fallback retry prompt cannot be empty.' }
+    'msg_max_less_initial'    = @{ zh = '最大等待時間不能小於首次等待時間。'; en = 'Maximum wait time cannot be less than initial wait time.' }
+    'msg_action_failed'       = @{ zh = '操作沒有生效，任務狀態可能已經改變。'; en = 'Action did not take effect; task state may have changed.' }
+    'memory_guard_msg'        = @{ zh = '設定視窗私有記憶體已達到 {0} MB，超過上限 {1} MB。視窗將關閉，Codex 任務資料未被刪除。'; en = 'Settings window memory reached {0} MB, exceeding limit of {1} MB. Window will close; Codex task data is preserved.' }
+    'memory_guard_title'      = @{ zh = 'Codex Auto Retry 記憶體保護'; en = 'Codex Auto Retry Memory Guard' }
+    'layout_overlap_err'      = @{ zh = '設定版面發生遮擋：'; en = 'Layout overlap detected: ' }
+    'layout_bounds_err'       = @{ zh = '設定輸入框超出可見區域。'; en = 'Control bounds exceed visible area.' }
+    'config_read_err'         = @{ zh = '無法讀取自動重試設定。'; en = 'Cannot read auto-retry settings.' }
 }
 
 function T($Key) {
@@ -643,9 +643,9 @@ function Get-StateText {
     $lang = $script:currentLanguage
     switch ($State) {
         'pending'  { if ($lang -eq 'en') { return 'Pending' } else { return '等待中' } }
-        'starting' { if ($lang -eq 'en') { return 'Starting' } else { return '启动中' } }
-        'running'  { if ($lang -eq 'en') { return 'Running' } else { return '执行中' } }
-        'stopped'  { if ($lang -eq 'en') { return 'Limit Reached' } else { return '达到上限' } }
+        'starting' { if ($lang -eq 'en') { return 'Starting' } else { return '啟動中' } }
+        'running'  { if ($lang -eq 'en') { return 'Running' } else { return '執行中' } }
+        'stopped'  { if ($lang -eq 'en') { return 'Limit Reached' } else { return '達到上限' } }
         default { return $State }
     }
 }
@@ -654,53 +654,53 @@ function Get-StoppedStateText {
     param([string]$Reason)
     $lang = $script:currentLanguage
     if ($Reason -eq 'auth_attempt_limit') {
-        if ($lang -eq 'en') { return 'Auth Limit' } else { return '登录异常专用上限' }
+        if ($lang -eq 'en') { return 'Auth Limit' } else { return '登入異常專用上限' }
     }
     if ($Reason -eq 'codex_not_running') {
-        if ($lang -eq 'en') { return 'Codex Exited' } else { return 'Codex 已退出' }
+        if ($lang -eq 'en') { return 'Codex Exited' } else { return 'Codex 已結束' }
     }
     if ($Reason -eq 'shared_app_server_disabled') {
-        if ($lang -eq 'en') { return 'Shared Backend Disabled' } else { return '共享后台已关闭' }
+        if ($lang -eq 'en') { return 'Shared Backend Disabled' } else { return '共用後端已關閉' }
     }
     if ($Reason -eq 'codex_restart_required') {
-        if ($lang -eq 'en') { return 'Codex Not Connected' } else { return 'Codex 未接入共享后台' }
+        if ($lang -eq 'en') { return 'Codex Not Connected' } else { return 'Codex 未接入共用後端' }
     }
     if ($Reason -eq 'codex_home_not_shared') {
-        if ($lang -eq 'en') { return 'Task Dir Not Shared' } else { return '任务目录未接入' }
+        if ($lang -eq 'en') { return 'Task Dir Not Shared' } else { return '任務目錄未接入' }
     }
     if ($Reason -eq 'shared_app_server_port_conflict') {
-        if ($lang -eq 'en') { return 'Port Conflict' } else { return '恢复端口冲突' }
+        if ($lang -eq 'en') { return 'Port Conflict' } else { return '恢復埠衝突' }
     }
     if ($Reason -eq 'shared_app_server_port_reserved') {
-        if ($lang -eq 'en') { return 'Port Reserved by Windows' } else { return '端口被 Windows 保留' }
+        if ($lang -eq 'en') { return 'Port Reserved by Windows' } else { return '埠被 Windows 保留' }
     }
     if ($Reason -eq 'shared_app_server_config_invalid') {
-        if ($lang -eq 'en') { return 'Config Incompatible; Reverted' } else { return '共享后台配置不兼容，已切回官方后台' }
+        if ($lang -eq 'en') { return 'Config Incompatible; Reverted' } else { return '共用後端設定不相容，已切回官方後端' }
     }
     if ($Reason -like 'controller_*' -or $Reason -like 'codex_background_*' -or $Reason -eq 'app_server_request_failed') {
-        if ($lang -eq 'en') { return 'Recovery Channel Failed' } else { return '恢复通道失败' }
+        if ($lang -eq 'en') { return 'Recovery Channel Failed' } else { return '恢復通道失敗' }
     }
     if ($Reason -eq 'goal_empty_response_limit_block_failed') {
-        if ($lang -eq 'en') { return 'Goal Stop Failed' } else { return '目标停止失败' }
+        if ($lang -eq 'en') { return 'Goal Stop Failed' } else { return '目標停止失敗' }
     }
     if ($Reason -eq 'goal_empty_response_limit') {
-        if ($lang -eq 'en') { return 'Goal Stopped (Empty Replies)' } else { return '目标空回复已停止' }
+        if ($lang -eq 'en') { return 'Goal Stopped (Empty Replies)' } else { return '目標空回覆已停止' }
     }
-    if ($lang -eq 'en') { return 'Limit Reached' } else { return '达到上限' }
+    if ($lang -eq 'en') { return 'Limit Reached' } else { return '達到上限' }
 }
 
 function Get-ClassText {
     param([string]$Class)
     $lang = $script:currentLanguage
     switch ($Class) {
-        'transient'      { if ($lang -eq 'en') { return 'Connection Dropped' } else { return '连接中断' } }
-        'rate_limit'     { if ($lang -eq 'en') { return 'Rate Limited' } else { return '请求限流' } }
-        'server'         { if ($lang -eq 'en') { return 'Provider Failure' } else { return '供应商故障' } }
-        'auth_transient' { if ($lang -eq 'en') { return 'Auth Service Error' } else { return '登录服务异常' } }
-        'auth_limited'   { if ($lang -eq 'en') { return 'Auth Error' } else { return '登录异常' } }
-        'empty_response' { if ($lang -eq 'en') { return 'Empty Model Reply' } else { return '模型空回复' } }
+        'transient'      { if ($lang -eq 'en') { return 'Connection Dropped' } else { return '連線中斷' } }
+        'rate_limit'     { if ($lang -eq 'en') { return 'Rate Limited' } else { return '請求限流' } }
+        'server'         { if ($lang -eq 'en') { return 'Provider Failure' } else { return '供應商故障' } }
+        'auth_transient' { if ($lang -eq 'en') { return 'Auth Service Error' } else { return '登入服務異常' } }
+        'auth_limited'   { if ($lang -eq 'en') { return 'Auth Error' } else { return '登入異常' } }
+        'empty_response' { if ($lang -eq 'en') { return 'Empty Model Reply' } else { return '模型空回覆' } }
         'unknown'        { if ($lang -eq 'en') { return 'Unknown Fault' } else { return '未知故障' } }
-        default          { if ($lang -eq 'en') { return 'Unclassified' } else { return '未分类' } }
+        default          { if ($lang -eq 'en') { return 'Unclassified' } else { return '未分類' } }
     }
 }
 

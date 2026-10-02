@@ -99,7 +99,7 @@
 
 可在 Codex 對話中直接呼叫：
 
-> `打開 Codex Auto Retry 管理面板` 或 `Open Codex Auto Retry Management Panel`
+> `開啟 Codex Auto Retry 管理面板` 或 `Open Codex Auto Retry Management Panel`
 
 採用純 TypeScript 撰寫並透過 Go `embed` 內嵌於 MCP 二進位檔中，零外部網路請求且不需 Node.js 執行期環境。提供：
 
@@ -112,20 +112,22 @@
 
 ## 快速上手（終端使用者）
 
-1. 下載並解壓縮 Windows x64 發佈檔（可自 [GitHub Releases](https://github.com/sybxxx/codex-auto-retry/releases/latest) 取得）。
-2. 完全關閉 Codex App，在**解壓縮後的發佈檔資料夾**內雙擊執行 `安装.cmd`。
+1. 從本 fork 的 [GitHub Releases](https://github.com/SanHsien/codex-auto-retry/releases/latest) 下載繁體中文版，二擇一：
+   * **單檔安裝程式** `Codex-Auto-Retry-<版本>-windows-x64-setup.exe`：完全關閉 Codex App 後直接雙擊，不必解壓縮。
+   * **壓縮檔** `Codex-Auto-Retry-<版本>-windows-x64.zip`：解壓縮後，在資料夾內雙擊 `安裝.cmd`。
+2. 兩者內容相同；單檔安裝程式只是把壓縮檔解到暫存資料夾再執行同一支 `deploy.ps1`。尚未購買程式碼簽章，Windows SmartScreen 可能提示「未知的發行者」，請對照 Release 頁的 SHA-256。
 3. 安裝程式自動校驗 SHA-256、設定目前使用者開機啟動，並將守護行程部署於 `%LOCALAPPDATA%\CodexAutoRetry`，同時完成 Codex 外掛註冊。
 4. **不需系統管理員權限**，亦不需安裝 Go 或 Node.js。
 
-> 原始碼內的 `release\windows\` 只是安裝範本，沒有 `release-manifest.json` 與 `payload\`，直接執行會出現 `release-manifest.json is missing`。要從原始碼安裝，先執行 `pwsh -NoProfile -File scripts\build-release.ps1`（需要 Go 與 Node.js），再解壓縮產生的 `Codex-Auto-Retry-<版本>-windows-x64.zip` 並執行其中的 `安装.cmd`。
+> 原始碼內的 `release\windows\` 只是安裝範本，沒有 `release-manifest.json` 與 `payload\`，直接執行會出現 `release-manifest.json is missing`。要從原始碼安裝，先執行 `pwsh -NoProfile -File scripts\build-release.ps1`（需要 Go 與 Node.js），它會在 `%USERPROFILE%\releases\codex-auto-retry\` 產生壓縮檔與單檔安裝程式。
 
 ### 管理與維護腳本
 
-位於發佈檔根目錄（原始碼範本在 `release\windows\`）：
+位於壓縮檔根目錄（原始碼範本在 `release\windows\`）。使用單檔安裝程式時，改用 `setup.exe -uninstall`（加 `-remove-data` 連設定與日誌一併清除）、`setup.exe -safe-disable`，或 `setup.exe -extract <資料夾>` 取出整包：
 
-* `启动管理器.cmd`：開啟啟動管理器視窗，顯示啟動指令、監護狀態、心跳與 Windows `StartupApproved` 狀態。
-* `安全停用.cmd`：一鍵緊急停止腳本，停用共享模式、清理外掛登錄值並恢復 Codex 官方直接執行模式。
-* `卸载.cmd`：乾淨解除安裝守護行程與外掛，預設保留使用者設定與日誌。執行 `.\uninstall-release.ps1 -RemoveData` 可執行完全清除。
+* `啟動管理員.cmd`：開啟啟動管理員視窗，顯示啟動指令、監護狀態、心跳與 Windows `StartupApproved` 狀態。
+* `安全停用.cmd`：一鍵緊急停止腳本，停用共用後端、清理外掛登錄值並恢復 Codex 官方直接執行模式。
+* `解除安裝.cmd`：乾淨解除安裝守護行程與外掛，預設保留使用者設定與日誌。執行 `.\uninstall-release.ps1 -RemoveData` 可執行完全清除。
 
 ---
 

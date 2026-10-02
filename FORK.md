@@ -9,7 +9,7 @@
 - 公開入口以繁體中文為主檔（`README.md`），英文鏡像放 `README.en.md`。
 - 移除非 Windows 平台程式碼與說明，專注純 Windows 11 原生架構。
 - 建立可重現的 Windows 開發 gate（`tools/dev_check.ps1`）、依賴新鮮度追蹤與上游水位檢查（涵蓋 commit、PR 與 issue）。
-- 產品執行路徑以上游為準；Go 與 TypeScript 核心、Windows 托盤行程與安裝腳本完全保留。
+- 產品邏輯以上游為準；差異只有介面字串與入口檔名改為繁體中文、預設後備重試文字改為「繼續」，以及額外提供單檔安裝程式。
 
 **回貢判準：修的是上游的 bug 就送回去；這裡獨創的文件與 Windows 維護骨架留在這裡。**
 回貢前必須在當次對話取得維護者明確同意；「fork」「建開發環境」「開 PR」都不是同意。
@@ -25,6 +25,8 @@
 | `NOTICE.md` / `FORK.md` / `LICENSE` | 來源、授權與同步說明 |
 | `.cursor/rules/no-upstream-pr.mdc` | 防止誤向 upstream 開 PR 的機器層邊界防護 |
 | 移除非 Windows 檔案 | 移除非 Windows 平台的 stub 程式碼與說明，專注 Windows 原生 |
+| 產品字串與 `release/windows/` 檔名 | 上游簡體中文改為臺灣繁體中文；由 `tools/convert_zh_hant.py` 轉換，契約測試防止回歸 |
+| `scripts/installer/` | 單檔安裝程式（setup stub 後接發佈壓縮檔），由 `scripts/build-release.ps1` 產生 |
 | `tools/dev_check.ps1` | Windows 本機一鍵 gate（語法、單元測試、相對連結檢查） |
 | `tools/check_upstream_updates.py` | 上游 commit、PR 與 issue 水位檢查工具 |
 | `tools/check_dependency_freshness.py` | 依賴新鮮度檢查工具 |

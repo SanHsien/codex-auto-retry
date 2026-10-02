@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-Hant-TW">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -16,12 +16,12 @@
           </div>
           <div class="brand-copy">
             <h1>Codex Auto Retry</h1>
-            <p class="service-line" id="service-line">正在连接</p>
+            <p class="service-line" id="service-line">正在連線</p>
           </div>
         </div>
         <div class="topbar-actions">
           <span class="version" id="version"></span>
-          <button class="icon-button" id="refresh-button" type="button" title="刷新状态" aria-label="刷新状态">
+          <button class="icon-button" id="refresh-button" type="button" title="重新整理狀態" aria-label="重新整理狀態">
             <i data-lucide="refresh-cw"></i>
           </button>
         </div>
@@ -29,20 +29,20 @@
 
       <div class="notice" id="notice" role="status" aria-live="polite" hidden></div>
 
-      <section class="metrics" aria-label="自动重试概况">
+      <section class="metrics" aria-label="自動重試概況">
         <div class="metric">
-          <span class="metric-label">服务</span>
+          <span class="metric-label">服務</span>
           <strong class="metric-value status-value" id="service-status">
             <span class="status-dot status-dot-neutral"></span>
-            连接中
+            連線中
           </strong>
         </div>
         <div class="metric">
-          <span class="metric-label">队列</span>
+          <span class="metric-label">佇列</span>
           <strong class="metric-value" id="queue-count">--</strong>
         </div>
         <div class="metric metric-next">
-          <span class="metric-label">下次重试</span>
+          <span class="metric-label">下次重試</span>
           <strong class="metric-value countdown" id="next-retry">--</strong>
         </div>
       </section>
@@ -50,15 +50,15 @@
       <section class="queue-section" aria-labelledby="queue-heading">
         <div class="section-heading">
           <div>
-            <h2 id="queue-heading">重试队列</h2>
-            <p id="queue-summary">正在读取</p>
+            <h2 id="queue-heading">重試佇列</h2>
+            <p id="queue-summary">正在讀取</p>
           </div>
           <span class="scan-time" id="scan-time"></span>
         </div>
         <div class="queue-list" id="queue-list" aria-live="polite">
           <div class="empty-state loading-state">
             <i data-lucide="clock"></i>
-            <span>正在读取队列</span>
+            <span>正在讀取佇列</span>
           </div>
         </div>
       </section>
@@ -66,17 +66,17 @@
       <section class="controls-section" aria-labelledby="settings-heading">
         <div class="section-heading compact-heading">
           <div>
-            <h2 id="settings-heading">设置</h2>
+            <h2 id="settings-heading">設定</h2>
           </div>
         </div>
 
         <div class="settings-grid">
           <div class="setting-row pause-row">
             <div class="setting-copy">
-              <label for="pause-toggle">自动重试</label>
-              <span id="pause-description">运行中</span>
+              <label for="pause-toggle">自動重試</label>
+              <span id="pause-description">執行中</span>
             </div>
-            <label class="switch" title="开启或暂停新的自动重试">
+            <label class="switch" title="開啟或暫停新的自動重試">
               <input id="pause-toggle" type="checkbox" role="switch" />
               <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
             </label>
@@ -84,12 +84,12 @@
 
           <div class="setting-row shared-server-row">
             <div class="setting-copy">
-              <label for="shared-app-server-toggle">共享 Codex 后台</label>
-              <span id="shared-app-server-description">默认关闭，不影响 Codex 官方后台</span>
+              <label for="shared-app-server-toggle">共用 Codex 後端</label>
+              <span id="shared-app-server-description">預設關閉，不影響 Codex 官方後端</span>
               <small id="shared-app-server-port" aria-live="polite"></small>
               <small id="startup-approval-status" aria-live="polite"></small>
             </div>
-            <label class="switch" title="启用前会检查端口、握手、版本和进程归属">
+            <label class="switch" title="啟用前會檢查埠、交握、版本和行程歸屬">
               <input id="shared-app-server-toggle" type="checkbox" role="switch" />
               <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
             </label>
@@ -97,7 +97,7 @@
 
           <div class="prompt-setting">
             <div class="prompt-label-row">
-              <label for="retry-prompt">后备重试文字</label>
+              <label for="retry-prompt">後備重試文字</label>
               <span><span id="prompt-count">0</span>/500</span>
             </div>
             <textarea id="retry-prompt" maxlength="500" rows="3" spellcheck="false" disabled></textarea>
@@ -105,33 +105,33 @@
               <span class="field-error" id="prompt-error" role="alert"></span>
               <button class="command-button" id="save-prompt" type="button" disabled>
                 <i data-lucide="save"></i>
-                <span>保存</span>
+                <span>儲存</span>
               </button>
             </div>
           </div>
           <div class="numeric-settings">
-            <label for="max-recovery-attempts">本次故障恢复上限</label>
+            <label for="max-recovery-attempts">本次故障恢復上限</label>
             <input id="max-recovery-attempts" type="number" min="1" max="1000" inputmode="numeric" />
-            <label for="max-consecutive-retries">连续无进展重试上限</label>
+            <label for="max-consecutive-retries">連續無進展重試上限</label>
             <input id="max-consecutive-retries" type="number" min="1" max="100" inputmode="numeric" />
-            <label for="auth-max-attempts">登录异常恢复上限</label>
+            <label for="auth-max-attempts">登入異常恢復上限</label>
             <input id="auth-max-attempts" type="number" min="1" max="1000" inputmode="numeric" />
-            <label for="memory-limit-mb">内存保护上限（MB）</label>
+            <label for="memory-limit-mb">記憶體保護上限（MB）</label>
             <input id="memory-limit-mb" type="number" min="128" max="65536" inputmode="numeric" />
             <div class="delay-strategy">
               <span id="delay-strategy-label">等待策略</span>
               <div class="segmented-control" role="group" aria-labelledby="delay-strategy-label">
                 <label>
                   <input type="radio" name="delay-strategy" value="exponential" />
-                  <span>翻倍递增</span>
+                  <span>翻倍遞增</span>
                 </label>
                 <label>
                   <input type="radio" name="delay-strategy" value="linear" />
-                  <span>等差递增</span>
+                  <span>等差遞增</span>
                 </label>
                 <label>
                   <input type="radio" name="delay-strategy" value="fixed" />
-                  <span>固定间隔</span>
+                  <span>固定間隔</span>
                 </label>
               </div>
             </div>
@@ -147,11 +147,11 @@
           <div class="settings-footer">
             <label class="checkbox-setting">
               <input id="notifications-toggle" type="checkbox" />
-              <span>达到重试上限时显示插件通知</span>
+              <span>達到重試上限時顯示外掛通知</span>
             </label>
             <button class="command-button" id="save-settings" type="button" disabled>
               <i data-lucide="save"></i>
-              <span>保存全部设置</span>
+              <span>儲存全部設定</span>
             </button>
           </div>
         </div>

@@ -44,7 +44,7 @@ try {
         shared_app_server_port = $port
         shared_app_server_enabled = $true
         controller_failure_limit = 1
-        retry_prompt = '继续'
+        retry_prompt = '繼續'
         show_notifications = $false
     }
     [System.IO.File]::WriteAllText(

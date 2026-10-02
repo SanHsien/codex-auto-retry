@@ -10,6 +10,16 @@
 
 ## [Unreleased]
 
+## [0.7.12-fork.2] - 2026-10-03
+
+### Added
+- 單檔安裝程式 `Codex-Auto-Retry-<版本>-windows-x64-setup.exe`（`scripts/installer/`）：雙擊即安裝，另支援 `-uninstall`、`-remove-data`、`-safe-disable`、`-extract`。
+- `tools/convert_zh_hant.py`：把上游簡體產品字串轉成臺灣繁體，同步上游後可重跑。
+
+### Changed
+- 系統匣、設定視窗、內嵌面板、MCP 工具說明與安裝提示改為繁體中文；預設後備重試文字由「继续」改為「繼續」（既有設定不受影響）。
+- `release/windows/` 入口改名為 `安裝.cmd`、`解除安裝.cmd`、`啟動管理員.cmd`、`安全啟動Codex.vbs`、`README-安裝說明.txt`。
+
 ### Fixed
 - `scripts/build-release.ps1` 打包清單仍指向已改名的 `README_zh.md`，導致無法產生發佈檔；改為 `README.md` 與 `README.en.md`，並加入契約測試。
 - 移除 `*_nonwindows.go` 後重建 `scripts/bin/` 兩個執行檔與 `scripts/build-info.json`，來源雜湊重新對齊。

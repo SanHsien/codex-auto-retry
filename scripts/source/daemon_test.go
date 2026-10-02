@@ -179,7 +179,7 @@ func TestStaleRestartRequiredStateClearsWithEmptyQueue(t *testing.T) {
 	d := newTestDaemon(t, isolatedConfig(t.TempDir()), runner)
 	// The watchdog was previously told a restart was needed, and every stopped
 	// task has since been resolved or removed. readiness must still be
-	// re-probed so status cannot display "等待重启 Codex" forever.
+	// re-probed so status cannot display "等待重新啟動 Codex" forever.
 	d.controllerState = "codex_restart_required"
 	if !d.controllerRestartReady(context.Background(), now) {
 		t.Fatal("empty queue blocked controller readiness re-probe")

@@ -298,40 +298,40 @@ func restoreTrayIcon(add func() bool, remove func(), refresh func()) bool {
 func (a *trayApp) refresh() {
 	snapshot, err := a.service.snapshot(time.Now().UTC())
 	if err != nil {
-		a.setTip("Codex Auto Retry - 状态读取失败")
+		a.setTip("Codex Auto Retry - 狀態讀取失敗")
 		return
 	}
-	tip := "Codex Auto Retry - 运行中"
+	tip := "Codex Auto Retry - 執行中"
 	iconState := "running"
 	if snapshot.ControllerState == "codex_restart_required" {
-		tip = "Codex Auto Retry - 当前为官方后台；请通过安全启动入口接入共享通道"
+		tip = "Codex Auto Retry - 目前為官方後端；請透過安全啟動入口接入共用通道"
 		iconState = "paused"
 	} else if snapshot.ControllerState == "codex_not_running" && snapshot.StoppedRetries > 0 {
-		tip = "Codex Auto Retry - Codex 已退出，重试已停止"
+		tip = "Codex Auto Retry - Codex 已結束，重試已停止"
 		iconState = "stopped"
 	} else if snapshot.ControllerState == "shared_app_server_disabled" {
-		tip = "Codex Auto Retry - 共享后台已关闭，重试未执行"
+		tip = "Codex Auto Retry - 共用後端已關閉，重試未執行"
 		iconState = "paused"
 	} else if snapshot.ControllerState == "shared_app_server_port_reserved" {
-		tip = "Codex Auto Retry - 共享端口被 Windows 保留，重试未执行"
+		tip = "Codex Auto Retry - 共用埠被 Windows 保留，重試未執行"
 		iconState = "stopped"
 	} else if snapshot.ControllerState == "shared_app_server_port_conflict" {
-		tip = fmt.Sprintf("Codex Auto Retry - 首选端口不可用，当前端口 %d", snapshot.SharedAppServerPort)
+		tip = fmt.Sprintf("Codex Auto Retry - 偏好埠不可用，目前埠 %d", snapshot.SharedAppServerPort)
 		iconState = "paused"
 	} else if snapshot.ControllerState == "shared_app_server_migration_deferred" {
-		tip = "Codex Auto Retry - 等待 Codex 关闭后完成后台迁移"
+		tip = "Codex Auto Retry - 等待 Codex 關閉後完成後端遷移"
 		iconState = "paused"
 	} else if snapshot.Paused {
-		tip = "Codex Auto Retry - 已暂停"
+		tip = "Codex Auto Retry - 已暫停"
 		iconState = "paused"
 	} else if snapshot.ActiveRetries > 0 {
-		tip = fmt.Sprintf("Codex Auto Retry - 正在重试 %d 个任务", snapshot.ActiveRetries)
+		tip = fmt.Sprintf("Codex Auto Retry - 正在重試 %d 個任務", snapshot.ActiveRetries)
 		iconState = "active"
 	} else if seconds, ok := nextRetrySeconds(snapshot.Retries); ok {
-		tip = fmt.Sprintf("Codex Auto Retry - %d 秒后自动重试", seconds)
+		tip = fmt.Sprintf("Codex Auto Retry - %d 秒後自動重試", seconds)
 		iconState = "waiting"
 	} else if snapshot.StoppedRetries > 0 {
-		tip = fmt.Sprintf("Codex Auto Retry - %d 个任务已停止重试", snapshot.StoppedRetries)
+		tip = fmt.Sprintf("Codex Auto Retry - %d 個任務已停止重試", snapshot.StoppedRetries)
 		iconState = "stopped"
 	}
 	a.setVisual(iconState, tip)
@@ -342,17 +342,17 @@ func (a *trayApp) refresh() {
 	sharedDisabled := stoppedReasonCount(snapshot.Retries, "shared_app_server_disabled")
 	limitStopped := retryLimitStoppedCount(snapshot.Retries)
 	if a.initialized && snapshot.ShowNotifications && restartRequired > a.lastRestartRequired {
-		a.notify("需要重启 Codex", "重启一次 Codex 后，等待中的自动重试会自行恢复。")
+		a.notify("需要重新啟動 Codex", "重新啟動一次 Codex 後，等待中的自動重試會自行恢復。")
 	} else if a.initialized && snapshot.ShowNotifications && codexStopped > a.lastCodexStopped {
-		a.notify("Codex 已退出", "相关任务已停止自动重试。启动 Codex 后可从设置中重新开始。")
+		a.notify("Codex 已結束", "相關任務已停止自動重試。啟動 Codex 後可從設定中重新開始。")
 	} else if a.initialized && snapshot.ShowNotifications && sharedDisabled > a.lastSharedDisabled {
-		a.notify("共享后台已关闭", "自动恢复未执行。请打开共享后台模式，然后重新开始该任务。")
+		a.notify("共用後端已關閉", "自動恢復未執行。請開啟共用後端模式，然後重新開始該任務。")
 	} else if a.initialized && snapshot.ShowNotifications && goalFailed > a.lastGoalFailed {
-		a.notify("目标停止失败", "目标恢复已停止，但自动设为受阻失败。请从面板重新开始或检查 Codex 状态。")
+		a.notify("目標停止失敗", "目標恢復已停止，但自動設為受阻失敗。請從面板重新開始或檢查 Codex 狀態。")
 	} else if a.initialized && snapshot.ShowNotifications && goalStopped > a.lastGoalStopped {
-		a.notify("目标已自动停止", "目标连续空回复达到上限，目标恢复已停止。")
+		a.notify("目標已自動停止", "目標連續空回覆達到上限，目標恢復已停止。")
 	} else if a.initialized && snapshot.ShowNotifications && limitStopped > a.lastStopped {
-		a.notify("自动重试已停止", fmt.Sprintf("有 %d 个任务已达到重试上限。", limitStopped))
+		a.notify("自動重試已停止", fmt.Sprintf("有 %d 個任務已達到重試上限。", limitStopped))
 	}
 	a.lastStopped = limitStopped
 	a.lastGoalStopped = goalStopped
@@ -466,14 +466,14 @@ func (a *trayApp) showMenu() {
 	}
 	appendTrayMenu(menu, mfGrayed, 0, status)
 	appendTrayMenu(menu, mfSeparator, 0, "")
-	appendTrayMenu(menu, mfString, menuOpenSettings, "打开设置…")
-	pauseText := "暂停自动重试"
+	appendTrayMenu(menu, mfString, menuOpenSettings, "開啟設定…")
+	pauseText := "暫停自動重試"
 	if snapshot.Paused {
-		pauseText = "恢复自动重试"
+		pauseText = "恢復自動重試"
 	}
 	appendTrayMenu(menu, mfString, menuTogglePause, pauseText)
 	appendTrayMenu(menu, mfSeparator, 0, "")
-	appendTrayMenu(menu, mfString, menuExit, "退出")
+	appendTrayMenu(menu, mfString, menuExit, "結束")
 	var point trayPoint
 	procGetCursorPos.Call(uintptr(unsafe.Pointer(&point)))
 	procSetForegroundWindow.Call(a.hwnd)

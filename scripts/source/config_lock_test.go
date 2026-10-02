@@ -16,7 +16,7 @@ func TestConcurrentConfigUpdatesPreserveUnrelatedFields(t *testing.T) {
 	go func() {
 		defer wait.Done()
 		if _, err := updateConfigFile(path, func(config *Config) error {
-			config.RetryPrompt = "并发更新 A"
+			config.RetryPrompt = "併發更新 A"
 			return nil
 		}); err != nil {
 			t.Errorf("prompt update failed: %v", err)
@@ -36,7 +36,7 @@ func TestConcurrentConfigUpdatesPreserveUnrelatedFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if config.RetryPrompt != "并发更新 A" || config.InitialDelaySeconds != 9 {
+	if config.RetryPrompt != "併發更新 A" || config.InitialDelaySeconds != 9 {
 		t.Fatalf("concurrent config updates lost unrelated fields: %+v", config)
 	}
 }
