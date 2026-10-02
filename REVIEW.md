@@ -44,8 +44,8 @@ gh repo set-default --view
 | R-07 | P1 | 刪除 `*_nonwindows.go` 後未重建，`scripts/build-info.json` 來源雜湊與內附執行檔不符，`Assert-CodexBuildProvenance` 會擋打包；已用 `scripts/build.ps1` 重建（`51285a1`，2026-10-03） |
 | R-08 | P2 | 在原始碼 `release\windows\` 直接跑 `安装.cmd` 只回報「not a valid release」，看不出原因；`deploy.ps1` 改為指出缺 `release-manifest.json` 與正確做法，README 補從原始碼安裝步驟（`51285a1`，2026-10-03） |
 | R-09 | P3 | `docs/project-map.md` 仍列已刪的非 Windows 檔案、`.gitignore` 留有 `.DS_Store`；已清除並加 `test_fork_is_windows_only`（`51285a1`，2026-10-03） |
-| R-10 | P2 | 產品介面、安裝提示與 `release/windows/` 入口檔名仍是上游簡體中文；以 `tools/convert_zh_hant.py` 轉為繁體並同步改打包／驗證腳本的檔名常數，加 `test_product_strings_are_traditional_chinese`（2026-10-03） |
-| R-11 | P3 | 只能下載壓縮檔再找入口檔安裝；新增單檔安裝程式 `scripts/installer/`，`release-test.ps1` 驗證其內容與壓縮檔一致（2026-10-03） |
+| R-10 | P2 | 產品介面、安裝提示與 `release/windows/` 入口檔名仍是上游簡體中文；以 `tools/convert_zh_hant.py` 轉為繁體並同步改打包／驗證腳本的檔名常數，加 `test_product_strings_are_traditional_chinese`（`17c944d`，2026-10-03） |
+| R-11 | P3 | 只能下載壓縮檔再找入口檔安裝；新增單檔安裝程式 `scripts/installer/`，`release-test.ps1` 驗證其內容與壓縮檔一致（`17c944d`，2026-10-03） |
 
 ## 未解風險
 
