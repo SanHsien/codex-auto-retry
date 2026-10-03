@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"bufio"
 	"bytes"
 	"io"
 	"os"
@@ -90,6 +91,7 @@ func TestParseOptionsRejectsInvalidCombinations(t *testing.T) {
 	for _, args := range [][]string{
 		{"-remove-data"},
 		{"-uninstall", "-safe-disable"},
+		{"-install", "-uninstall"},
 		{"stray"},
 		{"-unknown"},
 		{"-extract", ""},
@@ -104,16 +106,92 @@ func TestParseOptionsRejectsInvalidCombinations(t *testing.T) {
 			t.Fatalf("accepted %s", strings.Join(args, " "))
 		}
 	}
-	opts, err := parseOptions([]string{"-uninstall", "-remove-data", "-no-pause"}, io.Discard)
-	if err != nil || !opts.uninstall || !opts.removeData || !opts.noPause {
-		t.Fatalf("valid flags were rejected: %+v, %v", opts, err)
+	for _, valid := range []struct {
+		args   []string
+		action action
+	}{
+		{nil, actNone},
+		{[]string{"-install"}, actInstall},
+		{[]string{"-uninstall"}, actUninstall},
+		{[]string{"-uninstall", "-remove-data"}, actUninstallRemoveData},
+		{[]string{"-safe-disable"}, actSafeDisable},
+		{[]string{"-startup-manager"}, actManager},
+		{[]string{"-extract", "out"}, actExtract},
+	} {
+		opts, err := parseOptions(append(valid.args, "-no-pause"), io.Discard)
+		if err != nil || opts.action != valid.action || !opts.noPause {
+			t.Fatalf("%v: got %+v, %v", valid.args, opts, err)
+		}
 	}
-	opts, err = parseOptions([]string{"-startup-manager"}, io.Discard)
-	if err != nil || !opts.manager {
-		t.Fatalf("startup manager flag was rejected: %+v, %v", opts, err)
+}
+
+// menuRun feeds scripted answers to the menu and records what it would run.
+func menuRun(answers string) (actions []action, folders []string, output string) {
+	var out strings.Builder
+	runMenu(bufio.NewReader(strings.NewReader(answers)), &out, func() string { return "status" }, `C:\default`, func(selected action, folder string) int {
+		actions = append(actions, selected)
+		folders = append(folders, folder)
+		return 0
+	})
+	return actions, folders, out.String()
+}
+
+func TestMenuRunsTheChosenActionAndReturnsToTheMenu(t *testing.T) {
+	actions, _, output := menuRun("2\n\n1\n\n0\n")
+	if len(actions) != 2 || actions[0] != actManager || actions[1] != actInstall {
+		t.Fatalf("unexpected actions: %v", actions)
 	}
-	opts, err = parseOptions([]string{"-extract", "out"}, io.Discard)
-	if err != nil || !opts.extractOnly || opts.extractTo != "out" {
-		t.Fatalf("extract flags were rejected: %+v, %v", opts, err)
+	if strings.Count(output, "請輸入數字") != 3 {
+		t.Fatalf("menu was not shown again after each action:\n%s", output)
+	}
+}
+
+func TestMenuIgnoresUnknownAnswersAndStopsAtEndOfInput(t *testing.T) {
+	actions, _, output := menuRun("9\nabc\n")
+	if len(actions) != 0 || !strings.Contains(output, "沒有這個選項") {
+		t.Fatalf("unknown answers ran an action: %v\n%s", actions, output)
+	}
+}
+
+func TestMenuRemoveDataNeedsConfirmation(t *testing.T) {
+	if actions, _, _ := menuRun("5\nn\n0\n"); len(actions) != 0 {
+		t.Fatalf("data was removed without confirmation: %v", actions)
+	}
+	if actions, _, _ := menuRun("5\n\n0\n"); len(actions) != 0 {
+		t.Fatalf("an empty answer confirmed data removal: %v", actions)
+	}
+	if actions, _, _ := menuRun("5\ny\n\n0\n"); len(actions) != 1 || actions[0] != actUninstallRemoveData {
+		t.Fatalf("confirmed removal did not run: %v", actions)
+	}
+}
+
+func TestMenuExtractUsesDefaultOrTypedFolder(t *testing.T) {
+	_, folders, _ := menuRun("6\n\n\n6\n\"D:\\out\"\n\n0\n")
+	if len(folders) != 2 || folders[0] != `C:\default` || folders[1] != `D:\out` {
+		t.Fatalf("unexpected folders: %q", folders)
+	}
+}
+
+func TestStatusReadsPackagedAndInstalledVersions(t *testing.T) {
+	path := writeSelfExtractor(t, map[string]string{
+		"Package/payload/codex-auto-retry/.codex-plugin/plugin.json": `{"version":"9.9.9+test"}`,
+	})
+	if version, err := packagedVersion(path); err != nil || version != "9.9.9+test" {
+		t.Fatalf("packaged version = %q, %v", version, err)
+	}
+	profile := t.TempDir()
+	t.Setenv("USERPROFILE", profile)
+	if status := describeStatus(path); !strings.Contains(status, "9.9.9+test") || !strings.Contains(status, "尚未安裝") {
+		t.Fatalf("unexpected status before install: %s", status)
+	}
+	manifest := filepath.Join(profile, "plugins", "codex-auto-retry", ".codex-plugin")
+	if err := os.MkdirAll(manifest, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(manifest, "plugin.json"), []byte(`{"version":"1.0.0"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if status := describeStatus(path); !strings.Contains(status, "已安裝 1.0.0") {
+		t.Fatalf("unexpected status after install: %s", status)
 	}
 }

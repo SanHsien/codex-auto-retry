@@ -113,9 +113,9 @@
 ## 快速上手（終端使用者）
 
 1. 從本 fork 的 [GitHub Releases](https://github.com/SanHsien/codex-auto-retry/releases/latest) 下載繁體中文版，二擇一：
-   * **單檔安裝程式** `Codex-Auto-Retry-<版本>-windows-x64-setup.exe`：完全關閉 Codex App 後直接雙擊，不必解壓縮。
+   * **單一執行檔** `Codex-Auto-Retry-<版本>-windows-x64.exe`：不必解壓縮，雙擊後出現選單，可選安裝或更新、開啟啟動管理員、緊急停用、解除安裝、取出整包檔案。安裝前請先完全關閉 Codex App。
    * **壓縮檔** `Codex-Auto-Retry-<版本>-windows-x64.zip`：解壓縮後，在資料夾內雙擊 `安裝.cmd`。
-2. 兩者內容相同；單檔安裝程式只是把壓縮檔解到暫存資料夾再執行同一支 `deploy.ps1`。尚未購買程式碼簽章，Windows SmartScreen 可能提示「未知的發行者」，請對照 Release 頁的 SHA-256。
+2. 兩者內容相同；執行檔只是把壓縮檔解到暫存資料夾，再執行同一支 `deploy.ps1`。尚未購買程式碼簽章，Windows SmartScreen 可能提示「未知的發行者」，請對照 Release 頁的 SHA-256。
 3. 安裝程式自動校驗 SHA-256、設定目前使用者開機啟動，並將守護行程部署於 `%LOCALAPPDATA%\CodexAutoRetry`，同時完成 Codex 外掛註冊。
 4. **不需系統管理員權限**，亦不需安裝 Go 或 Node.js。
 
@@ -123,7 +123,7 @@
 
 ### 管理與維護腳本
 
-位於壓縮檔根目錄（原始碼範本在 `release\windows\`）。使用單檔安裝程式時，保留下載的 `setup.exe`，改用參數執行（可在檔案總管對它按右鍵建立捷徑，再於捷徑「目標」後面加上參數）：`setup.exe -startup-manager` 開啟啟動管理員（也能在裡面解除安裝）、`setup.exe -uninstall`（加 `-remove-data` 連設定與日誌一併清除）、`setup.exe -safe-disable`，或 `setup.exe -extract <資料夾>` 取出整包：
+位於壓縮檔根目錄（原始碼範本在 `release\windows\`）。使用單一執行檔時，請保留下載的 `.exe`，之後雙擊它從選單選擇即可；要用指令或捷徑也可以直接帶參數：`-install`、`-startup-manager`、`-safe-disable`、`-uninstall`（加 `-remove-data` 連設定與日誌一併清除）、`-extract <資料夾>`。壓縮檔裡的入口檔如下：
 
 * `啟動管理員.cmd`：開啟啟動管理員視窗，顯示啟動指令、監護狀態、心跳與 Windows `StartupApproved` 狀態。
 * `安全停用.cmd`：一鍵緊急停止腳本，停用共用後端、清理外掛登錄值並恢復 Codex 官方直接執行模式。

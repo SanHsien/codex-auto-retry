@@ -57,7 +57,7 @@ New-Item -ItemType Directory -Force -Path $outputPath | Out-Null
 $packageName = "Codex-Auto-Retry-$packageVersion-windows-x64"
 $archivePath = Join-Path $outputPath ($packageName + '.zip')
 $archiveHashPath = $archivePath + '.sha256.txt'
-$setupPath = Join-Path $outputPath ($packageName + '-setup.exe')
+$setupPath = Join-Path $outputPath ($packageName + '.exe')
 $setupHashPath = $setupPath + '.sha256.txt'
 $stageParent = Join-Path ([System.IO.Path]::GetTempPath()) ('codex-auto-retry-release-' + [guid]::NewGuid().ToString('N'))
 $packageRoot = Join-Path $stageParent $packageName

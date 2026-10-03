@@ -174,6 +174,10 @@ try {
     Remove-ItemProperty -Path $runKey -Name $testRunName -ErrorAction SilentlyContinue
     $guiArgs = @('-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $manager,
         '-Action', 'gui', '-UserProfileRoot', $profileRoot, '-LocalAppDataRoot', $localRoot, '-RunName', $testRunName)
+    # The default interface is Traditional Chinese; the button test below pins
+    # English so it can find the control by its accessible name.
+    $zhTitle = 'Codex Auto Retry ' + (-join [char[]](0x555f, 0x52d5, 0x7ba1, 0x7406, 0x54e1))
+    $actionArgs = $guiArgs + @('-Language', 'en')
     $guiError = Join-Path $testRoot 'gui-error.txt'
     $guiProcess = Start-Process -FilePath 'powershell.exe' -ArgumentList $guiArgs -WindowStyle Hidden -RedirectStandardError $guiError -PassThru
     $deadline = (Get-Date).AddSeconds(12)
@@ -181,9 +185,9 @@ try {
         Start-Sleep -Milliseconds 250
         $guiWindow = Get-Process -Id $guiProcess.Id -ErrorAction SilentlyContinue
     } while (-not $guiProcess.HasExited -and
-        ($null -eq $guiWindow -or $guiWindow.MainWindowTitle -ne 'Codex Auto Retry Startup Manager') -and (Get-Date) -lt $deadline)
+        ($null -eq $guiWindow -or $guiWindow.MainWindowTitle -ne $zhTitle) -and (Get-Date) -lt $deadline)
     if ($guiProcess.HasExited -or $null -eq $guiWindow -or $guiWindow.MainWindowHandle -eq 0 -or
-        $guiWindow.MainWindowTitle -ne 'Codex Auto Retry Startup Manager') {
+        $guiWindow.MainWindowTitle -ne $zhTitle) {
         throw ('Startup manager GUI did not create its visible settings window. ' + (Get-Content -LiteralPath $guiError -Raw))
     }
     Stop-Process -Id $guiProcess.Id -Force -ErrorAction SilentlyContinue
@@ -216,7 +220,7 @@ namespace CodexAutoRetrySmoke {
         if ($null -eq $runRegistryKey) { throw 'The current-user startup registry key could not be opened.' }
         try { $runRegistryKey.SetValue($testRunName, ('"' + $fakeWatchdog + '" supervise'), [Microsoft.Win32.RegistryValueKind]::String) }
         finally { $runRegistryKey.Close() }
-        $actionProcess = Start-Process -FilePath 'powershell.exe' -ArgumentList $guiArgs -WindowStyle Hidden -PassThru
+        $actionProcess = Start-Process -FilePath 'powershell.exe' -ArgumentList $actionArgs -WindowStyle Hidden -PassThru
         try {
         $deadline = (Get-Date).AddSeconds(10)
         $actionWindow = $null

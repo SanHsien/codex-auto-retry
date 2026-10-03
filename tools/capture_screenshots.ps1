@@ -88,6 +88,55 @@ finally {
     Remove-Item -LiteralPath $captureScript -Force -ErrorAction SilentlyContinue
 }
 
+# Startup manager: a real window with empty temporary profile folders, so it
+# shows the "not installed" state and cannot touch the real installation.
+Add-Type -AssemblyName System.Drawing
+if (-not ('CodexAutoRetryShots.Native' -as [type])) {
+    Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+namespace CodexAutoRetryShots {
+    public static class Native {
+        [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+        [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr window, out RECT rect);
+        [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr window, IntPtr dc, uint flags);
+    }
+}
+'@
+}
+$managerRoot = Join-Path ([IO.Path]::GetTempPath()) ('codex-auto-retry-shot-manager-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Force -Path (Join-Path $managerRoot 'profile'), (Join-Path $managerRoot 'local') | Out-Null
+$managerProcess = Start-Process -FilePath 'powershell.exe' -PassThru -WindowStyle Hidden -ArgumentList @(
+    '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $repoRoot 'scripts\startup-manager.ps1'),
+    '-Action', 'gui', '-Language', 'zh', '-RunName', 'CodexAutoRetryScreenshot',
+    '-UserProfileRoot', (Join-Path $managerRoot 'profile'), '-LocalAppDataRoot', (Join-Path $managerRoot 'local'))
+try {
+    $deadline = (Get-Date).AddSeconds(15)
+    do {
+        Start-Sleep -Milliseconds 300
+        $window = Get-Process -Id $managerProcess.Id -ErrorAction SilentlyContinue
+    } while (($null -eq $window -or $window.MainWindowHandle -eq 0) -and (Get-Date) -lt $deadline)
+    if ($null -eq $window -or $window.MainWindowHandle -eq 0) { throw 'The startup manager window did not appear.' }
+    Start-Sleep -Milliseconds 1500
+    $rect = New-Object CodexAutoRetryShots.Native+RECT
+    [void][CodexAutoRetryShots.Native]::GetWindowRect($window.MainWindowHandle, [ref]$rect)
+    $bitmap = [System.Drawing.Bitmap]::new($rect.Right - $rect.Left, $rect.Bottom - $rect.Top)
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    try {
+        $dc = $graphics.GetHdc()
+        [void][CodexAutoRetryShots.Native]::PrintWindow($window.MainWindowHandle, $dc, 2)
+        $graphics.ReleaseHdc($dc)
+        $managerTarget = Join-Path $outputPath 'startup_manager.png'
+        $bitmap.Save($managerTarget, [System.Drawing.Imaging.ImageFormat]::Png)
+        Write-Host "Saved $managerTarget"
+    }
+    finally { $graphics.Dispose(); $bitmap.Dispose() }
+}
+finally {
+    Stop-Process -Id $managerProcess.Id -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $managerRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 $edge = @(
     "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
     "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe"

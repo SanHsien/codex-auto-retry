@@ -10,6 +10,15 @@ English | [繁體中文](CHANGELOG.md)
 
 ## [Unreleased]
 
+## [0.7.12-fork.5] - 2026-10-03
+
+### Changed
+- The executable is renamed to `Codex-Auto-Retry-<version>-windows-x64.exe` (no `-setup`).
+- The startup manager now has a Traditional Chinese UI (status labels, buttons, confirmation dialogs) with an English toggle; the language choice is shared with the settings window.
+- The safe-launch failure and missing-launcher dialogs are now in Traditional Chinese.
+- `assets/startup_manager.png` is retaken with the Traditional Chinese UI.
+- Double-clicking it now shows a Traditional Chinese menu: install/update, startup manager, safe-disable, uninstall, uninstall and remove data (requires typing Y), and extract, together with the packaged and installed versions. Existing flags still work; the new `-install` flag installs without the menu.
+
 ## [0.7.12-fork.4] - 2026-10-03
 
 ### Added

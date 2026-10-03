@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidateSet('gui', 'status', 'enable', 'disable', 'start', 'stop', 'launch-codex', 'safe-disable', 'uninstall')]
     [string]$Action = 'gui',
@@ -7,7 +7,9 @@ param(
     [string]$UserProfileRoot = $env:USERPROFILE,
     [string]$LocalAppDataRoot = $env:LOCALAPPDATA,
     [string]$RunName = 'CodexAutoRetry',
-    [string]$ReleaseRoot = ''
+    [string]$ReleaseRoot = '',
+    [ValidateSet('', 'zh', 'en')]
+    [string]$Language = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -407,9 +409,69 @@ function Invoke-ManagerAction {
     }
 }
 
+# Interface text. The language follows the settings window's saved choice
+# (ui-language.json) unless -Language is given; Traditional Chinese is default.
+$managerText = @{
+    title             = @{ zh = 'Codex Auto Retry 啟動管理員'; en = 'Codex Auto Retry Startup Manager' }
+    subtitle          = @{ zh = '檢視開機啟動、背景服務與共用後端狀態。所有操作只影響本外掛。'; en = 'Inspect startup, service, and shared-backend state. Actions are limited to this plugin.' }
+    language          = @{ zh = 'English'; en = '中文' }
+    refresh           = @{ zh = '重新整理狀態'; en = 'Refresh status' }
+    'launch-codex'    = @{ zh = '安全啟動 Codex'; en = 'Launch Codex safely' }
+    enable            = @{ zh = '啟用開機啟動'; en = 'Enable startup' }
+    disable           = @{ zh = '停用開機啟動'; en = 'Disable startup' }
+    start             = @{ zh = '啟動服務'; en = 'Start service' }
+    stop              = @{ zh = '停止服務'; en = 'Stop service' }
+    'safe-disable'    = @{ zh = '緊急停用共用後端'; en = 'Safe-disable shared backend' }
+    uninstall         = @{ zh = '解除安裝（保留資料）'; en = 'Uninstall, keep data' }
+    'uninstall-remove' = @{ zh = '解除安裝並刪除資料'; en = 'Uninstall and remove data' }
+    confirmFull       = @{ zh = '這會移除外掛、執行狀態、設定與日誌，不會動到對話資料。要繼續嗎？'; en = 'This removes the plugin, runtime state, settings, and logs. Chat data is not touched. Continue?' }
+    confirmFullTitle  = @{ zh = '確認完整解除安裝'; en = 'Confirm full uninstall' }
+    doneFull          = @{ zh = '已完整解除安裝。'; en = 'Full uninstall completed.' }
+    confirmKeep       = @{ zh = '這會移除外掛、開機啟動項目與背景服務，但保留重試設定、狀態與日誌。要繼續嗎？'; en = 'This removes the plugin, startup entry, and service, but keeps retry settings, state, and logs. Continue?' }
+    confirmKeepTitle  = @{ zh = '確認解除安裝'; en = 'Confirm uninstall' }
+    doneKeep          = @{ zh = '已解除安裝，執行資料已保留。'; en = 'Uninstall completed. Runtime data was kept.' }
+    failedTitle       = @{ zh = '操作失敗'; en = 'Action failed' }
+}
+$managerStateLabels = @{
+    PluginInstalled = '外掛已安裝'; PluginVersion = '外掛版本'; InstallDir = '安裝資料夾'
+    ServiceRunning = '服務執行中'; ProcessCount = '行程數'; ProcessIds = '行程 ID'
+    HeartbeatFresh = '心跳正常'; RuntimeVersion = '執行版本'; LastScanAt = '最近掃描'
+    StartupMode = '開機啟動模式'; StartupEntry = '開機啟動指令'; StartupOwned = '啟動項目屬於本外掛'
+    StartupApproved = 'Windows 開機啟動核准'; SharedModeEnabled = '共用後端已啟用'
+    SharedModeRequested = '已要求共用後端'; SharedEndpointConfigured = '已設定共用端點'
+    DesktopLaunchMode = 'Codex 啟動方式'; SafeLauncher = '安全啟動指令碼'
+    SharedServerState = '共用後端狀態'; SharedServerVerification = '共用後端驗證'
+    SharedAppServerMemoryUsageMB = '共用後端記憶體（MB）'; SharedAppServerMemoryLimitMB = '共用後端記憶體上限（MB）'
+    SharedAppServerMemoryGuardTriggered = '共用後端記憶體保護已觸發'; RetrySafetyWarning = '重試安全提醒'
+    StatusCompatibility = '狀態檔相容性'; StatusCompatibilityMessage = '相容性說明'
+    DataDirectoryExists = '資料夾存在'
+}
+
+function Get-ManagerLanguage {
+    if ($Language) { return $Language }
+    $saved = Read-JsonOrNull -Path (Join-Path $installDir 'ui-language.json')
+    if ($saved -and $saved.PSObject.Properties['language'] -and [string]$saved.language -eq 'en') { return 'en' }
+    return 'zh'
+}
+
 function Format-ManagerState {
-    param([Parameter(Mandatory = $true)]$State)
-    $State | Format-List * | Out-String -Width 120
+    param([Parameter(Mandatory = $true)]$State, [string]$Lang = 'en')
+    if ($Lang -ne 'zh') { return ($State | Format-List * | Out-String -Width 120) }
+    $properties = @($State.PSObject.Properties)
+    $labels = @($properties | ForEach-Object { if ($managerStateLabels.ContainsKey($_.Name)) { $managerStateLabels[$_.Name] } else { $_.Name } })
+    # MingLiU draws CJK characters exactly two ASCII columns wide, so padding
+    # by display width keeps the colons aligned.
+    $displayWidth = { param([string]$Value) $count = 0; foreach ($char in $Value.ToCharArray()) { if ([int]$char -ge 0x2E80) { $count += 2 } else { $count += 1 } }; $count }
+    $width = ($labels | ForEach-Object { & $displayWidth $_ } | Measure-Object -Maximum).Maximum
+    $lines = for ($index = 0; $index -lt $properties.Count; $index++) {
+        $value = $properties[$index].Value
+        $shown = if ($value -is [bool]) { if ($value) { '是' } else { '否' } }
+            elseif ($null -eq $value) { '' }
+            elseif ($value -is [array]) { $value -join ', ' }
+            else { [string]$value }
+        $labels[$index] + (' ' * ($width + 2 - (& $displayWidth $labels[$index]))) + ': ' + $shown
+    }
+    return ($lines -join [Environment]::NewLine)
 }
 
 function Hide-ManagerConsoleWindow {
@@ -448,31 +510,45 @@ function Show-Manager {
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
 
+    $ui = @{ Lang = Get-ManagerLanguage }
+    $text = $managerText
     $form = New-Object System.Windows.Forms.Form
-    $form.Text = 'Codex Auto Retry Startup Manager'
+    $form.Text = $text.title[$ui.Lang]
     $form.StartPosition = 'CenterScreen'
     $form.Size = New-Object System.Drawing.Size(720, 600)
     $form.MinimumSize = New-Object System.Drawing.Size(620, 540)
 
     $title = New-Object System.Windows.Forms.Label
-    $title.Text = 'Codex Auto Retry Startup Manager'
+    $title.Text = $text.title[$ui.Lang]
     $title.Font = New-Object System.Drawing.Font('Segoe UI', 14, [System.Drawing.FontStyle]::Bold)
     $title.AutoSize = $true
     $title.Location = New-Object System.Drawing.Point(18, 15)
     $form.Controls.Add($title)
 
     $subtitle = New-Object System.Windows.Forms.Label
-    $subtitle.Text = 'Inspect startup, service, and shared-backend state. Actions are limited to this plugin.'
+    $subtitle.Text = $text.subtitle[$ui.Lang]
     $subtitle.AutoSize = $true
     $subtitle.ForeColor = [System.Drawing.Color]::DimGray
     $subtitle.Location = New-Object System.Drawing.Point(20, 48)
     $form.Controls.Add($subtitle)
 
+    $languageButton = New-Object System.Windows.Forms.Button
+    $languageButton.Text = $text.language[$ui.Lang]
+    $languageButton.Width = 90
+    $languageButton.Height = 28
+    $languageButton.Anchor = 'Top,Right'
+    $languageButton.Location = New-Object System.Drawing.Point(596, 14)
+    $form.Controls.Add($languageButton)
+
     $output = New-Object System.Windows.Forms.TextBox
     $output.Multiline = $true
     $output.ReadOnly = $true
     $output.ScrollBars = 'Vertical'
-    $output.Font = New-Object System.Drawing.Font('Consolas', 10)
+    $outputFont = @{
+        en = New-Object System.Drawing.Font('Consolas', 10)
+        zh = New-Object System.Drawing.Font('MingLiU', 11)
+    }
+    $output.Font = $outputFont[$ui.Lang]
     $output.Anchor = 'Top,Bottom,Left,Right'
     $output.Location = New-Object System.Drawing.Point(18, 78)
     $output.Size = New-Object System.Drawing.Size(668, 330)
@@ -488,25 +564,26 @@ function Show-Manager {
     $form.Controls.Add($buttons)
 
     $refresh = New-Object System.Windows.Forms.Button
-    $refresh.Text = 'Refresh status'
-    $refresh.Width = 100
+    $refresh.Text = $text.refresh[$ui.Lang]
+    $refresh.Tag = 'refresh'
+    $refresh.Width = 142
     $refresh.Height = 30
     $buttons.Controls.Add($refresh)
 
     $definitions = @(
-        @('Launch Codex safely', 'launch-codex', $false),
-        @('Enable startup', 'enable', $false),
-        @('Disable startup', 'disable', $false),
-        @('Start service', 'start', $false),
-        @('Stop service', 'stop', $false),
-        @('Safe-disable shared backend', 'safe-disable', $true),
-        @('Uninstall, keep data', 'uninstall', $true),
-        @('Uninstall and remove data', 'uninstall-remove', $true)
+        @('launch-codex', $false),
+        @('enable', $false),
+        @('disable', $false),
+        @('start', $false),
+        @('stop', $false),
+        @('safe-disable', $true),
+        @('uninstall', $true),
+        @('uninstall-remove', $true)
     )
 
     $refreshView = {
         try {
-            $output.Text = Format-ManagerState -State (Get-ManagerState)
+            $output.Text = Format-ManagerState -State (Get-ManagerState) -Lang $ui.Lang
         }
         catch {
             $output.Text = $_.Exception.Message
@@ -514,9 +591,10 @@ function Show-Manager {
     }.GetNewClosure()
 
     function Add-ManagerButton {
-        param([string]$Text, [string]$ButtonAction, [bool]$Danger, [scriptblock]$RefreshView)
+        param([string]$ButtonAction, [bool]$Danger, [scriptblock]$RefreshView, [hashtable]$Ui, [hashtable]$Text)
         $button = New-Object System.Windows.Forms.Button
-        $button.Text = $Text
+        $button.Text = $Text[$ButtonAction][$Ui.Lang]
+        $button.Tag = $ButtonAction
         $button.Width = 142
         $button.Height = 30
         if ($Danger) { $button.ForeColor = [System.Drawing.Color]::DarkRed }
@@ -524,8 +602,8 @@ function Show-Manager {
             try {
                 if ($ButtonAction -eq 'uninstall-remove') {
                     $confirm = [System.Windows.Forms.MessageBox]::Show(
-                        'This removes the plugin, runtime state, settings, and logs. Chat data is not touched. Continue?',
-                        'Confirm full uninstall',
+                        $Text.confirmFull[$Ui.Lang],
+                        $Text.confirmFullTitle[$Ui.Lang],
                         [System.Windows.Forms.MessageBoxButtons]::YesNo,
                         [System.Windows.Forms.MessageBoxIcon]::Warning
                     )
@@ -533,14 +611,14 @@ function Show-Manager {
                     $script:RemoveData = $true
                     $script:NoPrompt = $true
                     $null = Invoke-ManagerAction -RequestedAction 'uninstall'
-                    [System.Windows.Forms.MessageBox]::Show('Full uninstall completed.', 'Codex Auto Retry') | Out-Null
+                    [System.Windows.Forms.MessageBox]::Show($Text.doneFull[$Ui.Lang], 'Codex Auto Retry') | Out-Null
                     $form.Close()
                     return
                 }
                 if ($ButtonAction -eq 'uninstall') {
                     $confirm = [System.Windows.Forms.MessageBox]::Show(
-                        'This removes the plugin, startup entry, and service, but keeps retry settings, state, and logs. Continue?',
-                        'Confirm uninstall',
+                        $Text.confirmKeep[$Ui.Lang],
+                        $Text.confirmKeepTitle[$Ui.Lang],
                         [System.Windows.Forms.MessageBoxButtons]::YesNo,
                         [System.Windows.Forms.MessageBoxIcon]::Question
                     )
@@ -548,7 +626,7 @@ function Show-Manager {
                     $script:RemoveData = $false
                     $script:NoPrompt = $true
                     $null = Invoke-ManagerAction -RequestedAction 'uninstall'
-                    [System.Windows.Forms.MessageBox]::Show('Uninstall completed. Runtime data was kept.', 'Codex Auto Retry') | Out-Null
+                    [System.Windows.Forms.MessageBox]::Show($Text.doneKeep[$Ui.Lang], 'Codex Auto Retry') | Out-Null
                     $form.Close()
                     return
                 }
@@ -556,7 +634,7 @@ function Show-Manager {
                 & $RefreshView
             }
             catch {
-                [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Action failed', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+                [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, $Text.failedTitle[$Ui.Lang], [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
                 try { & $RefreshView } catch { $output.Text = $_.Exception.Message }
             }
         }.GetNewClosure()
@@ -565,9 +643,28 @@ function Show-Manager {
     }
 
     foreach ($definition in $definitions) {
-        Add-ManagerButton -Text $definition[0] -ButtonAction $definition[1] -Danger ([bool]$definition[2]) -RefreshView $refreshView
+        Add-ManagerButton -ButtonAction $definition[0] -Danger ([bool]$definition[1]) -RefreshView $refreshView -Ui $ui -Text $text
     }
     $refresh.Add_Click({ & $refreshView }.GetNewClosure())
+    $languageButton.Add_Click({
+        $ui.Lang = if ($ui.Lang -eq 'zh') { 'en' } else { 'zh' }
+        $form.Text = $text.title[$ui.Lang]
+        $title.Text = $text.title[$ui.Lang]
+        $subtitle.Text = $text.subtitle[$ui.Lang]
+        $languageButton.Text = $text.language[$ui.Lang]
+        $output.Font = $outputFont[$ui.Lang]
+        foreach ($control in $buttons.Controls) {
+            if ($text.ContainsKey([string]$control.Tag)) { $control.Text = $text[[string]$control.Tag][$ui.Lang] }
+        }
+        # Share the choice with the settings window; a failed save only
+        # affects the next launch, never the running manager.
+        try {
+            if (Test-Path -LiteralPath $installDir -PathType Container) {
+                [IO.File]::WriteAllText((Join-Path $installDir 'ui-language.json'), (@{ language = $ui.Lang } | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
+            }
+        } catch { }
+        & $refreshView
+    }.GetNewClosure())
     $form.Add_Shown({
         Hide-ManagerConsoleWindow
         # A hidden script host can also suppress the first ShowWindow call.

@@ -400,7 +400,7 @@ try {
     }
 
     # The single-file installer must unpack to exactly the verified archive.
-    $setup = $archive -replace '\.zip$', '-setup.exe'
+    $setup = $archive -replace '\.zip$', '.exe'
     if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) { throw "Single-file installer is missing: $setup" }
     $setupRoot = Join-Path $testRoot 'setup-extract'
     $setupSums = Get-Content -LiteralPath ($setup + '.sha256.txt') -Raw

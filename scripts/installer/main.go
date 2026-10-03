@@ -4,11 +4,15 @@
 // program reads that ZIP from its own file, extracts it to a private temporary
 // folder, and hands over to the PowerShell scripts shipped in the package, so
 // the integrity checks and rollback logic stay in one place (deploy.ps1).
+//
+// Started without flags (a double-click) it shows a menu; flags run one action
+// directly for terminals and shortcuts.
 package main
 
 import (
 	"archive/zip"
 	"bufio"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -24,42 +28,81 @@ const (
 	exitInternal = 70
 )
 
+type action int
+
+const (
+	actNone action = iota
+	actInstall
+	actManager
+	actSafeDisable
+	actUninstall
+	actUninstallRemoveData
+	actExtract
+)
+
 type options struct {
-	uninstall   bool
-	removeData  bool
-	safeDisable bool
-	manager     bool
-	extractTo   string
-	extractOnly bool
-	noPause     bool
+	action    action
+	extractTo string
+	noPause   bool
+}
+
+type menuItem struct {
+	key    string
+	action action
+	label  string
+}
+
+var menuItems = []menuItem{
+	{"1", actInstall, "安裝或更新"},
+	{"2", actManager, "開啟啟動管理員（看狀態、開關開機啟動、啟停服務）"},
+	{"3", actSafeDisable, "緊急停用共用後端，讓 Codex 回到官方模式"},
+	{"4", actUninstall, "解除安裝（保留設定與日誌）"},
+	{"5", actUninstallRemoveData, "解除安裝並刪除全部設定、狀態與日誌"},
+	{"6", actExtract, "只把整包檔案取出到資料夾"},
+	{"0", actNone, "離開"},
 }
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
-func run(args []string, stdout, stderr io.Writer) int {
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	opts, err := parseOptions(args, stderr)
 	if err != nil {
 		return exitUsage
 	}
-	code := execute(opts, stdout, stderr)
-	if !opts.noPause && !opts.extractOnly && !opts.manager {
+	self, err := os.Executable()
+	if err != nil {
+		fmt.Fprintln(stderr, "找不到安裝程式本身的檔案：", err)
+		return exitInternal
+	}
+	input := bufio.NewReader(stdin)
+	if opts.action == actNone {
+		perform := func(selected action, extractTo string) int {
+			return perform(self, selected, extractTo, stdout, stderr)
+		}
+		status := func() string { return describeStatus(self) }
+		return runMenu(input, stdout, status, defaultExtractFolder(self), perform)
+	}
+	code := perform(self, opts.action, opts.extractTo, stdout, stderr)
+	if !opts.noPause && opts.action != actExtract && opts.action != actManager {
 		fmt.Fprintln(stdout)
-		fmt.Fprint(stdout, "Press Enter to close this window...")
-		_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
+		fmt.Fprint(stdout, "按 Enter 關閉視窗…")
+		_, _ = input.ReadString('\n')
 	}
 	return code
 }
 
 func parseOptions(args []string, stderr io.Writer) (options, error) {
 	var opts options
-	flags := flag.NewFlagSet("codex-auto-retry-setup", flag.ContinueOnError)
+	var install, uninstall, removeData, safeDisable, manager bool
+	flags := flag.NewFlagSet("Codex-Auto-Retry", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	flags.BoolVar(&opts.uninstall, "uninstall", false, "uninstall the watchdog and plugin, keeping settings and logs")
-	flags.BoolVar(&opts.removeData, "remove-data", false, "with -uninstall, also delete settings, state and logs")
-	flags.BoolVar(&opts.safeDisable, "safe-disable", false, "disable the shared backend and return Codex to the official direct mode")
-	flags.BoolVar(&opts.manager, "startup-manager", false, "open the startup manager window (status, startup, service, uninstall)")
+	flags.BoolVar(&install, "install", false, "install or update without showing the menu")
+	flags.BoolVar(&uninstall, "uninstall", false, "uninstall the watchdog and plugin, keeping settings and logs")
+	flags.BoolVar(&removeData, "remove-data", false, "with -uninstall, also delete settings, state and logs")
+	flags.BoolVar(&safeDisable, "safe-disable", false, "disable the shared backend and return Codex to the official direct mode")
+	flags.BoolVar(&manager, "startup-manager", false, "open the startup manager window (status, startup, service, uninstall)")
 	flags.StringVar(&opts.extractTo, "extract", "", "only extract the release package into `folder`")
 	flags.BoolVar(&opts.noPause, "no-pause", false, "do not wait for Enter before exiting")
 	if err := flags.Parse(args); err != nil {
@@ -69,45 +112,109 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		fmt.Fprintf(stderr, "unexpected argument: %s\n", flags.Arg(0))
 		return opts, errors.New("unexpected argument")
 	}
-	if opts.removeData && !opts.uninstall {
+	extract := false
+	flags.Visit(func(f *flag.Flag) {
+		if f.Name == "extract" {
+			extract = true
+		}
+	})
+	if removeData && !uninstall {
 		fmt.Fprintln(stderr, "-remove-data requires -uninstall")
 		return opts, errors.New("invalid flags")
 	}
-	flags.Visit(func(f *flag.Flag) {
-		if f.Name == "extract" {
-			opts.extractOnly = true
-		}
-	})
-	if opts.extractOnly && (strings.TrimSpace(opts.extractTo) == "" || strings.HasPrefix(opts.extractTo, "-")) {
+	if extract && (strings.TrimSpace(opts.extractTo) == "" || strings.HasPrefix(opts.extractTo, "-")) {
 		// An empty folder must never fall through to a real installation, and
 		// a value that looks like a flag means the folder was forgotten.
 		fmt.Fprintln(stderr, "-extract requires a folder")
 		return opts, errors.New("invalid flags")
 	}
-	actions := 0
-	for _, selected := range []bool{opts.uninstall, opts.safeDisable, opts.manager, opts.extractOnly} {
-		if selected {
-			actions++
+	selected := 0
+	for candidate, chosen := range map[action]bool{
+		actInstall: install, actUninstall: uninstall, actSafeDisable: safeDisable, actManager: manager, actExtract: extract,
+	} {
+		if chosen {
+			selected++
+			opts.action = candidate
 		}
 	}
-	if actions > 1 {
-		fmt.Fprintln(stderr, "choose only one of -uninstall, -safe-disable, -startup-manager and -extract")
+	if selected > 1 {
+		fmt.Fprintln(stderr, "choose only one of -install, -uninstall, -safe-disable, -startup-manager and -extract")
 		return opts, errors.New("invalid flags")
+	}
+	if opts.action == actUninstall && removeData {
+		opts.action = actUninstallRemoveData
 	}
 	return opts, nil
 }
 
-func execute(opts options, stdout, stderr io.Writer) int {
-	self, err := os.Executable()
-	if err != nil {
-		fmt.Fprintln(stderr, "Cannot locate the installer file:", err)
-		return exitInternal
-	}
+// runMenu shows the choices until the user leaves. Destructive choices need an
+// explicit confirmation, and an unreadable answer never selects anything.
+func runMenu(input *bufio.Reader, out io.Writer, status func() string, extractDefault string, perform func(action, string) int) int {
+	last := 0
+	for {
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "Codex Auto Retry 安裝程式")
+		fmt.Fprintln(out, status())
+		fmt.Fprintln(out)
+		for _, item := range menuItems {
+			fmt.Fprintf(out, "  %s. %s\n", item.key, item.label)
+		}
+		fmt.Fprintln(out)
+		fmt.Fprint(out, "請輸入數字後按 Enter：")
+		answer, err := input.ReadString('\n')
+		if err != nil && strings.TrimSpace(answer) == "" {
+			return last
+		}
+		selected, ok := lookupMenu(strings.TrimSpace(answer))
+		if !ok {
+			fmt.Fprintln(out, "沒有這個選項，請重新輸入。")
+			continue
+		}
+		if selected == actNone {
+			return last
+		}
 
-	if opts.extractOnly {
-		root, err := extractPackage(self, opts.extractTo)
+		extractTo := ""
+		switch selected {
+		case actUninstallRemoveData:
+			fmt.Fprint(out, "這會刪除全部設定、狀態與日誌，無法復原。確定請輸入 Y：")
+			confirm, _ := input.ReadString('\n')
+			if !strings.EqualFold(strings.TrimSpace(confirm), "y") {
+				fmt.Fprintln(out, "已取消，沒有做任何變更。")
+				continue
+			}
+		case actExtract:
+			fmt.Fprintf(out, "要取出到哪個資料夾？直接按 Enter 使用 %s：", extractDefault)
+			folder, _ := input.ReadString('\n')
+			extractTo = strings.Trim(strings.TrimSpace(folder), `"`)
+			if extractTo == "" {
+				extractTo = extractDefault
+			}
+		}
+
+		last = perform(selected, extractTo)
+		fmt.Fprintln(out)
+		fmt.Fprint(out, "按 Enter 回到選單…")
+		if _, err := input.ReadString('\n'); err != nil {
+			return last
+		}
+	}
+}
+
+func lookupMenu(key string) (action, bool) {
+	for _, item := range menuItems {
+		if item.key == key {
+			return item.action, true
+		}
+	}
+	return actNone, false
+}
+
+func perform(self string, selected action, extractTo string, stdout, stderr io.Writer) int {
+	if selected == actExtract {
+		root, err := extractPackage(self, extractTo)
 		if err != nil {
-			fmt.Fprintln(stderr, "Extraction failed:", err)
+			fmt.Fprintln(stderr, "取出失敗：", err)
 			return exitInternal
 		}
 		fmt.Fprintln(stdout, root)
@@ -116,50 +223,113 @@ func execute(opts options, stdout, stderr io.Writer) int {
 
 	workDir, err := os.MkdirTemp("", "codex-auto-retry-setup-")
 	if err != nil {
-		fmt.Fprintln(stderr, "Cannot create a temporary folder:", err)
+		fmt.Fprintln(stderr, "無法建立暫存資料夾：", err)
 		return exitInternal
 	}
 	defer os.RemoveAll(workDir)
 
-	fmt.Fprintln(stdout, "Codex Auto Retry - single-file installer")
-	fmt.Fprintln(stdout, "Extracting the release package...")
+	fmt.Fprintln(stdout, "正在解開安裝檔…")
 	root, err := extractPackage(self, workDir)
 	if err != nil {
-		fmt.Fprintln(stderr, "Extraction failed:", err)
+		fmt.Fprintln(stderr, "取出失敗：", err)
 		return exitInternal
 	}
 
 	script, scriptArgs := "deploy.ps1", []string{"-WaitForCodexExit"}
-	switch {
-	case opts.uninstall:
+	switch selected {
+	case actUninstall:
 		script, scriptArgs = "uninstall-release.ps1", nil
-		if opts.removeData {
-			scriptArgs = []string{"-RemoveData"}
-		}
-	case opts.safeDisable:
+	case actUninstallRemoveData:
+		script, scriptArgs = "uninstall-release.ps1", []string{"-RemoveData"}
+	case actSafeDisable:
 		script, scriptArgs = "startup-manager.ps1", []string{"-Action", "safe-disable"}
-	case opts.manager:
+	case actManager:
 		script, scriptArgs = "startup-manager.ps1", []string{"-Action", "gui"}
 		// The manager hides its own console window; give it a separate one so
 		// this window (or the terminal that started setup) stays visible.
-		fmt.Fprintln(stdout, "The startup manager is open. This window closes when you close it.")
+		fmt.Fprintln(stdout, "已開啟啟動管理員，關閉它之後這裡會繼續。")
 	}
 
-	code, err := runPowerShell(filepath.Join(root, script), scriptArgs, opts.manager, stdout, stderr)
+	code, err := runPowerShell(filepath.Join(root, script), scriptArgs, selected == actManager, stdout, stderr)
 	if err != nil {
-		fmt.Fprintln(stderr, "Cannot start Windows PowerShell:", err)
+		fmt.Fprintln(stderr, "無法啟動 Windows PowerShell：", err)
 		return exitInternal
 	}
 	fmt.Fprintln(stdout)
 	switch {
 	case code == 0:
-		fmt.Fprintln(stdout, "Completed successfully.")
-	case code == 2 && script == "deploy.ps1":
-		fmt.Fprintln(stdout, "Installation cancelled. No plugin or runtime changes were made.")
+		fmt.Fprintln(stdout, "完成。")
+	case code == 2 && selected == actInstall:
+		fmt.Fprintln(stdout, "已取消安裝，外掛與執行環境都沒有變更。")
 	default:
-		fmt.Fprintf(stdout, "Failed with exit code %d. Review the error above.\n", code)
+		fmt.Fprintf(stdout, "失敗（錯誤狀態 %d），請看上方的訊息。\n", code)
 	}
 	return code
+}
+
+// describeStatus compares this package with what is installed for the current
+// user. It only reads files; a missing or unreadable manifest is reported as
+// such instead of guessed.
+func describeStatus(self string) string {
+	packaged := "未知"
+	if version, err := packagedVersion(self); err == nil {
+		packaged = version
+	}
+	installed := "尚未安裝"
+	if profile := os.Getenv("USERPROFILE"); profile != "" {
+		manifest := filepath.Join(profile, "plugins", "codex-auto-retry", ".codex-plugin", "plugin.json")
+		if version, err := manifestVersion(manifest); err == nil {
+			installed = "已安裝 " + version
+		} else if !errors.Is(err, os.ErrNotExist) {
+			installed = "無法判斷"
+		}
+	}
+	return fmt.Sprintf("這個安裝檔：%s　目前電腦上：%s", packaged, installed)
+}
+
+func packagedVersion(self string) (string, error) {
+	reader, err := zip.OpenReader(self)
+	if err != nil {
+		return "", err
+	}
+	defer reader.Close()
+	for _, file := range reader.File {
+		if strings.HasSuffix(strings.ReplaceAll(file.Name, "\\", "/"), "/payload/codex-auto-retry/.codex-plugin/plugin.json") {
+			source, err := file.Open()
+			if err != nil {
+				return "", err
+			}
+			defer source.Close()
+			return decodeVersion(source)
+		}
+	}
+	return "", os.ErrNotExist
+}
+
+func manifestVersion(path string) (string, error) {
+	source, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer source.Close()
+	return decodeVersion(source)
+}
+
+func decodeVersion(source io.Reader) (string, error) {
+	var manifest struct {
+		Version string `json:"version"`
+	}
+	if err := json.NewDecoder(source).Decode(&manifest); err != nil {
+		return "", err
+	}
+	if manifest.Version == "" {
+		return "", errors.New("manifest has no version")
+	}
+	return manifest.Version, nil
+}
+
+func defaultExtractFolder(self string) string {
+	return filepath.Join(filepath.Dir(self), strings.TrimSuffix(filepath.Base(self), filepath.Ext(self)))
 }
 
 // extractPackage reads the ZIP appended to archivePath, extracts it under

@@ -8,11 +8,11 @@ Codex Auto Retry 0.7.12 - Windows x64 安裝說明
 - 只寫入目前使用者的資料夾，不需要系統管理員權限
 - 不需要預先安裝 Go、Node.js 或其他開發執行環境
 
-使用單檔安裝程式（檔名結尾為 -setup.exe，以下簡稱 setup.exe）時
+使用單一執行檔（Codex-Auto-Retry-<版本>-windows-x64.exe）時
 ------------------------------
-- 直接雙擊即可安裝，不需要解壓縮；安裝完成後暫存資料夾會自動清除。
-- 請保留下載的 setup.exe。下文提到「解壓縮目錄」裡的入口檔時，請改用：setup.exe -startup-manager（啟動管理員）、setup.exe -uninstall（加 -remove-data 連設定與日誌一併清除）、
-  setup.exe -safe-disable，或 setup.exe -extract <資料夾> 取出整包後再執行其中的入口檔。
+- 不需要解壓縮。雙擊後會出現選單：安裝或更新、開啟啟動管理員、緊急停用、解除安裝、取出整包檔案。
+- 請保留下載的 .exe，日後要管理或解除安裝時再雙擊它，從選單選擇即可；下文提到「解壓縮目錄」裡的入口檔也都在選單裡。
+- 也可以直接帶參數執行，不顯示選單：-install、-startup-manager、-safe-disable、-uninstall（加 -remove-data 連資料一併清除）、-extract <資料夾>。
 
 安裝步驟
 --------

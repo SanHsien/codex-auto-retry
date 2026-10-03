@@ -48,11 +48,12 @@ gh repo set-default --view
 | R-11 | P3 | 只能下載壓縮檔再找入口檔安裝；新增單檔安裝程式 `scripts/installer/`，`release-test.ps1` 驗證其內容與壓縮檔一致（`17c944d`，2026-10-03） |
 | R-12 | P1 | 全新安裝的前置檢查列出全部市集，Codex 設定裡任何一個失效的無關市集都會讓安裝以 `configuration_error` 中止（維護者實機遇到）；`deploy.ps1`、`uninstall-release.ps1` 改為退回只列本外掛的市集，`installer-cli-smoke-test.ps1` 加兩個情境（`b0d225f`，2026-10-03） |
 | R-13 | P3 | 用單檔安裝程式安裝的人無法開啟啟動管理員（入口只在壓縮檔裡）；新增 `setup.exe -startup-manager`；`assets/` 截圖以 `tools/capture_screenshots.ps1` 重拍為繁體（`177de48`，2026-10-03） |
+| R-14 | P3 | 執行檔只能靠參數切換功能、檔名帶 `-setup` 易誤會成只能安裝；改名並在雙擊時顯示操作選單，刪除資料需輸入 Y 確認（2026-10-03） |
+| R-15 | P2 | 啟動管理員與安全啟動的錯誤視窗只有英文；啟動管理員加繁中／英文切換（共用 `ui-language.json`），兩個錯誤視窗改繁中（2026-10-03） |
 
 ## 未解風險
 
 - 推送到 `main` 不會自動觸發 CI：GitHub 對「fork 時已含 workflow」的 repo 預設停用（Actions 頁顯示 *Workflows aren't being run on this forked repository*），需維護者在 Actions 頁按下啟用；在那之前每次推送後手動 `gh workflow run ci.yml`（`b4b6f6a` 的手動執行 `37035605853` 全綠）。`go test -race` 需要 gcc，本機未安裝，只能由 CI 驗證。
-- `assets/startup_manager.png` 是上游截圖（介面本身只有英文，未重拍）。
 - 發佈檔未做程式碼簽章；單檔安裝程式是自解壓執行檔，SmartScreen 與防毒軟體可能示警。
 - 繁體化後每次同步上游都要重跑轉換工具並人工對照 PowerShell 測試裡的字元碼常數。
 

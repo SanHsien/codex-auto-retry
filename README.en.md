@@ -63,9 +63,9 @@ Long-running Codex work can be interrupted after tools have already executed or 
 
 ## Quick Start
 
-1. **Download**: Get this fork's Traditional Chinese build from [Releases](https://github.com/SanHsien/codex-auto-retry/releases/latest): either the single-file installer `Codex-Auto-Retry-<version>-windows-x64-setup.exe` or the ZIP.
+1. **Download**: Get this fork's Traditional Chinese build from [Releases](https://github.com/SanHsien/codex-auto-retry/releases/latest): either the single executable `Codex-Auto-Retry-<version>-windows-x64.exe` or the ZIP.
 2. **Extract** (ZIP only): Extract it to a standard local folder (do not run directly from inside the archive preview).
-3. **Install**: Fully close Codex, then double-click the setup executable, or `安裝.cmd` inside the extracted ZIP. The installer verifies the package and starts the watchdog service.
+3. **Install**: Fully close Codex, then double-click the executable and choose Install from its menu, or run `安裝.cmd` inside the extracted ZIP. The installer verifies the package and starts the watchdog service.
 4. **Verify**: Open Codex and create a new task. The watchdog will automatically detect active tasks. You can also say `開啟 Codex Auto Retry 管理面板` to open the embedded control panel.
 5. See [Windows installation notes](release/windows/README-安裝說明.txt) for route verification, shared backend details, and safe-launch behavior.
 
@@ -186,8 +186,8 @@ Built with vanilla TypeScript and embedded into the Go MCP binary via Go `embed`
 
 ### End-User Installation
 
-1. Download the single-file installer (`...-setup.exe`) or download and extract the self-contained Windows x64 release ZIP.
-2. Fully close Codex App, then double-click the setup executable or `安裝.cmd`. Both run the same `deploy.ps1`; the setup executable only unpacks the ZIP into a temporary folder first. The build is not code-signed, so Windows SmartScreen may warn about an unknown publisher; compare the SHA-256 on the release page.
+1. Download the single executable (`...-windows-x64.exe`) or download and extract the self-contained Windows x64 release ZIP.
+2. Fully close Codex App, then double-click the executable (a menu offers install/update, startup manager, safe-disable, uninstall and extract) or `安裝.cmd`. Both run the same `deploy.ps1`; the executable only unpacks the ZIP into a temporary folder first. The build is not code-signed, so Windows SmartScreen may warn about an unknown publisher; compare the SHA-256 on the release page.
 3. The installer verifies file hashes via SHA-256, registers current-user startup, deploys the local watchdog under `%LOCALAPPDATA%\CodexAutoRetry`, and registers the Codex plugin.
 4. Neither administrator rights nor Go/Node.js dependencies are required.
 
@@ -199,7 +199,7 @@ Plugin-list support is checked before replacement; final verification requires t
 
 ### Administrative & Break-Glass Tools
 
-These launchers are in the ZIP root. With the single-file installer, keep the downloaded `setup.exe` and run it with a flag (a shortcut with the flag appended to its Target works too): `setup.exe -startup-manager` opens the startup manager (which can also uninstall), `setup.exe -uninstall` (add `-remove-data` for a full cleanup), `setup.exe -safe-disable`, or `setup.exe -extract <folder>` to unpack the whole package.
+These launchers are in the ZIP root. With the single executable, keep the downloaded `.exe` and double-click it to pick an action from its menu. Flags skip the menu for terminals and shortcuts: `-install`, `-startup-manager`, `-safe-disable`, `-uninstall` (add `-remove-data` for a full cleanup), and `-extract <folder>`.
 
 - `啟動管理員.cmd`: Launches a windowed startup manager (without leaving a command console) showing exact startup commands, supervisor status, heartbeat, and Windows `StartupApproved` status.
 - `安全停用.cmd`: One-click emergency script that immediately disables shared mode, clears plugin-owned registry values, and restores Codex to official direct execution.

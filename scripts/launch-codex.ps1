@@ -268,7 +268,10 @@ try {
     if ($CheckOnly) { throw }
     Write-CodexLaunchResult $DataDir $route.Mode 'launch_refused_or_failed' 'failed'
     Add-Type -AssemblyName System.Windows.Forms
-    [void][Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Codex safe launcher', 'OK', 'Warning')
+    # ASCII source keeps the Traditional Chinese text valid in Windows PowerShell 5.1.
+    $launchTitle = -join [char[]](0x0043, 0x006f, 0x0064, 0x0065, 0x0078, 0x0020, 0x5b89, 0x5168, 0x555f, 0x52d5)
+    $launchLead = -join [char[]](0x5b89, 0x5168, 0x555f, 0x52d5, 0x0020, 0x0043, 0x006f, 0x0064, 0x0065, 0x0078, 0x0020, 0x5931, 0x6557, 0xff1a)
+    [void][Windows.Forms.MessageBox]::Show($launchLead + [Environment]::NewLine + $_.Exception.Message, $launchTitle, 'OK', 'Warning')
     exit 1
 } finally {
     if ($null -ne $launchLock) { $launchLock.ReleaseMutex(); $launchLock.Dispose() }

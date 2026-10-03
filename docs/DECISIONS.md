@@ -27,11 +27,11 @@
 **限制**：
 - 既有使用者設定檔裡的後備重試文字不會被改寫，只有新安裝採用新預設。
 - 測試裡「UTF-8 被當成 GBK」的亂碼字串必須原樣保留，工具依標記跳過。
-- `assets/` 截圖由 `tools/capture_screenshots.ps1` 重拍（2026-10-03）；啟動管理員介面只有英文，沿用上游截圖。
+- `assets/` 截圖由 `tools/capture_screenshots.ps1` 重拍（2026-10-03）；啟動管理員也已加上繁中介面並重拍。
 
 ## 2026-10-03：提供單檔安裝程式，不做免安裝版
 
-**決定**：`scripts/build-release.ps1` 除了壓縮檔，另外產生 `Codex-Auto-Retry-<版本>-windows-x64-setup.exe`。它是 `scripts/installer/` 的小程式後面直接接上同一份壓縮檔；執行時把壓縮檔解到暫存資料夾，再呼叫其中的 `deploy.ps1`。
+**決定**：`scripts/build-release.ps1` 除了壓縮檔，另外產生單一執行檔 `Codex-Auto-Retry-<版本>-windows-x64.exe`（2026-10-03 起不帶 `-setup`，直接雙擊顯示操作選單）。它是 `scripts/installer/` 的小程式後面直接接上同一份壓縮檔；執行時把壓縮檔解到暫存資料夾，再呼叫其中的 `deploy.ps1`。
 
 **理由**：本工具必須註冊開機啟動、Codex 外掛與背景服務，沒有「免安裝直接執行」的形態；能省的是解壓縮與找入口檔這一步。安裝邏輯仍只有 `deploy.ps1` 一份，完整性檢查與失敗回復不會出現第二套實作。
 
