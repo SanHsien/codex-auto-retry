@@ -28,6 +28,7 @@ type options struct {
 	uninstall   bool
 	removeData  bool
 	safeDisable bool
+	manager     bool
 	extractTo   string
 	extractOnly bool
 	noPause     bool
@@ -43,7 +44,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 	code := execute(opts, stdout, stderr)
-	if !opts.noPause && !opts.extractOnly {
+	if !opts.noPause && !opts.extractOnly && !opts.manager {
 		fmt.Fprintln(stdout)
 		fmt.Fprint(stdout, "Press Enter to close this window...")
 		_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
@@ -58,6 +59,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.BoolVar(&opts.uninstall, "uninstall", false, "uninstall the watchdog and plugin, keeping settings and logs")
 	flags.BoolVar(&opts.removeData, "remove-data", false, "with -uninstall, also delete settings, state and logs")
 	flags.BoolVar(&opts.safeDisable, "safe-disable", false, "disable the shared backend and return Codex to the official direct mode")
+	flags.BoolVar(&opts.manager, "startup-manager", false, "open the startup manager window (status, startup, service, uninstall)")
 	flags.StringVar(&opts.extractTo, "extract", "", "only extract the release package into `folder`")
 	flags.BoolVar(&opts.noPause, "no-pause", false, "do not wait for Enter before exiting")
 	if err := flags.Parse(args); err != nil {
@@ -71,10 +73,6 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		fmt.Fprintln(stderr, "-remove-data requires -uninstall")
 		return opts, errors.New("invalid flags")
 	}
-	if opts.uninstall && opts.safeDisable {
-		fmt.Fprintln(stderr, "-uninstall and -safe-disable cannot be combined")
-		return opts, errors.New("invalid flags")
-	}
 	flags.Visit(func(f *flag.Flag) {
 		if f.Name == "extract" {
 			opts.extractOnly = true
@@ -86,8 +84,14 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		fmt.Fprintln(stderr, "-extract requires a folder")
 		return opts, errors.New("invalid flags")
 	}
-	if opts.extractOnly && (opts.uninstall || opts.safeDisable) {
-		fmt.Fprintln(stderr, "-extract cannot be combined with -uninstall or -safe-disable")
+	actions := 0
+	for _, selected := range []bool{opts.uninstall, opts.safeDisable, opts.manager, opts.extractOnly} {
+		if selected {
+			actions++
+		}
+	}
+	if actions > 1 {
+		fmt.Fprintln(stderr, "choose only one of -uninstall, -safe-disable, -startup-manager and -extract")
 		return opts, errors.New("invalid flags")
 	}
 	return opts, nil
@@ -134,9 +138,14 @@ func execute(opts options, stdout, stderr io.Writer) int {
 		}
 	case opts.safeDisable:
 		script, scriptArgs = "startup-manager.ps1", []string{"-Action", "safe-disable"}
+	case opts.manager:
+		script, scriptArgs = "startup-manager.ps1", []string{"-Action", "gui"}
+		// The manager hides its own console window; give it a separate one so
+		// this window (or the terminal that started setup) stays visible.
+		fmt.Fprintln(stdout, "The startup manager is open. This window closes when you close it.")
 	}
 
-	code, err := runPowerShell(filepath.Join(root, script), scriptArgs, stdout, stderr)
+	code, err := runPowerShell(filepath.Join(root, script), scriptArgs, opts.manager, stdout, stderr)
 	if err != nil {
 		fmt.Fprintln(stderr, "Cannot start Windows PowerShell:", err)
 		return exitInternal
@@ -224,7 +233,7 @@ func extractFile(file *zip.File, target string) error {
 	return output.Close()
 }
 
-func runPowerShell(script string, args []string, stdout, stderr io.Writer) (int, error) {
+func runPowerShell(script string, args []string, ownConsole bool, stdout, stderr io.Writer) (int, error) {
 	systemRoot := os.Getenv("SystemRoot")
 	if systemRoot == "" {
 		return 0, errors.New("SystemRoot is not set")
@@ -233,9 +242,13 @@ func runPowerShell(script string, args []string, stdout, stderr io.Writer) (int,
 	command := exec.Command(powershell, append([]string{
 		"-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script,
 	}, args...)...)
-	command.Stdin = os.Stdin
-	command.Stdout = stdout
-	command.Stderr = stderr
+	if ownConsole {
+		useHiddenConsole(command)
+	} else {
+		command.Stdin = os.Stdin
+		command.Stdout = stdout
+		command.Stderr = stderr
+	}
 
 	err := command.Run()
 	var exitErr *exec.ExitError

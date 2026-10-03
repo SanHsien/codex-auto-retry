@@ -11,7 +11,7 @@ Codex Auto Retry 0.7.12 - Windows x64 安裝說明
 使用單檔安裝程式（檔名結尾為 -setup.exe，以下簡稱 setup.exe）時
 ------------------------------
 - 直接雙擊即可安裝，不需要解壓縮；安裝完成後暫存資料夾會自動清除。
-- 下文提到「解壓縮目錄」裡的入口檔時，請改用：setup.exe -uninstall（加 -remove-data 連設定與日誌一併清除）、
+- 請保留下載的 setup.exe。下文提到「解壓縮目錄」裡的入口檔時，請改用：setup.exe -startup-manager（啟動管理員）、setup.exe -uninstall（加 -remove-data 連設定與日誌一併清除）、
   setup.exe -safe-disable，或 setup.exe -extract <資料夾> 取出整包後再執行其中的入口檔。
 
 安裝步驟

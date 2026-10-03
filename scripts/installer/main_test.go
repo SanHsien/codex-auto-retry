@@ -97,6 +97,8 @@ func TestParseOptionsRejectsInvalidCombinations(t *testing.T) {
 		{"-extract", "-uninstall"},
 		{"-extract", "out", "-uninstall"},
 		{"-extract", "out", "-safe-disable"},
+		{"-startup-manager", "-uninstall"},
+		{"-startup-manager", "-extract", "out"},
 	} {
 		if _, err := parseOptions(args, io.Discard); err == nil {
 			t.Fatalf("accepted %s", strings.Join(args, " "))
@@ -105,6 +107,10 @@ func TestParseOptionsRejectsInvalidCombinations(t *testing.T) {
 	opts, err := parseOptions([]string{"-uninstall", "-remove-data", "-no-pause"}, io.Discard)
 	if err != nil || !opts.uninstall || !opts.removeData || !opts.noPause {
 		t.Fatalf("valid flags were rejected: %+v, %v", opts, err)
+	}
+	opts, err = parseOptions([]string{"-startup-manager"}, io.Discard)
+	if err != nil || !opts.manager {
+		t.Fatalf("startup manager flag was rejected: %+v, %v", opts, err)
 	}
 	opts, err = parseOptions([]string{"-extract", "out"}, io.Discard)
 	if err != nil || !opts.extractOnly || opts.extractTo != "out" {

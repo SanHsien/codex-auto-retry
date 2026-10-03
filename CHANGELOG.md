@@ -10,6 +10,15 @@
 
 ## [Unreleased]
 
+## [0.7.12-fork.4] - 2026-10-03
+
+### Added
+- 單檔安裝程式新增 `-startup-manager`，用安裝檔就能開啟啟動管理員（狀態、開機啟動、啟停服務、解除安裝）。
+- `tools/capture_screenshots.ps1`：用暫存假資料重拍 `assets/` 截圖。
+
+### Changed
+- `assets/settings_zh.png`、`settings_en.png`、`panel.png` 重拍為繁體中文與目前版本的介面。
+
 ## [0.7.12-fork.3] - 2026-10-03
 
 ### Fixed

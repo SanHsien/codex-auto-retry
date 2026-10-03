@@ -10,6 +10,15 @@ English | [繁體中文](CHANGELOG.md)
 
 ## [Unreleased]
 
+## [0.7.12-fork.4] - 2026-10-03
+
+### Added
+- The single-file installer gains `-startup-manager`, so the startup manager (status, sign-in startup, service start/stop, uninstall) is reachable without the ZIP.
+- `tools/capture_screenshots.ps1` retakes the `assets/` screenshots from temporary sample data.
+
+### Changed
+- `assets/settings_zh.png`, `settings_en.png`, and `panel.png` now show the current Traditional Chinese UI.
+
 ## [0.7.12-fork.3] - 2026-10-03
 
 ### Fixed

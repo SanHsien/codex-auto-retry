@@ -199,7 +199,7 @@ Plugin-list support is checked before replacement; final verification requires t
 
 ### Administrative & Break-Glass Tools
 
-These launchers are in the ZIP root. With the single-file installer use `setup.exe -uninstall` (add `-remove-data` for a full cleanup), `setup.exe -safe-disable`, or `setup.exe -extract <folder>` to unpack the whole package.
+These launchers are in the ZIP root. With the single-file installer, keep the downloaded `setup.exe` and run it with a flag (a shortcut with the flag appended to its Target works too): `setup.exe -startup-manager` opens the startup manager (which can also uninstall), `setup.exe -uninstall` (add `-remove-data` for a full cleanup), `setup.exe -safe-disable`, or `setup.exe -extract <folder>` to unpack the whole package.
 
 - `啟動管理員.cmd`: Launches a windowed startup manager (without leaving a command console) showing exact startup commands, supervisor status, heartbeat, and Windows `StartupApproved` status.
 - `安全停用.cmd`: One-click emergency script that immediately disables shared mode, clears plugin-owned registry values, and restores Codex to official direct execution.

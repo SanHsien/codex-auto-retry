@@ -123,7 +123,7 @@
 
 ### 管理與維護腳本
 
-位於壓縮檔根目錄（原始碼範本在 `release\windows\`）。使用單檔安裝程式時，改用 `setup.exe -uninstall`（加 `-remove-data` 連設定與日誌一併清除）、`setup.exe -safe-disable`，或 `setup.exe -extract <資料夾>` 取出整包：
+位於壓縮檔根目錄（原始碼範本在 `release\windows\`）。使用單檔安裝程式時，保留下載的 `setup.exe`，改用參數執行（可在檔案總管對它按右鍵建立捷徑，再於捷徑「目標」後面加上參數）：`setup.exe -startup-manager` 開啟啟動管理員（也能在裡面解除安裝）、`setup.exe -uninstall`（加 `-remove-data` 連設定與日誌一併清除）、`setup.exe -safe-disable`，或 `setup.exe -extract <資料夾>` 取出整包：
 
 * `啟動管理員.cmd`：開啟啟動管理員視窗，顯示啟動指令、監護狀態、心跳與 Windows `StartupApproved` 狀態。
 * `安全停用.cmd`：一鍵緊急停止腳本，停用共用後端、清理外掛登錄值並恢復 Codex 官方直接執行模式。
