@@ -276,11 +276,11 @@ func TestSharedAppServerIsOptInByDefault(t *testing.T) {
 
 func TestConfigReportsAggressiveRetryPolicy(t *testing.T) {
 	config := defaultConfig()
-	if warning := config.retrySafetyWarning(); warning != "" {
+	if warning := config.retrySafetyWarning(languageChinese); warning != "" {
 		t.Fatalf("default retry policy unexpectedly warned: %s", warning)
 	}
 	config.MaxRecoveryAttempts = recommendedMaxRecoveryAttempts + 1
-	if warning := config.retrySafetyWarning(); warning == "" {
+	if warning := config.retrySafetyWarning(languageEnglish); warning == "" {
 		t.Fatal("aggressive recovery policy did not produce a warning")
 	}
 }

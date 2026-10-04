@@ -10,6 +10,24 @@ English | [繁體中文](CHANGELOG.md)
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-04
+
+This fork now has its own semantic version line starting at 1.0.0; product logic matches upstream `sybxxx/codex-auto-retry` 0.7.12. All earlier `0.7.12-fork.N` builds are folded into this release, and only 1.0.0 remains on the release page.
+
+### Added
+- Full Traditional Chinese / English support:
+  - The settings window, startup manager, embedded panel, and tray share one language preference (`ui-language.json`, Traditional Chinese by default), switchable from the panel header and the startup manager; new MCP tool `set_ui_language`.
+  - Tray tooltips and notifications, panel notices, queue labels, and the retry-limit warning follow the language.
+  - The installer, the executable's menu, `.cmd` launchers, console progress, and error messages (about 160) always show Chinese and English side by side; so do the memory alert and the close-Codex prompt.
+  - MCP tool titles and descriptions are bilingual; the installation guide text file gains a full English section.
+- `assets/panel_en.png`: English panel screenshot.
+- Contract tests: console and error messages must be bilingual, scripts with Chinese text must carry a BOM, and panel static text must have English.
+
+### Changed
+- Version: plugin, watchdog, and panel are `1.0.0`; release files are `Codex-Auto-Retry-1.0.0-windows-x64.*`.
+- Panel wait-strategy buttons read 翻倍／等差／固定 (Double / Linear / Fixed) so both languages fit on one line.
+- `tools/convert_zh_hant.py` only converts lines that really contain Simplified characters, so valid Traditional words (登錄, 通過, 項目) are no longer rewritten.
+
 ## [0.7.12-fork.5] - 2026-10-03
 
 ### Changed

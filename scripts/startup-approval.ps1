@@ -1,4 +1,4 @@
-$script:CodexAutoRetryStartupApprovedSubKey = 'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
+﻿$script:CodexAutoRetryStartupApprovedSubKey = 'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
 $script:CodexAutoRetryRunSubKey = 'Software\Microsoft\Windows\CurrentVersion\Run'
 
 function Open-CodexAutoRetryRunKey {
@@ -101,7 +101,7 @@ function Set-CodexAutoRetryStartupApprovalEnabled {
     if ($null -eq $key) {
         $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($script:CodexAutoRetryStartupApprovedSubKey, $true)
     }
-    if ($null -eq $key) { throw 'The current-user startup approval registry key could not be opened.' }
+    if ($null -eq $key) { throw '無法開啟目前使用者的開機啟動核准登錄機碼。 / The current-user startup approval registry key could not be opened.' }
     try {
         $key.SetValue($RunName, $bytes, [Microsoft.Win32.RegistryValueKind]::Binary)
     }
@@ -110,7 +110,7 @@ function Set-CodexAutoRetryStartupApprovalEnabled {
     }
     $actual = Get-CodexAutoRetryStartupApproval -RunName $RunName
     if ($actual.Status -ne 'enabled') {
-        throw "The startup approval for $RunName could not be enabled."
+        throw "無法啟用 $RunName 的開機啟動核准。 / The startup approval for $RunName could not be enabled."
     }
     return $actual
 }
@@ -129,7 +129,7 @@ function Remove-CodexAutoRetryStartupApproval {
         $key.Close()
     }
     if ((Get-CodexAutoRetryStartupApproval -RunName $RunName).Present) {
-        throw "The startup approval for $RunName is still present after removal."
+        throw "移除後 $RunName 的開機啟動核准仍然存在。 / The startup approval for $RunName is still present after removal."
     }
     return $true
 }
@@ -148,7 +148,7 @@ function Restore-CodexAutoRetryStartupApproval {
     if ($null -eq $key) {
         $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($script:CodexAutoRetryStartupApprovedSubKey, $true)
     }
-    if ($null -eq $key) { throw 'The current-user startup approval registry key could not be opened.' }
+    if ($null -eq $key) { throw '無法開啟目前使用者的開機啟動核准登錄機碼。 / The current-user startup approval registry key could not be opened.' }
     try {
         $key.SetValue($RunName, $Bytes, [Microsoft.Win32.RegistryValueKind]::Binary)
     }

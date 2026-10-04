@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$DataDir = (Join-Path $env:LOCALAPPDATA 'CodexAutoRetry'),
     [switch]$Official,
@@ -115,7 +115,7 @@ function Get-CodexDesktopExecutable {
             if (Test-Path -LiteralPath $exe -PathType Leaf) { return $exe }
         }
     }
-    throw 'Cannot find the current-user OpenAI.Codex package executable. Install or repair Codex first.'
+    throw '找不到目前使用者的 OpenAI.Codex 執行檔，請先安裝或修復 Codex。 / Cannot find the current-user OpenAI.Codex package executable. Install or repair Codex first.'
 }
 
 function Wait-CodexDesktopStopped {
@@ -133,12 +133,12 @@ function Wait-CodexDesktopStopped {
                 })
         }
         catch {
-            throw 'Cannot confirm Codex is fully closed. Fully exit Codex and try again. No process was stopped.'
+            throw '無法確認 Codex 已完全關閉，請完全結束 Codex 後再試，沒有停止任何程式。 / Cannot confirm Codex is fully closed. Fully exit Codex and try again. No process was stopped.'
         }
         if ($running.Count -eq 0) { return }
         Start-Sleep -Milliseconds 250
     } while ([DateTimeOffset]::UtcNow -lt $deadline)
-    throw 'Codex is still running. Fully exit Codex before using the safe launcher.'
+    throw 'Codex 仍在執行，請完全結束 Codex 後再使用安全啟動。 / Codex is still running. Fully exit Codex before using the safe launcher.'
 }
 
 function Invoke-CodexLaunchRecovery {
@@ -194,10 +194,10 @@ function Assert-CodexDesktopStopped {
             if (-not $process.ExecutablePath -or $process.Name -ieq 'ChatGPT.exe' -or
                 [string]::Equals([string]$process.ExecutablePath, $Executable, [StringComparison]::OrdinalIgnoreCase) -or
                 [string]$process.ExecutablePath -match '(?i)\\app\\Codex\.exe$') {
-                throw 'Codex may already be running. Fully exit Codex before using this launcher.'
+                throw 'Codex 可能已在執行，請完全結束 Codex 後再使用這個啟動方式。 / Codex may already be running. Fully exit Codex before using this launcher.'
             }
         }
-    } catch { throw 'Cannot confirm Codex is fully closed. Fully exit Codex and try again. No process was stopped.' }
+    } catch { throw '無法確認 Codex 已完全關閉，請完全結束 Codex 後再試，沒有停止任何程式。 / Cannot confirm Codex is fully closed. Fully exit Codex and try again. No process was stopped.' }
 }
 
 function New-CodexDesktopStartInfo {
@@ -234,7 +234,7 @@ function Enter-CodexLaunchLock {
     try {
         try { $acquired = $lock.WaitOne(0) }
         catch [Threading.AbandonedMutexException] { $acquired = $true }
-        if (-not $acquired) { throw 'Another safe Codex launch is already in progress. No second instance was started.' }
+        if (-not $acquired) { throw '另一個安全啟動正在進行，沒有啟動第二個 Codex。 / Another safe Codex launch is already in progress. No second instance was started.' }
         return $lock
     } catch { $lock.Dispose(); throw }
 }
@@ -261,7 +261,7 @@ try {
     $child = [Diagnostics.Process]::Start((New-CodexDesktopStartInfo $exe $route))
     try {
         # Keep concurrent clicks out until the process is visible to the next probe.
-        if ($child.WaitForExit(1000)) { throw 'Codex exited immediately after launch. No automatic restart was attempted.' }
+        if ($child.WaitForExit(1000)) { throw 'Codex 啟動後立刻結束，沒有自動重新啟動。 / Codex exited immediately after launch. No automatic restart was attempted.' }
     } finally { $child.Dispose() }
     Write-CodexLaunchResult $DataDir $route.Mode $route.Reason 'launch_requested'
 } catch {

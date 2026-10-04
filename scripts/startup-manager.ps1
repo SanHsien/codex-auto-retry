@@ -14,7 +14,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2
-if ($env:OS -ne 'Windows_NT') { throw 'The startup manager supports Windows only.' }
+if ($env:OS -ne 'Windows_NT') { throw '啟動管理員只支援 Windows。 / The startup manager supports Windows only.' }
 
 $profileRoot = [System.IO.Path]::GetFullPath($UserProfileRoot)
 $localAppDataRoot = [System.IO.Path]::GetFullPath($LocalAppDataRoot)
@@ -66,7 +66,7 @@ function Restore-ManagedStartupValue {
     $key = Open-RunKey -Writable $true
     if ($null -eq $key) {
         if ([string]::IsNullOrWhiteSpace($Value)) { return }
-        throw 'The current-user startup registry key could not be opened while restoring the previous value.'
+        throw '還原先前的值時無法開啟目前使用者的開機啟動登錄機碼。 / The current-user startup registry key could not be opened while restoring the previous value.'
     }
     try {
         if ([string]::IsNullOrWhiteSpace($Value)) {
@@ -83,11 +83,11 @@ function Restore-ManagedStartupValue {
 
 function Set-ManagedStartup {
     if (-not (Test-Path -LiteralPath $watchdog -PathType Leaf)) {
-        throw "The watchdog executable is missing: $watchdog"
+        throw "缺少背景服務執行檔：$watchdog / The watchdog executable is missing: $watchdog"
     }
     $existing = Get-RunValue
     if (-not [string]::IsNullOrWhiteSpace($existing) -and -not (Test-OwnedStartupValue $existing)) {
-        throw "The startup entry $RunName belongs to another command and was not changed."
+        throw "開機啟動項目 $RunName 屬於其他程式，沒有變更。 / The startup entry $RunName belongs to another command and was not changed."
     }
     $oldApproval = Get-CodexAutoRetryStartupApproval -RunName $RunName
     $desiredValue = ('"{0}" supervise' -f $watchdog)
@@ -97,7 +97,7 @@ function Set-ManagedStartup {
         if ($null -eq $key) {
             $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($runSubKey, $true)
         }
-        if ($null -eq $key) { throw 'The current-user startup registry key could not be opened.' }
+        if ($null -eq $key) { throw '無法開啟目前使用者的開機啟動登錄機碼。 / The current-user startup registry key could not be opened.' }
         try {
             $key.SetValue($RunName, $desiredValue, [Microsoft.Win32.RegistryValueKind]::String)
         }
@@ -107,7 +107,7 @@ function Set-ManagedStartup {
         $null = Set-CodexAutoRetryStartupApprovalEnabled -RunName $RunName
         $actual = Get-RunValue
         if (-not (Test-OwnedStartupValue $actual) -or $actual -notmatch '(?i)\bsupervise\b') {
-            throw 'The startup entry could not be registered in supervised mode.'
+            throw '無法以監護模式註冊開機啟動項目。 / The startup entry could not be registered in supervised mode.'
         }
     }
     catch {
@@ -145,7 +145,7 @@ function Set-ManagedStartup {
 function Remove-ManagedStartup {
     $existing = Get-RunValue
     if (-not [string]::IsNullOrWhiteSpace($existing) -and -not (Test-OwnedStartupValue $existing)) {
-        throw "The startup entry $RunName belongs to another command and was not removed."
+        throw "開機啟動項目 $RunName 屬於其他程式，沒有移除。 / The startup entry $RunName belongs to another command and was not removed."
     }
     $oldApproval = Get-CodexAutoRetryStartupApproval -RunName $RunName
     $removedRun = $false
@@ -154,7 +154,7 @@ function Remove-ManagedStartup {
         # user cannot replace the checked owned command with a foreign one.
         $current = Get-RunValue
         if ($current -ne $existing) {
-            throw "The startup entry $RunName changed while it was being removed."
+            throw "移除開機啟動項目 $RunName 時它被改過。 / The startup entry $RunName changed while it was being removed."
         }
         if (-not [string]::IsNullOrWhiteSpace($existing)) {
             $key = Open-RunKey -Writable $true
@@ -164,7 +164,7 @@ function Remove-ManagedStartup {
             }
         }
         if (-not [string]::IsNullOrWhiteSpace((Get-RunValue))) {
-            throw 'The plugin startup entry is still present after removal.'
+            throw '移除後外掛的開機啟動項目仍然存在。 / The plugin startup entry is still present after removal.'
         }
         $removedApproval = Remove-CodexAutoRetryStartupApproval -RunName $RunName
         return $removedRun -or $removedApproval
@@ -318,14 +318,14 @@ function Start-ManagedService {
     $current = Get-ManagerState
     if ($current.ServiceRunning) { return $current }
     if (-not (Test-Path -LiteralPath $watchdog -PathType Leaf)) {
-        throw "The watchdog executable is missing: $watchdog"
+        throw "缺少背景服務執行檔：$watchdog / The watchdog executable is missing: $watchdog"
     }
     New-Item -ItemType Directory -Force -Path $installDir | Out-Null
     Remove-Item -LiteralPath (Join-Path $installDir 'stop.signal') -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath (Join-Path $installDir 'supervisor.stop') -Force -ErrorAction SilentlyContinue
     Start-Process -FilePath $watchdog -ArgumentList @('supervise') -WorkingDirectory $installDir -WindowStyle Hidden | Out-Null
     $state = Wait-ManagerServiceState -Running $true
-    if (-not $state.ServiceRunning) { throw 'The watchdog did not publish a fresh heartbeat after starting.' }
+    if (-not $state.ServiceRunning) { throw '背景服務啟動後沒有回報新的心跳。 / The watchdog did not publish a fresh heartbeat after starting.' }
     return $state
 }
 
@@ -341,7 +341,7 @@ function Stop-ManagedService {
     } while ((Get-Date) -lt $deadline)
     $remaining = @(Get-ManagerProcesses)
     if ($remaining.Count -gt 0) {
-        throw 'The watchdog did not stop gracefully. No process was force-terminated; use the safe-disable action after Codex closes.'
+        throw '背景服務沒有正常停止。沒有強制結束任何程式，請在 Codex 關閉後使用緊急停用。 / The watchdog did not stop gracefully. No process was force-terminated; use the safe-disable action after Codex closes.'
     }
     return Get-ManagerState
 }
@@ -351,9 +351,9 @@ function Invoke-ManagedScript {
         [Parameter(Mandatory = $true)][string]$Path,
         [string[]]$Arguments = @()
     )
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Required maintenance script is missing: $Path" }
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "缺少必要的維護指令碼：$Path / Required maintenance script is missing: $Path" }
     $output = (& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $Path @Arguments 2>&1 | Out-String)
-    if ($LASTEXITCODE -ne 0) { throw "Maintenance script failed with exit code $LASTEXITCODE.`n$($output.Trim())" }
+    if ($LASTEXITCODE -ne 0) { throw "維護指令碼失敗，結束狀態 $LASTEXITCODE。`n$($output.Trim()) / Maintenance script failed with exit code $LASTEXITCODE.`n$($output.Trim())" }
     return $output
 }
 
@@ -372,7 +372,7 @@ function Invoke-ManagerUninstall {
         $uninstaller = Join-Path $ReleaseRoot 'uninstall-release.ps1'
     }
     if (-not (Test-Path -LiteralPath $uninstaller -PathType Leaf)) {
-        throw 'For a complete uninstall, run this manager from the extracted release folder so it can remove the Codex plugin registration safely.'
+        throw '要完整解除安裝，請從解壓縮的發佈檔資料夾（或執行檔選單）開啟啟動管理員，才能安全移除 Codex 外掛註冊。 / For a complete uninstall, run this manager from the extracted release folder so it can remove the Codex plugin registration safely.'
     }
     $arguments = @('-UserProfileRoot', $profileRoot, '-LocalAppDataRoot', $localAppDataRoot)
     if ($RemoveData) { $arguments += '-RemoveData' }
@@ -401,11 +401,11 @@ function Invoke-ManagerAction {
         'safe-disable' { return Invoke-ManagerSafeDisable }
         'uninstall' {
             if ($RemoveData -and -not $NoPrompt) {
-                throw 'Destructive data removal requires -NoPrompt when invoked without the graphical manager.'
+                throw '不經圖形介面刪除資料時必須加上 -NoPrompt。 / Destructive data removal requires -NoPrompt when invoked without the graphical manager.'
             }
             return Invoke-ManagerUninstall
         }
-        default { throw "Unsupported manager action: $RequestedAction" }
+        default { throw "不支援的管理動作：$RequestedAction / Unsupported manager action: $RequestedAction" }
     }
 }
 

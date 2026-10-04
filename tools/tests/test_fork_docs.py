@@ -114,6 +114,44 @@ def test_product_strings_are_traditional_chinese() -> None:
     assert 'lang="zh-Hant-TW"' in (ROOT / "scripts/source/ui/panel.html").read_text(encoding="utf-8")
 
 
+def test_user_facing_script_messages_are_bilingual() -> None:
+    # Console output and errors carry Chinese then English ("中文 / English").
+    pattern = re.compile(r"""\b(?:throw|Write-Step|Write-Host|Write-Warning)\s+\(?\s*(['"])((?:(?!\1).)*)\1""")
+    cjk = re.compile(r"[一-鿿]")
+    scripts = [
+        *(ROOT / "release" / "windows").glob("*.ps1"),
+        *(
+            path
+            for path in (ROOT / "scripts").glob("*.ps1")
+            if not re.search(r"smoke-test|release-test|build|provenance", path.name)
+        ),
+    ]
+    missing = []
+    for path in scripts:
+        for number, line in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), 1):
+            for match in pattern.finditer(line):
+                message = match.group(2)
+                if len(message) < 3 or message.strip() == "[Codex Auto Retry]":
+                    continue
+                if not (cjk.search(message) and " / " in message):
+                    missing.append(f"{path.relative_to(ROOT)}:{number}: {message[:60]}")
+    assert missing == []
+    for path in scripts:
+        if cjk.search(path.read_text(encoding="utf-8-sig")):
+            assert path.read_bytes().startswith(b"\xef\xbb\xbf"), f"{path.name} needs a UTF-8 BOM for Windows PowerShell 5.1"
+
+
+def test_panel_static_text_has_english() -> None:
+    html = (ROOT / "scripts" / "source" / "ui" / "panel.html").read_text(encoding="utf-8")
+    cjk = re.compile(r"[一-鿿]")
+    untranslated = [
+        element
+        for element in re.findall(r"<(?:label|span|h2|p)\b[^>]*>[^<]*</", html)
+        if cjk.search(element) and "data-en=" not in element and " / " not in element
+    ]
+    assert untranslated == []
+
+
 def test_gitignore_covers_user_data_and_reports() -> None:
     text = (ROOT / ".gitignore").read_text(encoding="utf-8")
     assert ".env" in text

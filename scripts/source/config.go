@@ -278,9 +278,9 @@ const (
 	recommendedMaxConsecutiveRetries = 20
 )
 
-func (c Config) retrySafetyWarning() string {
+func (c Config) retrySafetyWarning(language string) string {
 	if c.MaxRecoveryAttempts > recommendedMaxRecoveryAttempts || c.MaxConsecutiveRetries > recommendedMaxConsecutiveRetries {
-		return fmt.Sprintf("重試上限偏激進（本次故障 %d 次、連續無進展 %d 次），建議不超過 %d/%d", c.MaxRecoveryAttempts, c.MaxConsecutiveRetries, recommendedMaxRecoveryAttempts, recommendedMaxConsecutiveRetries)
+		return fmt.Sprintf(text(language, "重試上限偏激進（本次故障 %d 次、連續無進展 %d 次），建議不超過 %d/%d", "Retry limits are aggressive (%d per outage, %d without progress); keep them at or below %d/%d"), c.MaxRecoveryAttempts, c.MaxConsecutiveRetries, recommendedMaxRecoveryAttempts, recommendedMaxConsecutiveRetries)
 	}
 	return ""
 }

@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param()
 
 Set-StrictMode -Version 2
@@ -24,7 +24,7 @@ function Resolve-SafeChildPath {
     $prefix = $base + '\'
     if (-not $candidate.Equals($base, [System.StringComparison]::OrdinalIgnoreCase) -and
         -not $candidate.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Path escapes its intended directory: $ChildPath"
+        throw "路徑超出允許的資料夾：$ChildPath / Path escapes its intended directory: $ChildPath"
     }
     return $candidate
 }
@@ -145,27 +145,27 @@ function Find-CodexCli {
             return $candidate
         }
     }
-    throw 'Codex CLI was not found. Start Codex App once, then run this installer again.'
+    throw '找不到 Codex 命令列工具。請先啟動一次 Codex App，再重新執行安裝程式。 / Codex CLI was not found. Start Codex App once, then run this installer again.'
 }
 
 function Assert-X64PeBinary {
     param([Parameter(Mandatory = $true)][string]$Path)
 
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        throw "Required executable is missing: $Path"
+        throw "缺少必要的執行檔：$Path / Required executable is missing: $Path"
     }
     $bytes = [System.IO.File]::ReadAllBytes($Path)
     if ($bytes.Length -lt 0x40 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) {
-        throw "Executable is not a valid Windows PE file: $Path"
+        throw "不是有效的 Windows 執行檔：$Path / Executable is not a valid Windows PE file: $Path"
     }
     $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
     if ($peOffset -lt 0 -or $peOffset + 6 -gt $bytes.Length -or
         $bytes[$peOffset] -ne 0x50 -or $bytes[$peOffset + 1] -ne 0x45) {
-        throw "Executable has an invalid PE header: $Path"
+        throw "執行檔標頭無效：$Path / Executable has an invalid PE header: $Path"
     }
     $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4)
     if ($machine -ne 0x8664) {
-        throw "Executable is not Windows x64 (machine 0x$('{0:X4}' -f $machine)): $Path"
+        throw "執行檔不是 Windows x64 版本（machine 0x$('{0:X4}' -f $machine)）：$Path / Executable is not Windows x64 (machine 0x$('{0:X4}' -f $machine)): $Path"
     }
 }
 
@@ -177,7 +177,7 @@ function Read-JsonDocument {
         return (Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json)
     }
     catch {
-        throw "JSON file is invalid: $Path"
+        throw "JSON 檔案格式錯誤：$Path / JSON file is invalid: $Path"
     }
 }
 
@@ -199,7 +199,7 @@ function Get-RelativePackagePath {
     $base = (Get-FullPath $BasePath).TrimEnd('\') + '\'
     $full = Get-FullPath $Path
     if (-not $full.StartsWith($base, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Path is outside package root: $Path"
+        throw "路徑不在安裝包資料夾內：$Path / Path is outside package root: $Path"
     }
     return $full.Substring($base.Length).Replace('\', '/')
 }

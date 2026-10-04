@@ -1024,7 +1024,7 @@ func (d *daemon) writeStatusLocked(running bool, rootCount int) error {
 		SharedAppServerMemoryUsageMB:        memoryBytesToMB(d.sharedAppServerMemoryBytes),
 		SharedAppServerMemoryLimitMB:        d.config.SharedAppServerMemoryLimitMB,
 		SharedAppServerMemoryGuardTriggered: d.sharedAppServerMemoryGuardTriggered,
-		RetrySafetyWarning:                  d.config.retrySafetyWarning(),
+		RetrySafetyWarning:                  d.config.retrySafetyWarning(uiLanguage(d.dataDir)),
 		LogPath:                             d.logger.path,
 	}
 	writer := d.writeStatusFile

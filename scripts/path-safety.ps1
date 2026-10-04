@@ -1,4 +1,4 @@
-function Get-CodexAutoRetryRedirectedPath {
+﻿function Get-CodexAutoRetryRedirectedPath {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
@@ -16,7 +16,7 @@ function Get-CodexAutoRetryRedirectedPath {
 
             $parent = Split-Path -Parent $fullPath
             if (-not (Test-Path -LiteralPath $parent -PathType Container)) {
-                throw "The runtime parent directory does not exist: $parent"
+                throw "執行資料夾的上層資料夾不存在：$parent / The runtime parent directory does not exist: $parent"
             }
             $probePath = Join-Path $parent ('.codex-auto-retry-host-probe-' + [guid]::NewGuid().ToString('N'))
             New-Item -ItemType Directory -Path $probePath | Out-Null
@@ -56,7 +56,7 @@ function Assert-CodexAutoRetryHostPath {
     $fullPath = [System.IO.Path]::GetFullPath($Path)
     $redirectedPath = Get-CodexAutoRetryRedirectedPath -Path $fullPath -ProbeIfMissing
     if ($redirectedPath) {
-        throw "Windows redirected the Codex Auto Retry runtime path into an app sandbox: $redirectedPath. The real host installation was not changed. Run the installer from Windows Explorer or a normal PowerShell window outside Codex."
+        throw "Windows 把 Codex Auto Retry 的執行路徑導向了應用程式沙箱：$redirectedPath。真正的安裝沒有變更，請從檔案總管或 Codex 以外的一般 PowerShell 視窗執行安裝程式。 / Windows redirected the Codex Auto Retry runtime path into an app sandbox: $redirectedPath. The real host installation was not changed. Run the installer from Windows Explorer or a normal PowerShell window outside Codex."
     }
     return $fullPath
 }

@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [switch]$EnableSharedAppServer
 )
@@ -48,16 +48,16 @@ function Test-OwnedStartupValue {
 function Set-SupervisedStartupEntry {
     $existing = Get-RunValue
     if (-not [string]::IsNullOrWhiteSpace($existing) -and -not (Test-OwnedStartupValue $existing)) {
-        throw 'The current-user startup entry belongs to another command and was not overwritten.'
+        throw '目前使用者的開機啟動項目屬於其他程式，沒有覆寫。 / The current-user startup entry belongs to another command and was not overwritten.'
     }
     $runRegistryKey = Open-CodexAutoRetryRunKey -Writable $true
-    if ($null -eq $runRegistryKey) { throw 'The current-user startup registry key could not be opened.' }
+    if ($null -eq $runRegistryKey) { throw '無法開啟目前使用者的開機啟動登錄機碼。 / The current-user startup registry key could not be opened.' }
     try { $runRegistryKey.SetValue($runName, ('"{0}" supervise' -f $watchdogTarget), [Microsoft.Win32.RegistryValueKind]::String) }
     finally { $runRegistryKey.Close() }
     $value = Get-RunValue
     if ([string]::IsNullOrWhiteSpace($value) -or $value -notmatch '(?i)\bsupervise\b' -or
         $value -notmatch [regex]::Escape($watchdogTarget)) {
-        throw 'The current-user startup entry was not migrated to supervised mode.'
+        throw '目前使用者的開機啟動項目沒有轉成監護模式。 / The current-user startup entry was not migrated to supervised mode.'
     }
     $null = Set-CodexAutoRetryStartupApprovalEnabled -RunName $runName
 }
@@ -81,7 +81,7 @@ function Stop-InstalledRuntime {
             $existing = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
                 Where-Object { $_.ExecutablePath -and [string]::Equals($_.ExecutablePath, $watchdogTarget, [System.StringComparison]::OrdinalIgnoreCase) })
         } while ($existing.Count -gt 0 -and (Get-Date) -lt $deadline)
-        if ($existing.Count -gt 0) { throw 'The watchdog did not stop gracefully. Runtime installation was cancelled.' }
+        if ($existing.Count -gt 0) { throw '背景服務沒有正常停止，已取消執行環境安裝。 / The watchdog did not stop gracefully. Runtime installation was cancelled.' }
     }
     Stop-OwnedProcessPath $mcpTarget
     @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
@@ -160,11 +160,11 @@ function Test-SafeInstallTransactionRoot {
 function Recover-IncompleteInstall {
     if (-not (Test-Path -LiteralPath $installJournalPath -PathType Leaf)) { return }
     try { $journal = Get-Content -Raw -Encoding UTF8 -LiteralPath $installJournalPath | ConvertFrom-Json }
-    catch { throw "The runtime install journal is invalid and was not modified: $installJournalPath" }
+    catch { throw "執行環境安裝紀錄無效，未做修改：$installJournalPath / The runtime install journal is invalid and was not modified: $installJournalPath" }
     if ($null -eq $journal -or [int]$journal.schema_version -ne 1 -or
         [string]::IsNullOrWhiteSpace([string]$journal.transaction_root) -or
         -not (Test-SafeInstallTransactionRoot ([string]$journal.transaction_root))) {
-        throw 'The runtime install journal is invalid or points outside the temporary transaction area.'
+        throw '執行環境安裝紀錄無效，或指向暫存交易區以外的位置。 / The runtime install journal is invalid or points outside the temporary transaction area.'
     }
     $transactionRoot = [System.IO.Path]::GetFullPath([string]$journal.transaction_root)
     if ([string]$journal.phase -eq 'committed') {
@@ -173,11 +173,11 @@ function Recover-IncompleteInstall {
         return
     }
     if (Test-CodexDesktopRunning) {
-        throw 'An interrupted runtime install requires Codex Desktop to be closed before rollback.'
+        throw '要回復中斷的執行環境安裝，必須先關閉 Codex Desktop。 / An interrupted runtime install requires Codex Desktop to be closed before rollback.'
     }
     $backupRoot = Join-Path $transactionRoot 'previous'
     if (-not (Test-Path -LiteralPath $backupRoot -PathType Container)) {
-        throw 'The incomplete runtime install is missing its backup directory; refusing a guessed rollback.'
+        throw '未完成的執行環境安裝缺少備份資料夾，拒絕用猜測的方式回復。 / The incomplete runtime install is missing its backup directory; refusing a guessed rollback.'
     }
     Stop-InstalledRuntime
     foreach ($name in @('codex-auto-retry.exe', 'codex-auto-retry-mcp.exe', 'settings.ps1')) {
@@ -203,7 +203,7 @@ function Recover-IncompleteInstall {
     if ([string]::IsNullOrWhiteSpace($currentRunValue) -or (Test-OwnedStartupValue $currentRunValue)) {
         if ([bool]$journal.run_present) {
             $runRegistryKey = Open-CodexAutoRetryRunKey -Writable $true
-            if ($null -eq $runRegistryKey) { throw 'The current-user startup registry key could not be opened while restoring the previous value.' }
+            if ($null -eq $runRegistryKey) { throw '還原先前的值時無法開啟目前使用者的開機啟動登錄機碼。 / The current-user startup registry key could not be opened while restoring the previous value.' }
             try { $runRegistryKey.SetValue($runName, [string]$journal.run_value, [Microsoft.Win32.RegistryValueKind]::String) }
             finally { $runRegistryKey.Close() }
         }
@@ -220,7 +220,7 @@ function Recover-IncompleteInstall {
         }
     }
     else {
-        Write-Warning 'The startup entry changed during interrupted-install recovery; the foreign value was preserved.'
+        Write-Warning '回復中斷安裝時開機啟動項目被改過，已保留其他程式的值。 / The startup entry changed during interrupted-install recovery; the foreign value was preserved.'
     }
     # Restoring a binary must not restore its unsafe global routing behavior.
     # Leave the old worker stopped and disable shared mode before any later sign-in.
@@ -246,7 +246,7 @@ function Set-ConfigSharedMode {
                 $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom-Json
             }
             catch {
-                throw "The existing Codex Auto Retry configuration is invalid and was not overwritten: $configPath"
+                throw "既有的 Codex Auto Retry 設定無效，沒有覆寫：$configPath / The existing Codex Auto Retry configuration is invalid and was not overwritten: $configPath"
             }
         }
         if ($null -eq $config) {
@@ -283,29 +283,29 @@ function Wait-Heartbeat {
         }
     } while ((-not $status -or -not $status.running -or -not $heartbeatMatches -or ($RequireSharedReady -and [string]$status.controller_state -notin @('ready', 'codex_restart_required', 'codex_not_running'))) -and (Get-Date) -lt $deadline)
     if (-not $status -or -not $status.running -or -not $heartbeatMatches) {
-        throw "Watchdog did not publish a running heartbeat. Check $installDir\logs\daemon.log"
+        throw "背景服務沒有回報執行心跳，請查看 $installDir\logs\daemon.log / Watchdog did not publish a running heartbeat. Check $installDir\logs\daemon.log"
     }
     $expectedBuild = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'build-info.json') -Raw | ConvertFrom-Json
     if ((Get-CodexAutoRetryStatusProperty $status 'build_source_hash' '') -ne $expectedBuild.source_hash) {
-        throw 'The running watchdog build does not match this package. Installation was not verified.'
+        throw '執行中的背景服務版本和這個安裝包不同，無法確認安裝結果。 / The running watchdog build does not match this package. Installation was not verified.'
     }
     if ($RequireSharedReady -and [string]$status.controller_state -notin @('ready', 'codex_restart_required', 'codex_not_running')) {
-        throw "Shared app-server health check did not pass. State: $([string]$status.controller_state)"
+        throw "共用後端健康檢查沒有通過，狀態：$([string]$status.controller_state) / Shared app-server health check did not pass. State: $([string]$status.controller_state)"
     }
     if ($RequireSharedReady) {
         $sharedState = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $installDir 'shared-server.json') | ConvertFrom-Json
         $verification = Get-CodexAutoRetrySharedServerStatus -State $sharedState -ExpectedPort (Get-CodexAutoRetrySharedAppServerPort -ConfigPath $configPath)
-        if ($verification.Status -ne 'live') { throw 'The prepared shared server failed independent identity and endpoint verification.' }
+        if ($verification.Status -ne 'live') { throw '準備好的共用後端沒有通過身分與端點的獨立驗證。 / The prepared shared server failed independent identity and endpoint verification.' }
     }
     return $status
 }
 
-if (-not (Test-Path -LiteralPath $watchdogSource -PathType Leaf)) { throw "Built watchdog not found: $watchdogSource" }
-if (-not (Test-Path -LiteralPath $mcpSource -PathType Leaf)) { throw "Built MCP server not found: $mcpSource" }
+if (-not (Test-Path -LiteralPath $watchdogSource -PathType Leaf)) { throw "找不到建置好的背景服務：$watchdogSource / Built watchdog not found: $watchdogSource" }
+if (-not (Test-Path -LiteralPath $mcpSource -PathType Leaf)) { throw "找不到建置好的 MCP 程式：$mcpSource / Built MCP server not found: $mcpSource" }
 [void](Assert-CodexAutoRetryHostPath -Path $installDir)
 
 if (Test-CodexDesktopRunning) {
-    throw 'Close Codex Desktop completely before installing, upgrading, or recovering the runtime. No runtime or routing changes were made.'
+    throw '安裝、升級或回復執行環境前請完全關閉 Codex Desktop，執行環境與路由都沒有變更。 / Close Codex Desktop completely before installing, upgrading, or recovering the runtime. No runtime or routing changes were made.'
 }
 Recover-IncompleteInstall
 
@@ -314,7 +314,7 @@ if (Test-Path -LiteralPath $configPath -PathType Leaf) {
     try { $existingConfig = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom-Json } catch { }
 }
 if (Test-CodexDesktopRunning) {
-	throw 'Codex Desktop is using the shared backend. Close Codex completely before installing or upgrading the runtime.'
+	throw 'Codex Desktop 正在使用共用後端，請完全關閉 Codex 後再安裝或升級執行環境。 / Codex Desktop is using the shared backend. Close Codex completely before installing or upgrading the runtime.'
 }
 
 $transactionRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('codex-auto-retry-runtime-' + [guid]::NewGuid().ToString('N'))
@@ -430,7 +430,7 @@ try {
     Copy-Item -LiteralPath $mcpSource -Destination $candidateMcp -Force
     if ((Get-FileHash -LiteralPath $watchdogSource -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $candidateWatchdog -Algorithm SHA256).Hash -or
         (Get-FileHash -LiteralPath $mcpSource -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $candidateMcp -Algorithm SHA256).Hash) {
-        throw 'Candidate binary verification failed.'
+        throw '新版執行檔驗證失敗。 / Candidate binary verification failed.'
     }
 	$journal.phase = 'candidate_verified'
 	Write-CodexAutoRetryJsonAtomic -Path $installJournalPath -Value $journal
@@ -491,7 +491,7 @@ catch {
             if ($approvalWasOld -or $approvalWasWritten) {
                 if ($oldRunValue) {
                     $runRegistryKey = Open-CodexAutoRetryRunKey -Writable $true
-                    if ($null -eq $runRegistryKey) { throw 'The current-user startup registry key could not be opened while restoring the previous value.' }
+                    if ($null -eq $runRegistryKey) { throw '還原先前的值時無法開啟目前使用者的開機啟動登錄機碼。 / The current-user startup registry key could not be opened while restoring the previous value.' }
                     try { $runRegistryKey.SetValue($runName, $oldRunValue, [Microsoft.Win32.RegistryValueKind]::String) }
                     finally { $runRegistryKey.Close() }
                 }
@@ -507,7 +507,7 @@ catch {
             }
         }
         elseif ($currentRunAfterFailure -ne $oldRunValue) {
-            Write-Warning 'Startup entry changed during rollback; the concurrent value was preserved.'
+            Write-Warning '回復時開機啟動項目被改過，已保留同時修改的值。 / Startup entry changed during rollback; the concurrent value was preserved.'
         }
         foreach ($pair in @(
             @($watchdogTarget, (Join-Path $backupRoot 'codex-auto-retry.exe'), $oldWatchdog),
@@ -532,7 +532,7 @@ catch {
 			$journalCleared = $true
 		}
     }
-    catch { Write-Warning 'Automatic runtime rollback was incomplete; user task data was not deleted.' }
+    catch { Write-Warning '執行環境自動回復沒有完成，使用者的任務資料沒有刪除。 / Automatic runtime rollback was incomplete; user task data was not deleted.' }
     throw $failure
 }
 finally {

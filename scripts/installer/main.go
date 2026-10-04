@@ -53,13 +53,13 @@ type menuItem struct {
 }
 
 var menuItems = []menuItem{
-	{"1", actInstall, "安裝或更新"},
-	{"2", actManager, "開啟啟動管理員（看狀態、開關開機啟動、啟停服務）"},
-	{"3", actSafeDisable, "緊急停用共用後端，讓 Codex 回到官方模式"},
-	{"4", actUninstall, "解除安裝（保留設定與日誌）"},
-	{"5", actUninstallRemoveData, "解除安裝並刪除全部設定、狀態與日誌"},
-	{"6", actExtract, "只把整包檔案取出到資料夾"},
-	{"0", actNone, "離開"},
+	{"1", actInstall, "安裝或更新 / Install or update"},
+	{"2", actManager, "開啟啟動管理員 / Open the startup manager"},
+	{"3", actSafeDisable, "緊急停用共用後端 / Safe-disable the shared backend"},
+	{"4", actUninstall, "解除安裝，保留設定與日誌 / Uninstall, keep settings and logs"},
+	{"5", actUninstallRemoveData, "解除安裝並刪除全部資料 / Uninstall and delete all data"},
+	{"6", actExtract, "只取出整包檔案 / Extract the package only"},
+	{"0", actNone, "離開 / Exit"},
 }
 
 func main() {
@@ -73,7 +73,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	self, err := os.Executable()
 	if err != nil {
-		fmt.Fprintln(stderr, "找不到安裝程式本身的檔案：", err)
+		fmt.Fprintln(stderr, "找不到安裝程式本身的檔案 / Cannot locate this executable:", err)
 		return exitInternal
 	}
 	input := bufio.NewReader(stdin)
@@ -87,7 +87,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	code := perform(self, opts.action, opts.extractTo, stdout, stderr)
 	if !opts.noPause && opts.action != actExtract && opts.action != actManager {
 		fmt.Fprintln(stdout)
-		fmt.Fprint(stdout, "按 Enter 關閉視窗…")
+		fmt.Fprint(stdout, "按 Enter 關閉視窗 / Press Enter to close…")
 		_, _ = input.ReadString('\n')
 	}
 	return code
@@ -153,21 +153,21 @@ func runMenu(input *bufio.Reader, out io.Writer, status func() string, extractDe
 	last := 0
 	for {
 		fmt.Fprintln(out)
-		fmt.Fprintln(out, "Codex Auto Retry 安裝程式")
+		fmt.Fprintln(out, "Codex Auto Retry 安裝程式 / Installer")
 		fmt.Fprintln(out, status())
 		fmt.Fprintln(out)
 		for _, item := range menuItems {
 			fmt.Fprintf(out, "  %s. %s\n", item.key, item.label)
 		}
 		fmt.Fprintln(out)
-		fmt.Fprint(out, "請輸入數字後按 Enter：")
+		fmt.Fprint(out, "請輸入數字後按 Enter / Type a number and press Enter: ")
 		answer, err := input.ReadString('\n')
 		if err != nil && strings.TrimSpace(answer) == "" {
 			return last
 		}
 		selected, ok := lookupMenu(strings.TrimSpace(answer))
 		if !ok {
-			fmt.Fprintln(out, "沒有這個選項，請重新輸入。")
+			fmt.Fprintln(out, "沒有這個選項，請重新輸入。 / No such option, try again.")
 			continue
 		}
 		if selected == actNone {
@@ -177,14 +177,14 @@ func runMenu(input *bufio.Reader, out io.Writer, status func() string, extractDe
 		extractTo := ""
 		switch selected {
 		case actUninstallRemoveData:
-			fmt.Fprint(out, "這會刪除全部設定、狀態與日誌，無法復原。確定請輸入 Y：")
+			fmt.Fprint(out, "這會刪除全部設定、狀態與日誌，無法復原。確定請輸入 Y / This deletes all settings, state and logs and cannot be undone. Type Y to confirm: ")
 			confirm, _ := input.ReadString('\n')
 			if !strings.EqualFold(strings.TrimSpace(confirm), "y") {
-				fmt.Fprintln(out, "已取消，沒有做任何變更。")
+				fmt.Fprintln(out, "已取消，沒有做任何變更。 / Cancelled; nothing was changed.")
 				continue
 			}
 		case actExtract:
-			fmt.Fprintf(out, "要取出到哪個資料夾？直接按 Enter 使用 %s：", extractDefault)
+			fmt.Fprintf(out, "要取出到哪個資料夾？直接按 Enter 使用 / Folder to extract to (Enter for default) %s: ", extractDefault)
 			folder, _ := input.ReadString('\n')
 			extractTo = strings.Trim(strings.TrimSpace(folder), `"`)
 			if extractTo == "" {
@@ -194,7 +194,7 @@ func runMenu(input *bufio.Reader, out io.Writer, status func() string, extractDe
 
 		last = perform(selected, extractTo)
 		fmt.Fprintln(out)
-		fmt.Fprint(out, "按 Enter 回到選單…")
+		fmt.Fprint(out, "按 Enter 回到選單 / Press Enter to return to the menu…")
 		if _, err := input.ReadString('\n'); err != nil {
 			return last
 		}
@@ -214,7 +214,7 @@ func perform(self string, selected action, extractTo string, stdout, stderr io.W
 	if selected == actExtract {
 		root, err := extractPackage(self, extractTo)
 		if err != nil {
-			fmt.Fprintln(stderr, "取出失敗：", err)
+			fmt.Fprintln(stderr, "取出失敗 / Extraction failed:", err)
 			return exitInternal
 		}
 		fmt.Fprintln(stdout, root)
@@ -223,15 +223,15 @@ func perform(self string, selected action, extractTo string, stdout, stderr io.W
 
 	workDir, err := os.MkdirTemp("", "codex-auto-retry-setup-")
 	if err != nil {
-		fmt.Fprintln(stderr, "無法建立暫存資料夾：", err)
+		fmt.Fprintln(stderr, "無法建立暫存資料夾 / Cannot create a temporary folder:", err)
 		return exitInternal
 	}
 	defer os.RemoveAll(workDir)
 
-	fmt.Fprintln(stdout, "正在解開安裝檔…")
+	fmt.Fprintln(stdout, "正在解開安裝檔… / Unpacking the package…")
 	root, err := extractPackage(self, workDir)
 	if err != nil {
-		fmt.Fprintln(stderr, "取出失敗：", err)
+		fmt.Fprintln(stderr, "取出失敗 / Extraction failed:", err)
 		return exitInternal
 	}
 
@@ -247,22 +247,22 @@ func perform(self string, selected action, extractTo string, stdout, stderr io.W
 		script, scriptArgs = "startup-manager.ps1", []string{"-Action", "gui"}
 		// The manager hides its own console window; give it a separate one so
 		// this window (or the terminal that started setup) stays visible.
-		fmt.Fprintln(stdout, "已開啟啟動管理員，關閉它之後這裡會繼續。")
+		fmt.Fprintln(stdout, "已開啟啟動管理員，關閉它之後這裡會繼續。 / The startup manager is open; this window continues when you close it.")
 	}
 
 	code, err := runPowerShell(filepath.Join(root, script), scriptArgs, selected == actManager, stdout, stderr)
 	if err != nil {
-		fmt.Fprintln(stderr, "無法啟動 Windows PowerShell：", err)
+		fmt.Fprintln(stderr, "無法啟動 Windows PowerShell / Cannot start Windows PowerShell:", err)
 		return exitInternal
 	}
 	fmt.Fprintln(stdout)
 	switch {
 	case code == 0:
-		fmt.Fprintln(stdout, "完成。")
+		fmt.Fprintln(stdout, "完成。 / Done.")
 	case code == 2 && selected == actInstall:
-		fmt.Fprintln(stdout, "已取消安裝，外掛與執行環境都沒有變更。")
+		fmt.Fprintln(stdout, "已取消安裝，外掛與執行環境都沒有變更。 / Installation cancelled; no plugin or runtime changes were made.")
 	default:
-		fmt.Fprintf(stdout, "失敗（錯誤狀態 %d），請看上方的訊息。\n", code)
+		fmt.Fprintf(stdout, "失敗（錯誤狀態 %d），請看上方的訊息。 / Failed (exit code %[1]d); see the messages above.\n", code)
 	}
 	return code
 }
@@ -271,20 +271,20 @@ func perform(self string, selected action, extractTo string, stdout, stderr io.W
 // user. It only reads files; a missing or unreadable manifest is reported as
 // such instead of guessed.
 func describeStatus(self string) string {
-	packaged := "未知"
+	packaged := "未知 / unknown"
 	if version, err := packagedVersion(self); err == nil {
 		packaged = version
 	}
-	installed := "尚未安裝"
+	installed := "尚未安裝 / not installed"
 	if profile := os.Getenv("USERPROFILE"); profile != "" {
 		manifest := filepath.Join(profile, "plugins", "codex-auto-retry", ".codex-plugin", "plugin.json")
 		if version, err := manifestVersion(manifest); err == nil {
-			installed = "已安裝 " + version
+			installed = "已安裝 " + version + " / installed"
 		} else if !errors.Is(err, os.ErrNotExist) {
-			installed = "無法判斷"
+			installed = "無法判斷 / unknown"
 		}
 	}
-	return fmt.Sprintf("這個安裝檔：%s　目前電腦上：%s", packaged, installed)
+	return fmt.Sprintf("這個安裝檔 / This package: %s\n目前電腦上 / On this computer: %s", packaged, installed)
 }
 
 func packagedVersion(self string) (string, error) {

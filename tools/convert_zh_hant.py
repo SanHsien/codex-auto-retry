@@ -82,6 +82,7 @@ POST = (
     ("健康檢查透過", "健康檢查通過"),
     ("許可權", "權限"),
     ("登入檔", "登錄檔"),
+    ("登入機碼", "登錄機碼"),
     ("全域性", "全域"),
     ("二進位制", "二進位"),
     ("驗證和", "雜湊值"),
@@ -113,6 +114,9 @@ POST = (
     ("”", "」"),
 )
 
+# Characters OpenCC maps although they are also standard in Taiwan usage.
+SHARED_FORMS = set("准台里后面干只系制征向并采表范几云价松")
+
 ESCAPE_RUN = re.compile(r"(?:\\u[0-9a-fA-F]{4})+")
 CJK = re.compile(r"[一-鿿]")
 
@@ -121,8 +125,17 @@ def build_converter():
     import opencc
 
     engine = opencc.OpenCC("s2twp")
+    characters = opencc.OpenCC("s2t")
+
+    def has_simplified(text: str) -> bool:
+        # Phrase tables also rewrite valid Traditional text (登錄→登入,
+        # 通過→透過), so only lines that really contain Simplified
+        # characters are converted.
+        return any(characters.convert(char) != char for char in text if CJK.match(char) and char not in SHARED_FORMS)
 
     def convert(text: str) -> str:
+        if not has_simplified(text):
+            return text
         for source, target in PRE:
             text = text.replace(source, target)
         text = engine.convert(text)

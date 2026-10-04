@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidateSet('gui', 'status', 'enable', 'disable', 'start', 'stop', 'launch-codex', 'safe-disable', 'uninstall')]
     [string]$Action = 'gui',
@@ -14,7 +14,7 @@ if (-not (Test-Path -LiteralPath $manager -PathType Leaf)) {
     # Also support launching the copy bundled inside the plugin payload.
     $manager = Join-Path $PSScriptRoot '..\..\scripts\startup-manager.ps1'
 }
-if (-not (Test-Path -LiteralPath $manager -PathType Leaf)) { throw "The packaged startup manager is missing: $manager" }
+if (-not (Test-Path -LiteralPath $manager -PathType Leaf)) { throw "安裝包缺少啟動管理員：$manager / The packaged startup manager is missing: $manager" }
 $arguments = @(
     '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass'
 )

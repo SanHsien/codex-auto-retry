@@ -149,7 +149,7 @@ The settings window allows configuring:
 - Delay curves (fixed, linear increment, or doubling backoff, with custom initial and max caps);
 - Fallback retry text (up to 500 characters);
 - Watchdog notification preferences;
-- One-click Chinese/English localization toggle.
+- One-click Traditional Chinese/English toggle, shared with the startup manager and the panel.
 
 <p align="center">
   <img src="assets/settings_en.png" alt="Codex Auto Retry Settings Window (English)" width="520" />
@@ -161,7 +161,7 @@ Users can open the management panel directly inside Codex by asking:
 > `開啟 Codex Auto Retry 管理面板` *(Open Codex Auto Retry Management Panel)*
 
 <p align="center">
-  <img src="assets/panel.png" alt="Codex Embedded Management Panel (MCP)" width="620" />
+  <img src="assets/panel_en.png" alt="Codex Embedded Management Panel (MCP), English view" width="620" />
 </p>
 
 Built with vanilla TypeScript and embedded into the Go MCP binary via Go `embed`, the panel requires no Node.js runtime and performs zero external network requests. It displays:
@@ -169,7 +169,12 @@ Built with vanilla TypeScript and embedded into the Go MCP binary via Go `embed`
 - Active and pending retry queues with real-time countdown timers;
 - Immediate retry (`Retry Now`) and cancellation controls;
 - Exhausted task list with a one-click attempt budget reset button;
-- Global pause/resume toggle.
+- Global pause/resume toggle;
+- One-click Traditional Chinese/English toggle in the header.
+
+### Interface Language (Traditional Chinese / English)
+
+The settings window, startup manager, embedded panel, and tray share one language preference (`%LOCALAPPDATA%\CodexAutoRetry\ui-language.json`, Traditional Chinese by default); switching it in one place applies to the others the next time they render. The installer, the executable's menu, console progress, and error messages always show Chinese and English side by side, so they are readable before any preference exists.
 
 ---
 

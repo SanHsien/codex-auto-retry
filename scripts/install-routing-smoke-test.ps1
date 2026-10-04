@@ -41,7 +41,7 @@ if ($deploySource -match '\(Test-SharedBackendInUse -RuntimePath \$runtimePath\)
 }
 $recoveryBlock = $deployAst.Find({ param($node)
     $node -is [System.Management.Automation.Language.StatementBlockAst] -and
-    $node.Extent.Text -match 'Write-Step "Recovering interrupted upgrade' -and
+    $node.Extent.Text -match 'Write-Step "[^"]*Recovering interrupted upgrade' -and
     $node.Extent.Text -notmatch '\$unfinished ='
 }, $true)
 if (-not $recoveryBlock -or $recoveryBlock.Extent.Text -notmatch 'Stop-RuntimeForUpgrade[\s\S]+Disable-CodexAutoRetryLegacyRouting[\s\S]+Restore-IncompleteUpgrade') {

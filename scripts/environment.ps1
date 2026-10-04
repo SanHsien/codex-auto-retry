@@ -1,4 +1,4 @@
-function Test-CodexAutoRetryEnvironmentValue {
+﻿function Test-CodexAutoRetryEnvironmentValue {
     param([AllowNull()][string]$Left, [AllowNull()][string]$Right)
     if ($null -eq $Left -or $null -eq $Right) { return $null -eq $Left -and $null -eq $Right }
     return [string]::Equals($Left, $Right, [System.StringComparison]::OrdinalIgnoreCase)
@@ -83,7 +83,7 @@ function Invoke-CodexAutoRetryConfigLocked {
             }
             catch [System.IO.IOException] {
                 if ([DateTime]::UtcNow -ge $deadline) {
-                    throw 'The Codex Auto Retry configuration is locked by another process.'
+                    throw 'Codex Auto Retry 的設定正被其他程式鎖定。 / The Codex Auto Retry configuration is locked by another process.'
                 }
                 Start-Sleep -Milliseconds 25
             }
@@ -158,7 +158,7 @@ function Set-CodexAutoRetrySharedEnvironment {
     # Persistent Desktop routing is retired. Retain the old writer only for
     # isolated ownership tests; production callers must use a child environment.
     if ($EnvironmentName -notmatch '^CODEX_AUTO_RETRY_ENV_TEST_[0-9a-f]{32}$') {
-        throw 'Persistent shared routing is disabled. Use the safe Codex launcher (process-scoped routing).'
+        throw '永久共用路由已停用，請改用安全啟動 Codex（只對單一行程路由）。 / Persistent shared routing is disabled. Use the safe Codex launcher (process-scoped routing).'
     }
     $name = $EnvironmentName
     $backupPath = Join-Path $DataDir 'environment-backup.json'
@@ -168,21 +168,21 @@ function Set-CodexAutoRetrySharedEnvironment {
     $backup = $null
     if (Test-Path -LiteralPath $backupPath -PathType Leaf) {
         try { $backup = Get-Content -Raw -Encoding UTF8 -LiteralPath $backupPath | ConvertFrom-Json }
-        catch { throw "The saved $name backup is invalid: $backupPath" }
+        catch { throw "已儲存的 $name 備份無效：$backupPath / The saved $name backup is invalid: $backupPath" }
         if ([int]$backup.schema_version -ne 1 -or [string]$backup.name -ne $name) {
-            throw "The saved $name backup is not recognized: $backupPath"
+            throw "無法辨識已儲存的 $name 備份：$backupPath / The saved $name backup is not recognized: $backupPath"
         }
         $expected = if ([bool]$backup.previous_present) { [string]$backup.previous_value } else { $null }
         $installed = [string]$backup.installed_value
         if (-not (Test-CodexAutoRetryEnvironmentValue $current $installed) -and
             -not (Test-CodexAutoRetryEnvironmentValue $current $expected) -and
             -not (Test-CodexAutoRetryEnvironmentValue $current $desired)) {
-            throw "$name already has a different user value. It was not overwritten: $current"
+            throw "$name 已有不同的使用者設定值，沒有覆寫：$current / $name already has a different user value. It was not overwritten: $current"
         }
     }
     else {
         if ($null -ne $current -and -not (Test-CodexAutoRetryEnvironmentValue $current $desired)) {
-            throw "$name already has a different user value. It was not overwritten: $current"
+            throw "$name 已有不同的使用者設定值，沒有覆寫：$current / $name already has a different user value. It was not overwritten: $current"
         }
         $backup = [pscustomobject][ordered]@{
             schema_version = 1
@@ -243,15 +243,15 @@ function Restore-CodexAutoRetrySharedEnvironment {
         return [pscustomobject]@{ Restored = $false; ChangedByUser = $false }
     }
     try { $backup = Get-Content -Raw -Encoding UTF8 -LiteralPath $backupPath | ConvertFrom-Json }
-    catch { throw "The saved $name backup is invalid: $backupPath" }
+    catch { throw "已儲存的 $name 備份無效：$backupPath / The saved $name backup is invalid: $backupPath" }
     if ([int]$backup.schema_version -ne 1 -or [string]$backup.name -ne $name) {
-        throw "The saved $name backup is not recognized: $backupPath"
+        throw "無法辨識已儲存的 $name 備份：$backupPath / The saved $name backup is not recognized: $backupPath"
     }
     $current = [Environment]::GetEnvironmentVariable($name, 'User')
     $installed = [string]$backup.installed_value
     $previous = if ([bool]$backup.previous_present) { [string]$backup.previous_value } else { $null }
     if ($name -eq 'CODEX_APP_SERVER_WS_URL' -and $installed -notmatch '^ws://127\.0\.0\.1:\d+$') {
-        throw 'The saved shared endpoint is not a recognized plugin loopback endpoint.'
+        throw '已儲存的共用端點不是可辨識的外掛本機端點。 / The saved shared endpoint is not a recognized plugin loopback endpoint.'
     }
     # Older releases could back up their own already-installed endpoint. Never
     # resurrect that endpoint when retiring persistent routing, even on rollback.

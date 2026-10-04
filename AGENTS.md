@@ -34,7 +34,7 @@
 
 - 一般變更直接推 `origin/main`，不開功能分支、不開維護 PR。只有在需要他人審查、或改動風險高到值得先讓 CI 在 PR 上跑一輪時，才退回 **branch → PR → CI → merge**。
 - 修 bug 先補可重現失敗測試，再做最小修正。
-- 使用繁體中文回覆；使用者文件以繁中為主，公開入口同步維護 `README.en.md`。直接交付可驗證結果，避免冗長背景鋪陳。
+- 使用繁體中文回覆；使用者文件以繁中為主，公開入口同步維護 `README.en.md`。產品介面是繁中／英文雙語，新增使用者看得到的訊息時兩種語言都要寫（寫法見 `docs/DEVELOPMENT.md`）。直接交付可驗證結果，避免冗長背景鋪陳。
 - 一般變更提交前跑 `pwsh -NoProfile -File tools\dev_check.ps1` 作為維護 gate，產品變更執行 `pwsh -NoProfile -File scripts\smoke-test.ps1`。
 - 提交訊息用 Conventional Commit。Dependabot 或外部 fork 的變更走 PR，讀 diff 並通過 CI 後再合併。
 - `REVIEW.md` 是風險快照，不是流水帳。

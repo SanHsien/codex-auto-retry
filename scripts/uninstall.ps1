@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [switch]$KeepData,
     [string]$RunName = 'CodexAutoRetry'
@@ -38,7 +38,7 @@ function Test-OwnedStartupValue {
 $runProperty = Get-ItemProperty -Path $runKey -Name $runName -ErrorAction SilentlyContinue
 $runValue = if ($null -eq $runProperty) { '' } else { [string]$runProperty.$runName }
 if (-not [string]::IsNullOrWhiteSpace($runValue) -and -not (Test-OwnedStartupValue $runValue)) {
-    throw 'The current-user startup entry belongs to another command and was not removed.'
+    throw '目前使用者的開機啟動項目屬於其他程式，沒有移除。 / The current-user startup entry belongs to another command and was not removed.'
 }
 $stateEndpoint = $null
 $statePath = Join-Path $installDir 'shared-server.json'
@@ -122,7 +122,7 @@ else {
             if (($runWasRemoved -or $runWasUnchanged) -and ($approvalWasOld -or $approvalWasRemoved)) {
                 if ($runWasRemoved -and -not [string]::IsNullOrWhiteSpace($runValue)) {
                     $runRegistryKey = Open-CodexAutoRetryRunKey -Writable $true
-                    if ($null -eq $runRegistryKey) { throw 'The current-user startup registry key could not be opened while restoring the previous value.' }
+                    if ($null -eq $runRegistryKey) { throw '還原先前的值時無法開啟目前使用者的開機啟動登錄機碼。 / The current-user startup registry key could not be opened while restoring the previous value.' }
                     try { $runRegistryKey.SetValue($RunName, $runValue, [Microsoft.Win32.RegistryValueKind]::String) }
                     finally { $runRegistryKey.Close() }
                 }
@@ -138,20 +138,20 @@ $environmentResult = Restore-CodexAutoRetrySharedEnvironment -DataDir $installDi
 $sharedServerStopped = Stop-CodexAutoRetrySharedServerIfUnused -DataDir $installDir
 $sharedStateStillPresent = Test-Path -LiteralPath $statePath -PathType Leaf
 if ($sharedStateStillPresent -and -not $KeepData) {
-    throw 'The plugin-owned shared app-server is still in use or could not be verified as stopped. Runtime data was not deleted; close Codex and run uninstall again.'
+    throw '外掛的共用後端仍在使用中，或無法確認已停止。執行資料沒有刪除，請關閉 Codex 後再解除安裝一次。 / The plugin-owned shared app-server is still in use or could not be verified as stopped. Runtime data was not deleted; close Codex and run uninstall again.'
 }
 if ($startupApprovalError) {
-    throw "Startup entry cleanup was incomplete: $($startupApprovalError.Message)"
+    throw "開機啟動項目沒有清除完整：$($startupApprovalError.Message) / Startup entry cleanup was incomplete: $($startupApprovalError.Message)"
 }
 if ($startupRemoved -and -not $startupApprovalRemoved) {
-    throw 'Startup entry cleanup was incomplete: the approval marker is still present.'
+    throw '開機啟動項目沒有清除完整：核准標記仍然存在。 / Startup entry cleanup was incomplete: the approval marker is still present.'
 }
 if (-not $startupRemoved -and $startupApprovalRemoved) {
-    throw 'Startup entry cleanup was incomplete: the startup entry is still present.'
+    throw '開機啟動項目沒有清除完整：啟動項目仍然存在。 / Startup entry cleanup was incomplete: the startup entry is still present.'
 }
 if ((-not [string]::IsNullOrWhiteSpace($runValue) -or $oldApproval.Present) -and
     (-not $startupRemoved -or -not $startupApprovalRemoved)) {
-    throw 'Startup entry cleanup was incomplete: final registry state was not fully removed.'
+    throw '開機啟動項目沒有清除完整：登錄檔最後狀態沒有完全移除。 / Startup entry cleanup was incomplete: final registry state was not fully removed.'
 }
 if (Test-Path -LiteralPath $installDir) {
     if ($KeepData) {

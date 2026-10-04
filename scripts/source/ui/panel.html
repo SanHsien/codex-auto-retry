@@ -16,12 +16,13 @@
           </div>
           <div class="brand-copy">
             <h1>Codex Auto Retry</h1>
-            <p class="service-line" id="service-line">正在連線</p>
+            <p class="service-line" id="service-line" data-en="Connecting">正在連線</p>
           </div>
         </div>
         <div class="topbar-actions">
           <span class="version" id="version"></span>
-          <button class="icon-button" id="refresh-button" type="button" title="重新整理狀態" aria-label="重新整理狀態">
+          <button class="language-button" id="language-button" type="button">English</button>
+          <button class="icon-button" id="refresh-button" type="button" title="重新整理狀態" aria-label="重新整理狀態" data-en-title="Refresh status" data-en-label="Refresh status">
             <i data-lucide="refresh-cw"></i>
           </button>
         </div>
@@ -29,20 +30,20 @@
 
       <div class="notice" id="notice" role="status" aria-live="polite" hidden></div>
 
-      <section class="metrics" aria-label="自動重試概況">
+      <section class="metrics" aria-label="自動重試概況" data-en-label="Auto retry overview">
         <div class="metric">
-          <span class="metric-label">服務</span>
+          <span class="metric-label" data-en="Service">服務</span>
           <strong class="metric-value status-value" id="service-status">
             <span class="status-dot status-dot-neutral"></span>
-            連線中
+            連線中 / Connecting
           </strong>
         </div>
         <div class="metric">
-          <span class="metric-label">佇列</span>
+          <span class="metric-label" data-en="Queue">佇列</span>
           <strong class="metric-value" id="queue-count">--</strong>
         </div>
         <div class="metric metric-next">
-          <span class="metric-label">下次重試</span>
+          <span class="metric-label" data-en="Next retry">下次重試</span>
           <strong class="metric-value countdown" id="next-retry">--</strong>
         </div>
       </section>
@@ -50,15 +51,15 @@
       <section class="queue-section" aria-labelledby="queue-heading">
         <div class="section-heading">
           <div>
-            <h2 id="queue-heading">重試佇列</h2>
-            <p id="queue-summary">正在讀取</p>
+            <h2 id="queue-heading" data-en="Retry queue">重試佇列</h2>
+            <p id="queue-summary">正在讀取 / Loading</p>
           </div>
           <span class="scan-time" id="scan-time"></span>
         </div>
         <div class="queue-list" id="queue-list" aria-live="polite">
           <div class="empty-state loading-state">
             <i data-lucide="clock"></i>
-            <span>正在讀取佇列</span>
+            <span>正在讀取佇列 / Loading queue</span>
           </div>
         </div>
       </section>
@@ -66,17 +67,17 @@
       <section class="controls-section" aria-labelledby="settings-heading">
         <div class="section-heading compact-heading">
           <div>
-            <h2 id="settings-heading">設定</h2>
+            <h2 id="settings-heading" data-en="Settings">設定</h2>
           </div>
         </div>
 
         <div class="settings-grid">
           <div class="setting-row pause-row">
             <div class="setting-copy">
-              <label for="pause-toggle">自動重試</label>
-              <span id="pause-description">執行中</span>
+              <label for="pause-toggle" data-en="Automatic retry">自動重試</label>
+              <span id="pause-description" data-en="Running">執行中</span>
             </div>
-            <label class="switch" title="開啟或暫停新的自動重試">
+            <label class="switch" title="開啟或暫停新的自動重試" data-en-title="Turn new automatic retries on or off">
               <input id="pause-toggle" type="checkbox" role="switch" />
               <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
             </label>
@@ -84,12 +85,12 @@
 
           <div class="setting-row shared-server-row">
             <div class="setting-copy">
-              <label for="shared-app-server-toggle">共用 Codex 後端</label>
-              <span id="shared-app-server-description">預設關閉，不影響 Codex 官方後端</span>
+              <label for="shared-app-server-toggle" data-en="Shared Codex backend">共用 Codex 後端</label>
+              <span id="shared-app-server-description" data-en="Off by default; the official Codex backend is unaffected">預設關閉，不影響 Codex 官方後端</span>
               <small id="shared-app-server-port" aria-live="polite"></small>
               <small id="startup-approval-status" aria-live="polite"></small>
             </div>
-            <label class="switch" title="啟用前會檢查埠、交握、版本和行程歸屬">
+            <label class="switch" title="啟用前會檢查埠、交握、版本和行程歸屬" data-en-title="Checks the port, handshake, version, and process ownership before enabling">
               <input id="shared-app-server-toggle" type="checkbox" role="switch" />
               <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
             </label>
@@ -97,7 +98,7 @@
 
           <div class="prompt-setting">
             <div class="prompt-label-row">
-              <label for="retry-prompt">後備重試文字</label>
+              <label for="retry-prompt" data-en="Fallback retry prompt">後備重試文字</label>
               <span><span id="prompt-count">0</span>/500</span>
             </div>
             <textarea id="retry-prompt" maxlength="500" rows="3" spellcheck="false" disabled></textarea>
@@ -105,41 +106,41 @@
               <span class="field-error" id="prompt-error" role="alert"></span>
               <button class="command-button" id="save-prompt" type="button" disabled>
                 <i data-lucide="save"></i>
-                <span>儲存</span>
+                <span data-en="Save">儲存</span>
               </button>
             </div>
           </div>
           <div class="numeric-settings">
-            <label for="max-recovery-attempts">本次故障恢復上限</label>
+            <label for="max-recovery-attempts" data-en="Outage recovery limit">本次故障恢復上限</label>
             <input id="max-recovery-attempts" type="number" min="1" max="1000" inputmode="numeric" />
-            <label for="max-consecutive-retries">連續無進展重試上限</label>
+            <label for="max-consecutive-retries" data-en="No-progress limit">連續無進展重試上限</label>
             <input id="max-consecutive-retries" type="number" min="1" max="100" inputmode="numeric" />
-            <label for="auth-max-attempts">登入異常恢復上限</label>
+            <label for="auth-max-attempts" data-en="Sign-in error limit">登入異常恢復上限</label>
             <input id="auth-max-attempts" type="number" min="1" max="1000" inputmode="numeric" />
-            <label for="memory-limit-mb">記憶體保護上限（MB）</label>
+            <label for="memory-limit-mb" data-en="Memory limit (MB)">記憶體保護上限（MB）</label>
             <input id="memory-limit-mb" type="number" min="128" max="65536" inputmode="numeric" />
             <div class="delay-strategy">
-              <span id="delay-strategy-label">等待策略</span>
+              <span id="delay-strategy-label" data-en="Wait strategy">等待策略</span>
               <div class="segmented-control" role="group" aria-labelledby="delay-strategy-label">
                 <label>
                   <input type="radio" name="delay-strategy" value="exponential" />
-                  <span>翻倍遞增</span>
+                  <span data-en="Double">翻倍</span>
                 </label>
                 <label>
                   <input type="radio" name="delay-strategy" value="linear" />
-                  <span>等差遞增</span>
+                  <span data-en="Linear">等差</span>
                 </label>
                 <label>
                   <input type="radio" name="delay-strategy" value="fixed" />
-                  <span>固定間隔</span>
+                  <span data-en="Fixed">固定</span>
                 </label>
               </div>
             </div>
-            <label for="initial-delay" id="initial-delay-label">首次等待（秒）</label>
+            <label for="initial-delay" id="initial-delay-label" data-en="First wait (s)">首次等待（秒）</label>
             <input id="initial-delay" type="number" min="1" max="3600" inputmode="numeric" />
-            <label for="max-delay">最大等待（秒）</label>
+            <label for="max-delay" data-en="Max wait (s)">最大等待（秒）</label>
             <input id="max-delay" type="number" min="1" max="86400" inputmode="numeric" />
-            <label for="delay-increment">每次增加（秒）</label>
+            <label for="delay-increment" data-en="Increment (s)">每次增加（秒）</label>
             <input id="delay-increment" type="number" min="1" max="3600" inputmode="numeric" />
             <div class="delay-preview" id="delay-preview"></div>
             <span class="field-error settings-error" id="settings-error" role="alert"></span>
@@ -147,11 +148,11 @@
           <div class="settings-footer">
             <label class="checkbox-setting">
               <input id="notifications-toggle" type="checkbox" />
-              <span>達到重試上限時顯示外掛通知</span>
+              <span data-en="Notify me when a retry limit is reached">達到重試上限時顯示外掛通知</span>
             </label>
             <button class="command-button" id="save-settings" type="button" disabled>
               <i data-lucide="save"></i>
-              <span>儲存全部設定</span>
+              <span data-en="Save all settings">儲存全部設定</span>
             </button>
           </div>
         </div>

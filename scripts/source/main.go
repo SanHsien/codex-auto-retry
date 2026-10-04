@@ -167,7 +167,7 @@ func main() {
 		cleanupCancel()
 		return
 	}
-	if warning := config.retrySafetyWarning(); warning != "" {
+	if warning := config.retrySafetyWarning(languageEnglish); warning != "" {
 		logger.Printf("retry policy warning category=aggressive_limits recovery=%d consecutive=%d", config.MaxRecoveryAttempts, config.MaxConsecutiveRetries)
 	}
 	// A previous fail-open may have been interrupted while config.json was

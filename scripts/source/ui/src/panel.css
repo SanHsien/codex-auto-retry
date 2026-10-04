@@ -163,6 +163,19 @@ h2 {
   cursor: pointer;
 }
 
+.language-button {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: var(--color-background-primary, #ffffff);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.language-button:hover,
 .icon-button:hover,
 .queue-action:hover {
   background: var(--panel-hover);
@@ -484,9 +497,10 @@ textarea:focus-visible,
 .segmented-control span {
   display: grid;
   min-height: 34px;
-  padding: 5px 7px;
+  padding: 5px 3px;
   place-items: center;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  text-align: center;
   color: var(--panel-muted);
   background: var(--color-background-primary, #ffffff);
   font-size: 11px;

@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$UserProfileRoot = $env:USERPROFILE,
     [string]$LocalAppDataRoot = $env:LOCALAPPDATA,
@@ -26,8 +26,8 @@ function Test-PluginInstalled {
         $marketplaceName = ($PluginId -split '@', 2)[1]
         $result = Invoke-CodexCli -Path $Cli -Arguments @('plugin', 'list', '--marketplace', $marketplaceName, '--json')
     }
-    if ($result.ExitCode -ne 0) { throw "Codex could not read the installed plugin list. Run 'codex plugin list' in a terminal to see the cause." }
-    try { $document = $result.Output | ConvertFrom-Json } catch { throw 'Codex returned an invalid plugin list.' }
+    if ($result.ExitCode -ne 0) { throw "Codex 無法讀取已安裝的外掛清單，請在終端機執行 codex plugin list 查看原因。 / Codex could not read the installed plugin list. Run 'codex plugin list' in a terminal to see the cause." }
+    try { $document = $result.Output | ConvertFrom-Json } catch { throw 'Codex 回傳的外掛清單格式錯誤。 / Codex returned an invalid plugin list.' }
     return $null -ne (@($document.installed) | Where-Object { $_.pluginId -eq $PluginId } | Select-Object -First 1)
 }
 
@@ -43,7 +43,7 @@ function Remove-MarketplaceEntry {
     return $true
 }
 
-if ($env:OS -ne 'Windows_NT') { throw 'This uninstaller supports Windows only.' }
+if ($env:OS -ne 'Windows_NT') { throw '這個解除安裝程式只支援 Windows。 / This uninstaller supports Windows only.' }
 
 $profileRootPath = Get-FullPath $UserProfileRoot
 $localAppDataPath = Get-FullPath $LocalAppDataRoot
@@ -82,14 +82,14 @@ function Remove-ReleaseStartupApproval {
         finally { $key.Close() }
     }
     if (Test-ReleaseStartupApprovalPresent -RunName $RunName) {
-        throw "The startup approval for $RunName is still present after uninstall."
+        throw "解除安裝後 $RunName 的開機啟動核准仍然存在。 / The startup approval for $RunName is still present after uninstall."
     }
 }
 
 $marketplace = Read-JsonDocument -Path $marketplacePath
 $marketplaceName = if ($null -eq $marketplace) { 'personal' } else { Get-MarketplaceName -Document $marketplace }
 if ($marketplaceName -notmatch '^[A-Za-z0-9._-]+$') {
-    throw "The personal marketplace has an unsupported name: $marketplaceName"
+    throw "個人外掛清單的名稱不受支援：$marketplaceName / The personal marketplace has an unsupported name: $marketplaceName"
 }
 $pluginId = 'codex-auto-retry@' + $marketplaceName
 
@@ -111,17 +111,17 @@ function Test-OwnedStartupValue {
 $startupProperty = Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'CodexAutoRetry' -ErrorAction SilentlyContinue
 $startupValue = if ($null -eq $startupProperty) { '' } else { [string]$startupProperty.CodexAutoRetry }
 if (-not [string]::IsNullOrWhiteSpace([string]$startupValue) -and -not (Test-OwnedStartupValue ([string]$startupValue))) {
-    throw 'The current-user startup entry belongs to another command and was not removed.'
+    throw '目前使用者的開機啟動項目屬於其他程式，沒有移除。 / The current-user startup entry belongs to another command and was not removed.'
 }
 
 $cli = $null
 if (-not $SkipCodexCheck) {
-    Write-Step 'Locating Codex App command line support...'
+    Write-Step '正在尋找 Codex App 命令列工具… / Locating Codex App command line support...'
     $cli = Find-CodexCli -PreferredPath $CodexCliPath -LocalAppDataRoot $localAppDataPath
 }
 
 if ($DryRun) {
-    Write-Step 'Dry run completed. No files or settings were changed.'
+    Write-Step '試跑完成，沒有變更任何檔案或設定。 / Dry run completed. No files or settings were changed.'
     [pscustomobject]@{
         Ready = $true
         PluginId = $pluginId
@@ -141,7 +141,7 @@ try {
     $env:HOME = $profileRootPath
     $env:LOCALAPPDATA = $localAppDataPath
 
-    Write-Step 'Stopping the background watchdog and removing startup...'
+    Write-Step '正在停止背景服務並移除開機啟動… / Stopping the background watchdog and removing startup...'
     $runtimeUninstaller = Join-Path $pluginTarget 'scripts\uninstall.ps1'
     if (-not (Test-Path -LiteralPath $runtimeUninstaller -PathType Leaf)) {
         $runtimeUninstaller = Join-Path $PSScriptRoot 'payload\codex-auto-retry\scripts\uninstall.ps1'
@@ -150,7 +150,7 @@ try {
         $arguments = @('-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $runtimeUninstaller)
         if (-not $RemoveData) { $arguments += '-KeepData' }
         $output = (& powershell.exe @arguments 2>&1 | Out-String)
-        if ($LASTEXITCODE -ne 0) { throw "The watchdog uninstaller failed with exit code $LASTEXITCODE." }
+        if ($LASTEXITCODE -ne 0) { throw "背景服務解除安裝失敗，結束狀態 $LASTEXITCODE。 / The watchdog uninstaller failed with exit code $LASTEXITCODE." }
     }
     else {
         if ([string]::IsNullOrWhiteSpace([string]$startupValue) -or (Test-OwnedStartupValue ([string]$startupValue))) {
@@ -159,7 +159,7 @@ try {
         if ($RemoveData -and (Test-Path -LiteralPath $runtimePath -PathType Container)) {
             $runtimeItem = Get-Item -LiteralPath $runtimePath -Force
             if (($runtimeItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
-                throw "Refusing to remove a linked runtime directory: $runtimePath"
+                throw "執行資料夾是連結，拒絕移除：$runtimePath / Refusing to remove a linked runtime directory: $runtimePath"
             }
             Remove-Item -LiteralPath $runtimePath -Recurse -Force
         }
@@ -168,25 +168,25 @@ try {
     Remove-ReleaseStartupApproval -RunName 'CodexAutoRetry'
 
     if (-not $SkipCodexCheck) {
-        Write-Step 'Removing the plugin from Codex...'
+        Write-Step '正在從 Codex 移除外掛… / Removing the plugin from Codex...'
         if (Test-PluginInstalled -Cli $cli -PluginId $pluginId) {
             $removeResult = Invoke-CodexCli -Path $cli -Arguments @('plugin', 'remove', $pluginId, '--json')
             if ($removeResult.ExitCode -ne 0) {
-                throw "Codex plugin removal failed with exit code $($removeResult.ExitCode)."
+                throw "Codex 外掛移除失敗，結束狀態 $($removeResult.ExitCode)。 / Codex plugin removal failed with exit code $($removeResult.ExitCode)."
             }
         }
     }
 
-    Write-Step 'Removing the personal marketplace entry and plugin files...'
+    Write-Step '正在移除個人外掛清單項目與外掛檔案… / Removing the personal marketplace entry and plugin files...'
     [void](Remove-MarketplaceEntry -Path $marketplacePath)
     if (Test-Path -LiteralPath $pluginTarget -PathType Container) {
         $pluginItem = Get-Item -LiteralPath $pluginTarget -Force
         if (($pluginItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
-            throw "Refusing to remove a linked plugin directory: $pluginTarget"
+            throw "外掛資料夾是連結，拒絕移除：$pluginTarget / Refusing to remove a linked plugin directory: $pluginTarget"
         }
         $manifest = Read-JsonDocument -Path (Join-Path $pluginTarget '.codex-plugin\plugin.json')
         if ($null -eq $manifest -or [string]$manifest.name -ne 'codex-auto-retry') {
-            throw "The plugin target is not Codex Auto Retry: $pluginTarget"
+            throw "目標外掛不是 Codex Auto Retry：$pluginTarget / The plugin target is not Codex Auto Retry: $pluginTarget"
         }
         Remove-Item -LiteralPath $pluginTarget -Recurse -Force
     }
@@ -194,23 +194,23 @@ try {
     $runProperty = Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'CodexAutoRetry' -ErrorAction SilentlyContinue
     $runValue = if ($null -eq $runProperty) { $null } else { $runProperty.CodexAutoRetry }
     if (-not [string]::IsNullOrWhiteSpace([string]$runValue)) {
-        throw 'The startup entry is still present after uninstall.'
+        throw '解除安裝後開機啟動項目仍然存在。 / The startup entry is still present after uninstall.'
     }
     if (Test-ReleaseStartupApprovalPresent -RunName 'CodexAutoRetry') {
-        throw 'The StartupApproved value is still present after uninstall.'
+        throw '解除安裝後 StartupApproved 值仍然存在。 / The StartupApproved value is still present after uninstall.'
     }
     if (-not $SkipCodexCheck -and (Test-PluginInstalled -Cli $cli -PluginId $pluginId)) {
-        throw 'Codex still reports the plugin as installed.'
+        throw 'Codex 仍回報外掛已安裝。 / Codex still reports the plugin as installed.'
     }
 
-    Write-Step 'Uninstall completed successfully.'
+    Write-Step '解除安裝完成。 / Uninstall completed successfully.'
     if ($RemoveData) {
-        Write-Host 'Runtime settings, state, and logs were removed.'
+        Write-Host '已移除執行設定、狀態與日誌。 / Runtime settings, state, and logs were removed.'
     }
     else {
-        Write-Host "Retry settings and state were preserved in: $runtimePath"
+        Write-Host "重試設定與狀態保留在：$runtimePath / Retry settings and state were preserved in: $runtimePath"
     }
-    Write-Host 'Open a new Codex task to refresh the plugin list.'
+    Write-Host '請開新的 Codex 任務重新整理外掛清單。 / Open a new Codex task to refresh the plugin list.'
 }
 finally {
     $env:USERPROFILE = $oldUserProfile

@@ -55,6 +55,14 @@ pwsh -NoProfile -File scripts\release-test.ps1 -ArchivePath $env:TEMP\car-releas
 
 推送到 `main` 後由 CI 跑完整驗證（競態測試需要 gcc，本機通常沒有）。
 
+### 版本號
+
+本 fork 用自己的語意化版本線（目前 1.0.0）。改版本要一起改：`.codex-plugin/plugin.json`、`scripts/source/model.go` 的 `appVersion`、`scripts/source/ui/package.json` 與 `package-lock.json`、`scripts/source/ui/src/panel.ts` 的兩處 `version`，然後重跑 `scripts\build.ps1`。
+
+### 雙語訊息
+
+使用者看得到的 `throw`／`Write-Step`／`Write-Host` 一律寫成「中文 / English」，含中文的 `.ps1` 要存成 UTF-8 BOM；面板文字用 `L("中文", "English")` 或 `data-en`；Go 介面文字用 `text(language, "中文", "English")`。`tools/tests/test_fork_docs.py` 會擋下漏寫英文的訊息。
+
 ### 繁體中文化
 
 ```powershell

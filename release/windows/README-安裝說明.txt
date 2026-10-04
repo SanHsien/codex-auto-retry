@@ -1,5 +1,7 @@
-Codex Auto Retry 0.7.12 - Windows x64 安裝說明
-================================================
+Codex Auto Retry 1.0.0 - Windows x64 安裝說明 / Installation Guide
+==================================================================
+
+（English version follows the Chinese section.）
 
 適用環境
 --------
@@ -19,23 +21,22 @@ Codex Auto Retry 0.7.12 - Windows x64 安裝說明
 1. 先把整個 ZIP 壓縮檔解壓縮到一個普通資料夾中（切勿直接在壓縮檔預覽視窗裡雙擊執行）。
 2. 先完整結束 Codex App，再雙擊「安裝.cmd」。安裝器會自動驗證包完整性並啟動後端守護服務。
    如果 Codex 仍在執行，會彈出中文提醒；儲存工作並結束後按一下「重試」即可繼續。取消或等待超過五分鐘會安全結束，不會強制關閉 Codex。
-3. 等待黑色主控臺視窗顯示「Installation succeeded」後按任意鍵關閉。
+3. 等待黑色主控台視窗顯示「安裝完成。 / Installation succeeded.」後按任意鍵關閉。
 4. 安裝完成後，Windows 右下角通知區域會出現獨立的 Codex Auto Retry 系統匣圖示。
 5. 檢查連線狀態與恢復通道：
    - 雙擊系統匣圖示開啟「設定」視窗檢視目前狀態：
      * 【推薦 / 新版 Codex】：若狀態顯示「Codex 已接入官方恢復通道」，說明您的 Codex 支援原生 IPC 通道。無需進行任何額外設定，直接正常開啟 Codex 即可享受自動靜默恢復！
-     * 【相容 / 舊版 Codex】：若狀態顯示「Codex 未接入共用後端」，如需開啟靜默恢復，請在系統匣設定中勾選「啟用共用後端」並通過健康檢查；之後完整結束 Codex，透過解壓縮目錄下的「安全啟動Codex.vbs」（或啟動管理員中的「Launch Codex safely」）啟動 Codex 即可。
+     * 【相容 / 舊版 Codex】：若狀態顯示「Codex 未接入共用後端」，如需開啟靜默恢復，請在系統匣設定中勾選「啟用共用後端」並通過健康檢查；之後完整結束 Codex，透過解壓縮目錄下的「安全啟動Codex.vbs」（或啟動管理員中的「安全啟動 Codex」）啟動 Codex 即可。
 6. 驗證是否安裝成功：
    開啟 Codex App 新建一個任務，傳送提示詞：「開啟 Codex Auto Retry 管理面板」。若能正常彈出內嵌管理面板並顯示心跳健康，即代表就緒！
 
-版本特性說明（0.7.12）
-----------------------
-0.7.12 包含以下修復：
-- 已驗證的官方 IPC 恢復不再依賴共用後端開關；符合安全條件的近期未傳送重試，在通道恢復後重新排隊，保留次數和時間限制。
-- 新增「登入異常恢復上限」（預設 6，範圍 1–1000）；與兩個通用上限取較小值。錯誤類型變化不再縮小歷史次數，「19/6」表示先前已嘗試 19 次，隨後適用上限變為 6。
-- 修復 PowerShell 5.1 把 CLI 警告誤判為安裝失敗的問題；失敗回復同時恢復外掛原始檔和後端程式，保留任務資料。
-- 新增關閉提醒與重試按鈕；完整結束後再安裝，取消不會更改已安裝程式。
-保留 0.7.11 的會話檔名相容、任務 ID 遷移和官方 IPC 協作模式設定修復。
+版本特性說明（1.0.0）
+--------------------
+1.0.0 是本 fork 自己的版本線（產品邏輯對應上游 sybxxx/codex-auto-retry 0.7.12）：
+- 整套繁體中文／英文雙語：設定視窗、啟動管理員、內嵌面板與系統匣可切換語言，安裝與錯誤訊息中英並列。
+- 單一執行檔 Codex-Auto-Retry-<版本>-windows-x64.exe：雙擊顯示選單，不必解壓縮。
+- 修復：Codex 設定裡有失效的外掛清單時，全新安裝不再中止。
+上游 0.7.12 的修復全部保留（官方 IPC 恢復、登入異常恢復上限、PowerShell 5.1 安裝誤判、關閉提醒與重試按鈕等）。
 
 啟動管理與緊急停用
 ------------------
@@ -56,7 +57,7 @@ Codex Auto Retry 0.7.12 - Windows x64 安裝說明
   * 「連續無進展」上限（預設 5 次，最高可調至 100 次）：若重試未產出任何可見助手回覆或工具呼叫，達到上限即主動停止並標記該任務，防止無限空耗 Token。
 - 等待退避策略：
   支援「固定間隔」、「等差線性遞增」以及「翻倍指數遞增」，可自訂首次等待、步長與最大等待封頂時間。產生可見回覆後，連續計數自動清零並重置等待時間。
-- 介面語言：支援一鍵切換繁體中文與英文。
+- 介面語言：設定視窗、啟動管理員與管理面板都能一鍵切換繁體中文與英文，三者共用同一個語言設定。
 - 提醒說明：系統匣中的通知開關僅控制外掛達到重試上限時的系統通知。Codex 自帶的「ChatGPT finished a turn」彈窗屬於主程式行為，如需關閉可在 Codex「設定 > 一般 > 通知 > 輪次完成通知」中選「從不」。
 
 Codex 內嵌管理面板
@@ -95,3 +96,78 @@ Codex 內嵌管理面板
 - 安裝後在 Codex 中看不到外掛：必須在 Codex 中「新建一個任務/會話」才能載入新外掛；已經在進行的舊會話不會自動重新讀取外掛清單。
 - 提示「請重新啟動一次 Codex」：完整結束 Codex 軟體後重新開啟即可。
 - 永久失效的帳號登入：若帳號被封禁或登入已徹底過期，仍需在 Codex 中重新掃碼/登入，外掛無法繞過帳號身份驗證。
+
+
+==================================================================
+English
+==================================================================
+
+Requirements
+------------
+- Windows 10 / 11, 64-bit
+- Codex App installed and started at least once
+- Writes only to the current user's folders; no administrator rights needed
+- No Go, Node.js, or other developer runtime needed
+
+Single executable (Codex-Auto-Retry-<version>-windows-x64.exe)
+--------------------------------------------------------------
+- No extraction needed. Double-click it to get a menu: install or update, open the startup manager, safe-disable, uninstall, or extract the package.
+- Keep the downloaded .exe and double-click it again later to manage or uninstall; every launcher mentioned below is also in its menu.
+- Flags skip the menu: -install, -startup-manager, -safe-disable, -uninstall (add -remove-data to delete all data), -extract <folder>.
+
+Install (ZIP)
+-------------
+1. Extract the whole ZIP into a normal folder (do not run files from the archive preview).
+2. Fully exit Codex App, then double-click 安裝.cmd. The installer verifies the package and starts the background service.
+   If Codex is still running, a bilingual reminder appears; save your work, exit Codex, and choose Retry. Cancel, or waiting more than five minutes, ends safely and never force-closes Codex.
+3. When the console shows "Installation succeeded.", press any key to close it.
+4. A Codex Auto Retry icon appears in the notification area.
+5. Check the recovery channel: double-click the tray icon to open Settings.
+   * Newer Codex: "Codex is on the official recovery channel" means native IPC works; nothing else to set up.
+   * Older Codex: "Codex is not on the shared backend" means silent recovery needs the shared backend. Enable it in Settings (it runs a health check), fully exit Codex, then start Codex with 安全啟動Codex.vbs or the startup manager's "Launch Codex safely".
+6. In a new Codex task, send "Open Codex Auto Retry management panel". The embedded panel with a healthy heartbeat means you are ready.
+
+Startup manager and emergency tools
+-----------------------------------
+- 啟動管理員.cmd: a window showing the startup command, supervisor, heartbeat, shared backend, and endpoint state; turn sign-in startup on or off and start or stop the service.
+- 安全啟動Codex.vbs: passes the local endpoint to Codex only after the backend passes its identity and health checks; otherwise Codex falls back to the official direct mode. Global environment variables are never changed.
+- 安全停用.cmd: emergency rollback. Disables the shared backend and removes the plugin's own startup entries and endpoint so Codex returns to the official setup. It never deletes chats or API keys.
+
+Settings window
+---------------
+- Live task queue with countdowns.
+- Two safety limits: per-outage recovery limit (default 15, up to 1000) and no-progress limit (default 5, up to 100).
+- Fixed, linear, or exponential waits with configurable first wait, step, and maximum.
+- Language toggle shared with the startup manager and the panel.
+- The notification switch only covers the plugin's retry-limit alerts. Codex's own "ChatGPT finished a turn" pop-up is set in Codex under Settings > General > Notifications.
+
+Embedded management panel
+-------------------------
+Send "Open Codex Auto Retry management panel" in any Codex task to view the queue and countdowns, retry or cancel, pause globally, edit the fallback retry prompt (default "繼續"), and switch the language. Normal conversations use silent in-place continuation; the fallback text is sent only when Codex cannot continue silently. Goal mode recovers natively and respects pauses.
+
+Uninstall
+---------
+1. Double-click 解除安裝.cmd (or choose Uninstall in the executable's menu). Settings, state, and logs are kept.
+2. To delete everything, open PowerShell in the extracted folder and run:
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\uninstall-release.ps1 -RemoveData
+
+Files and folders
+-----------------
+- Plugin: %USERPROFILE%\plugins\codex-auto-retry
+- Service and state: %LOCALAPPDATA%\CodexAutoRetry
+- Log: %LOCALAPPDATA%\CodexAutoRetry\logs\daemon.log
+- Codex plugin cache: %USERPROFILE%\.codex\plugins\cache
+- Startup entry: HKCU\Software\Microsoft\Windows\CurrentVersion\Run\CodexAutoRetry
+
+Security and privacy
+--------------------
+- The installer checks every file against SHA256SUMS.txt first.
+- Runs locally only; reads task lifecycle markers, never messages, code, tool arguments, or API keys.
+- Not code-signed, so SmartScreen may say "Unknown publisher"; compare the SHA-256 on the GitHub release page.
+
+Troubleshooting
+---------------
+- "Codex CLI was not found": start Codex App once, close it, then install again.
+- Plugin missing in Codex: open a new task; running sessions do not reload the plugin list.
+- "Restart Codex once": fully exit Codex and open it again.
+- A permanently expired sign-in still needs a fresh login in Codex; the plugin cannot bypass authentication.

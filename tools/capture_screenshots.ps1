@@ -144,16 +144,18 @@ $edge = @(
 if (-not $edge) { throw 'Microsoft Edge is required for the panel screenshot.' }
 $panel = Join-Path $repoRoot 'scripts\source\ui\dist\panel.html'
 if (-not (Test-Path -LiteralPath $panel)) { throw 'Build the panel first: scripts\build.ps1' }
-$panelUrl = ([Uri]$panel).AbsoluteUri + '?preview'
-$panelTarget = Join-Path $outputPath 'panel.png'
-$profileDir = Join-Path ([IO.Path]::GetTempPath()) ('codex-auto-retry-edge-' + [guid]::NewGuid().ToString('N'))
-try {
-    & $edge --headless=new --disable-gpu --hide-scrollbars --no-first-run `
-        "--user-data-dir=$profileDir" --window-size=1024,1100 --virtual-time-budget=3000 `
-        "--screenshot=$panelTarget" $panelUrl 2>&1 | Out-Null
-    if (-not (Test-Path -LiteralPath $panelTarget)) { throw 'Panel screenshot was not written.' }
-    Write-Host "Saved $panelTarget"
-}
-finally {
-    Remove-Item -LiteralPath $profileDir -Recurse -Force -ErrorAction SilentlyContinue
+foreach ($shot in @(@{ Query = '?preview'; File = 'panel.png' }, @{ Query = '?preview&lang=en'; File = 'panel_en.png' })) {
+    $panelUrl = ([Uri]$panel).AbsoluteUri + $shot.Query
+    $panelTarget = Join-Path $outputPath $shot.File
+    $profileDir = Join-Path ([IO.Path]::GetTempPath()) ('codex-auto-retry-edge-' + [guid]::NewGuid().ToString('N'))
+    try {
+        & $edge --headless=new --disable-gpu --hide-scrollbars --no-first-run `
+            "--user-data-dir=$profileDir" --window-size=1024,1100 --virtual-time-budget=3000 `
+            "--screenshot=$panelTarget" $panelUrl 2>&1 | Out-Null
+        if (-not (Test-Path -LiteralPath $panelTarget)) { throw "Panel screenshot was not written: $($shot.File)" }
+        Write-Host "Saved $panelTarget"
+    }
+    finally {
+        Remove-Item -LiteralPath $profileDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }

@@ -76,6 +76,7 @@ type ManagementSnapshot struct {
 	LastError                           string         `json:"last_error,omitempty" jsonschema:"privacy-safe watchdog error summary"`
 	ControllerState                     string         `json:"controller_state,omitempty" jsonschema:"background Codex controller state"`
 	Notice                              string         `json:"notice,omitempty" jsonschema:"result of the most recent management action"`
+	UILanguage                          string         `json:"ui_language" jsonschema:"interface language chosen by the user: zh or en"`
 	Retries                             []ManagedRetry `json:"retries" jsonschema:"current retry queue"`
 }
 
@@ -131,7 +132,7 @@ func (m *managementService) snapshotLocked(now time.Time) (ManagementSnapshot, e
 	processRunning := statusFound && processOwnsRuntime(status.PID, m.dataDir)
 	heartbeatStale := !statusFound || !processRunning || status.LastScanAt.IsZero() || now.Sub(status.LastScanAt) > staleAfter
 	running := statusFound && status.Running && !heartbeatStale
-	retries := managedRetries(state, now)
+	retries := managedRetries(state, now, uiLanguage(m.dataDir))
 	visibleRetries := retries[:0]
 	pending, active, stopped := 0, 0, 0
 	for _, retry := range retries {
@@ -165,7 +166,8 @@ func (m *managementService) snapshotLocked(now time.Time) (ManagementSnapshot, e
 		ShowNotifications:            config.ShowNotifications,
 		MemoryLimitMB:                config.MemoryLimitMB,
 		SharedAppServerMemoryLimitMB: config.SharedAppServerMemoryLimitMB,
-		RetrySafetyWarning:           config.retrySafetyWarning(),
+		RetrySafetyWarning:           config.retrySafetyWarning(uiLanguage(m.dataDir)),
+		UILanguage:                   uiLanguage(m.dataDir),
 		SharedAppServerPort:          config.SharedAppServerPort,
 		SharedAppServerEnabled:       config.SharedAppServerEnabled,
 		SharedAppServerRequested:     config.SharedAppServerRequested,
@@ -229,7 +231,7 @@ func (m *managementService) setSharedAppServerEnabled(enabled bool, now time.Tim
 	if config.SharedAppServerEnabled == enabled && config.SharedAppServerRequested == enabled {
 		snapshot, snapshotErr := m.snapshotLocked(now.UTC())
 		if snapshotErr == nil {
-			snapshot.Notice = "共用後端模式未改變"
+			snapshot.Notice = text(snapshot.UILanguage, "共用後端模式未改變", "Shared backend mode unchanged")
 		}
 		return snapshot, snapshotErr
 	}
@@ -287,9 +289,9 @@ func (m *managementService) setSharedAppServerEnabled(enabled bool, now time.Tim
 	snapshot, err := m.snapshotLocked(now.UTC())
 	if err == nil {
 		if enabled {
-			snapshot.Notice = "共用後端已啟用；完全結束 Codex 後，透過安全啟動 Codex 入口接入"
+			snapshot.Notice = text(snapshot.UILanguage, "共用後端已啟用；完全結束 Codex 後，透過安全啟動 Codex 入口接入", "Shared backend enabled; fully exit Codex, then relaunch it with the safe launcher")
 		} else {
-			snapshot.Notice = "共用後端模式已關閉，Codex 將使用官方後端"
+			snapshot.Notice = text(snapshot.UILanguage, "共用後端模式已關閉，Codex 將使用官方後端", "Shared backend disabled; Codex uses the official backend")
 		}
 	}
 	return snapshot, err
@@ -319,7 +321,7 @@ func (m *managementService) setRetrySettings(settings RetrySettings, now time.Ti
 	}
 	snapshot, err := m.snapshotLocked(now.UTC())
 	if err == nil {
-		snapshot.Notice = "自動重試設定已儲存"
+		snapshot.Notice = text(snapshot.UILanguage, "自動重試設定已儲存", "Automatic retry settings saved")
 	}
 	return snapshot, err
 }
@@ -380,7 +382,20 @@ func (m *managementService) setRetryPrompt(prompt string, now time.Time) (Manage
 	}
 	snapshot, err := m.snapshotLocked(now.UTC())
 	if err == nil {
-		snapshot.Notice = "普通對話的重試文字已儲存"
+		snapshot.Notice = text(snapshot.UILanguage, "普通對話的重試文字已儲存", "Fallback retry prompt saved")
+	}
+	return snapshot, err
+}
+
+func (m *managementService) setUILanguage(language string, now time.Time) (ManagementSnapshot, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err := setUILanguage(m.dataDir, language); err != nil {
+		return ManagementSnapshot{}, fmt.Errorf("save interface language: %w", err)
+	}
+	snapshot, err := m.snapshotLocked(now.UTC())
+	if err == nil {
+		snapshot.Notice = text(snapshot.UILanguage, "介面語言已改為繁體中文", "Interface language set to English")
 	}
 	return snapshot, err
 }
@@ -394,9 +409,9 @@ func (m *managementService) setPaused(paused bool, now time.Time) (ManagementSna
 	snapshot, err := m.snapshotLocked(now.UTC())
 	if err == nil {
 		if paused {
-			snapshot.Notice = "自動重試已暫停"
+			snapshot.Notice = text(snapshot.UILanguage, "自動重試已暫停", "Automatic retry paused")
 		} else {
-			snapshot.Notice = "自動重試已恢復"
+			snapshot.Notice = text(snapshot.UILanguage, "自動重試已恢復", "Automatic retry resumed")
 		}
 	}
 	return snapshot, err
@@ -425,7 +440,7 @@ func (m *managementService) queueThreadCommand(action ControlCommandAction, thre
 	thread, found := state.Threads[threadID]
 	if !found || (action == commandRestartRetry && thread.Stopped == nil) ||
 		(action != commandRestartRetry && thread.Pending == nil) {
-		return ManagementSnapshot{}, errors.New("該任務目前沒有可執行的重試操作")
+		return ManagementSnapshot{}, errors.New(text(uiLanguage(m.dataDir), "該任務目前沒有可執行的重試操作", "This task has no retry action available right now"))
 	}
 	if _, err := queueControlCommand(m.commandDir, action, threadID, now); err != nil {
 		return ManagementSnapshot{}, err
@@ -433,11 +448,11 @@ func (m *managementService) queueThreadCommand(action ControlCommandAction, thre
 	snapshot, err := m.snapshotLocked(now.UTC())
 	if err == nil {
 		if action == commandRetryNow {
-			snapshot.Notice = "已請求立即重試"
+			snapshot.Notice = text(snapshot.UILanguage, "已請求立即重試", "Retry requested")
 		} else if action == commandRestartRetry {
-			snapshot.Notice = "已重新開始計數並請求重試"
+			snapshot.Notice = text(snapshot.UILanguage, "已重新開始計數並請求重試", "Counters reset and retry requested")
 		} else {
-			snapshot.Notice = "已請求取消這次重試"
+			snapshot.Notice = text(snapshot.UILanguage, "已請求取消這次重試", "Cancellation requested")
 		}
 	}
 	return snapshot, err
@@ -458,7 +473,7 @@ func loadStatusSnapshot(path string) (StatusSnapshot, bool, error) {
 	return status, true, nil
 }
 
-func managedRetries(state RuntimeState, now time.Time) []ManagedRetry {
+func managedRetries(state RuntimeState, now time.Time, language string) []ManagedRetry {
 	retries := make([]ManagedRetry, 0)
 	for threadID, thread := range state.Threads {
 		if thread.Pending != nil {
@@ -468,7 +483,7 @@ func managedRetries(state RuntimeState, now time.Time) []ManagedRetry {
 			}
 			retries = append(retries, ManagedRetry{
 				ThreadID:              threadID,
-				Label:                 "任務 " + shortThreadID(threadID),
+				Label:                 text(language, "任務 ", "Task ") + shortThreadID(threadID),
 				State:                 "pending",
 				Class:                 thread.Pending.Class,
 				DueAt:                 thread.Pending.DueAt.Format(time.RFC3339Nano),
@@ -488,7 +503,7 @@ func managedRetries(state RuntimeState, now time.Time) []ManagedRetry {
 			}
 			retries = append(retries, ManagedRetry{
 				ThreadID:              threadID,
-				Label:                 "任務 " + shortThreadID(threadID),
+				Label:                 text(language, "任務 ", "Task ") + shortThreadID(threadID),
 				State:                 stateName,
 				Class:                 thread.Awaiting.Class,
 				RecoveryAttempt:       thread.Awaiting.Attempt,
@@ -501,7 +516,7 @@ func managedRetries(state RuntimeState, now time.Time) []ManagedRetry {
 		if thread.Stopped != nil && stoppedRetryIsVisible(thread.Stopped, now) {
 			retries = append(retries, ManagedRetry{
 				ThreadID:              threadID,
-				Label:                 "任務 " + shortThreadID(threadID),
+				Label:                 text(language, "任務 ", "Task ") + shortThreadID(threadID),
 				State:                 "stopped",
 				Class:                 thread.Stopped.Class,
 				RecoveryAttempt:       thread.Stopped.Attempts,

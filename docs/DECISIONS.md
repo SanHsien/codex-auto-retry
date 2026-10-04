@@ -18,6 +18,25 @@
 
 **理由**：維護者首選繁體中文與國際英文雙語維護，且本 fork 定位為純 Windows 原生維護線，排除非 Windows 程式碼與說明可減少維護面雜訊。
 
+## 2026-10-04：版本號改為本 fork 的語意化版本線 1.0.0
+
+**決定**：外掛、背景服務與面板版本改為 `1.0.0`，之後依 semver 遞增：介面或功能新增升 minor、只修錯升 patch、使用者需要手動處理的不相容變更升 major。上游對應版本寫在 CHANGELOG 與 release 說明；`0.7.12-fork.N` 的 release 與 tag 已刪除。
+
+**理由**：`-fork.N` 尾碼不好讀；沿用上游 0.7.x 或 0.8.0 又會和上游未來的版本撞號。
+
+**限制**：同步上游時版本號不跟著上游走，`scripts/build-release.ps1` 仍要求 `model.go` 的 `appVersion` 與外掛基礎版本一致；改版本要一起改 `.codex-plugin/plugin.json`、`scripts/source/model.go`、`scripts/source/ui/package.json`（含 lock）與 `panel.ts` 裡的兩處。
+
+## 2026-10-04：整套繁中／英文雙語
+
+**決定**：有語言設定可讀的介面（設定視窗、啟動管理員、面板、系統匣、面板回覆訊息）依 `ui-language.json` 切換；沒有機會先讀設定的地方（安裝程式、執行檔選單、`.cmd`、命令列進度、錯誤訊息、記憶體警示、關閉 Codex 提示、MCP 工具說明）一律「中文 / English」並列。
+
+**理由**：安裝當下還沒有語言設定，並列才能保證兩種使用者都看得懂；錯誤訊息保留原英文句子，既有測試與日後搜尋英文錯誤都不受影響。
+
+**限制**：
+- 含中文的 PowerShell 腳本必須有 UTF-8 BOM，否則 Windows PowerShell 5.1 讀成亂碼；契約測試會檢查。
+- 背景服務寫進日誌的訊息維持英文（給維護者看）。
+- 新增使用者看得到的訊息時要同時寫中英文，契約測試會擋下只有單一語言的 `throw`／`Write-Step`。
+
 ## 2026-10-03：產品介面與入口檔名改為繁體中文
 
 **決定**：系統匣、設定視窗、內嵌面板、MCP 工具說明、安裝提示與 `release/windows/` 入口檔名全部改為臺灣繁體中文（`安裝.cmd`、`解除安裝.cmd`、`啟動管理員.cmd`、`安全啟動Codex.vbs`、`README-安裝說明.txt`）；預設後備重試文字由「继续」改為「繼續」。轉換由 `tools/convert_zh_hant.py`（OpenCC `s2twp` 加用語對照表）完成，`test_product_strings_are_traditional_chinese` 防止回歸。

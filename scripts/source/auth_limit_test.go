@@ -125,7 +125,7 @@ func TestAuthLoweredPendingLimitRetainsCountAndReason(t *testing.T) {
 	if state.Threads[id].Stopped.Attempts != 19 {
 		t.Fatal("state reload clamped historical count")
 	}
-	rows := managedRetries(state, time.Now().UTC())
+	rows := managedRetries(state, time.Now().UTC(), languageChinese)
 	if len(rows) != 1 || rows[0].RecoveryAttempt != 19 || rows[0].StopReason != "auth_attempt_limit" {
 		t.Fatalf("management lost count or reason: %+v", rows)
 	}

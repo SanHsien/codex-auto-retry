@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$DataDir = (Join-Path $env:LOCALAPPDATA 'CodexAutoRetry'),
     [string]$RunName = 'CodexAutoRetry'
@@ -131,7 +131,7 @@ if ([string]::IsNullOrWhiteSpace($runValue) -or (Test-OwnedStartupValue $runValu
                 if (($runWasRemoved -or $runWasUnchanged) -and ($approvalWasOld -or $approvalWasRemoved)) {
                     if ($runWasRemoved -and -not [string]::IsNullOrWhiteSpace($runValue)) {
                         $runRegistryKey = Open-CodexAutoRetryRunKey -Writable $true
-                        if ($null -eq $runRegistryKey) { throw 'The current-user startup registry key could not be opened while restoring the previous value.' }
+                        if ($null -eq $runRegistryKey) { throw '還原先前的值時無法開啟目前使用者的開機啟動登錄機碼。 / The current-user startup registry key could not be opened while restoring the previous value.' }
                         try { $runRegistryKey.SetValue($RunName, $runValue, [Microsoft.Win32.RegistryValueKind]::String) }
                         finally { $runRegistryKey.Close() }
                     }
@@ -150,23 +150,23 @@ Send-CodexAutoRetryEnvironmentChange
 
 $afterEndpoint = [Environment]::GetEnvironmentVariable('CODEX_APP_SERVER_WS_URL', 'User')
 $afterKey = [Environment]::GetEnvironmentVariable('CODEX_API_KEY', 'User')
-if ($beforeKey -ne $afterKey) { throw 'safe-disable changed CODEX_API_KEY unexpectedly.' }
+if ($beforeKey -ne $afterKey) { throw '緊急停用意外改動了 CODEX_API_KEY。 / safe-disable changed CODEX_API_KEY unexpectedly.' }
 if ($stateEndpoint -and $afterEndpoint -eq $stateEndpoint -and $stateEndpoint -match '^ws://127\.0\.0\.1:(\d+)$') {
     $listener = @(Get-NetTCPConnection -LocalPort ([int]$matches[1]) -State Listen -ErrorAction SilentlyContinue)
-    if ($listener.Count -eq 0) { throw 'Codex still points at a dead plugin endpoint.' }
+    if ($listener.Count -eq 0) { throw 'Codex 仍指向已失效的外掛端點。 / Codex still points at a dead plugin endpoint.' }
 }
 if ($startupApprovalError) {
-    throw "Startup entry cleanup was incomplete: $($startupApprovalError.Message)"
+    throw "開機啟動項目沒有清除完整：$($startupApprovalError.Message) / Startup entry cleanup was incomplete: $($startupApprovalError.Message)"
 }
 if ($startupRemoved -and -not $startupApprovalRemoved) {
-    throw 'Startup entry cleanup was incomplete: the approval marker is still present.'
+    throw '開機啟動項目沒有清除完整：核准標記仍然存在。 / Startup entry cleanup was incomplete: the approval marker is still present.'
 }
 if (-not $startupRemoved -and $startupApprovalRemoved) {
-    throw 'Startup entry cleanup was incomplete: the startup entry is still present.'
+    throw '開機啟動項目沒有清除完整：啟動項目仍然存在。 / Startup entry cleanup was incomplete: the startup entry is still present.'
 }
 if ((-not [string]::IsNullOrWhiteSpace($runValue) -or $oldApproval.Present) -and
     (-not $startupRemoved -or -not $startupApprovalRemoved)) {
-    throw 'Startup entry cleanup was incomplete: final registry state was not fully removed.'
+    throw '開機啟動項目沒有清除完整：登錄檔最後狀態沒有完全移除。 / Startup entry cleanup was incomplete: final registry state was not fully removed.'
 }
 
 [pscustomobject]@{

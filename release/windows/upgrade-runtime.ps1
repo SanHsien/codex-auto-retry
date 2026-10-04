@@ -1,11 +1,11 @@
-function Assert-UpgradePlainPath {
+﻿function Assert-UpgradePlainPath {
     param([string]$Path)
     $current = Get-FullPath $Path
     while ($current) {
         if (Test-Path -LiteralPath $current) {
             $item = Get-Item -LiteralPath $current -Force
             if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-                throw 'Upgrade backup/restore refuses linked paths.'
+                throw '升級備份與還原不接受連結路徑。 / Upgrade backup/restore refuses linked paths.'
             }
         }
         $current = Split-Path -Parent $current
@@ -47,28 +47,28 @@ function Restore-UpgradeRuntime {
     Assert-UpgradePlainPath $TransactionRoot
     $backup = Join-Path $TransactionRoot 'runtime-backup'
     $record = Read-JsonDocument (Join-Path $backup 'snapshot.json')
-    if ($null -eq $record -or $record.schema_version -ne 1) { throw 'Runtime rollback snapshot is missing or invalid.' }
+    if ($null -eq $record -or $record.schema_version -ne 1) { throw '執行環境回復快照遺失或無效。 / Runtime rollback snapshot is missing or invalid.' }
     $names = @('codex-auto-retry.exe', 'codex-auto-retry-mcp.exe', 'settings.ps1')
-    if (@($record.files).Count -ne $names.Count) { throw 'Runtime rollback file list is invalid.' }
+    if (@($record.files).Count -ne $names.Count) { throw '執行環境回復的檔案清單無效。 / Runtime rollback file list is invalid.' }
     # Verify every backup before changing any target. Never guess after damage.
     foreach ($name in $names) {
         $entries = @($record.files | Where-Object name -eq $name)
-        if ($entries.Count -ne 1) { throw 'Runtime rollback file identity is invalid.' }
+        if ($entries.Count -ne 1) { throw '執行環境回復的檔案識別無效。 / Runtime rollback file identity is invalid.' }
         $entry = $entries[0]
         $source = Join-Path $backup $name
         Assert-UpgradePlainPath $source
         Assert-UpgradePlainPath (Join-Path $RuntimePath $name)
         if ($entry.present -and ((-not (Test-Path -LiteralPath $source -PathType Leaf)) -or
-            (Get-FileHash -LiteralPath $source).Hash -ne $entry.hash)) { throw 'Runtime rollback backup checksum failed.' }
+            (Get-FileHash -LiteralPath $source).Hash -ne $entry.hash)) { throw '執行環境回復備份的雜湊檢查失敗。 / Runtime rollback backup checksum failed.' }
     }
     foreach ($entry in $record.files) {
         $target = Join-Path $RuntimePath $entry.name
         if ($entry.present) {
             Copy-Item -LiteralPath (Join-Path $backup $entry.name) -Destination $target -Force
-            if ((Get-FileHash -LiteralPath $target).Hash -ne $entry.hash) { throw 'Runtime rollback verification failed.' }
+            if ((Get-FileHash -LiteralPath $target).Hash -ne $entry.hash) { throw '執行環境回復後驗證失敗。 / Runtime rollback verification failed.' }
         } else {
             Remove-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
-            if (Test-Path -LiteralPath $target) { throw 'New runtime file could not be retired.' }
+            if (Test-Path -LiteralPath $target) { throw '無法撤除新的執行檔案。 / New runtime file could not be retired.' }
         }
     }
     $desired = '"{0}" supervise' -f (Join-Path $RuntimePath 'codex-auto-retry.exe')
@@ -85,8 +85,8 @@ function Restore-UpgradeRuntime {
                 if ($null -eq $record.run_value) { $key.DeleteValue($RunName, $false) }
                 else { $key.SetValue($RunName, [string]$record.run_value, [Microsoft.Win32.RegistryValueKind]::String) }
                 Restore-CodexAutoRetryStartupApproval -RunName $RunName -Bytes $old
-            } else { Write-Warning 'Concurrent startup approval was preserved during rollback.' }
-        } else { Write-Warning 'Concurrent startup entry was preserved during rollback.' }
+            } else { Write-Warning '回復時保留了同時被修改的開機啟動核准。 / Concurrent startup approval was preserved during rollback.' }
+        } else { Write-Warning '回復時保留了同時被修改的開機啟動項目。 / Concurrent startup entry was preserved during rollback.' }
     } finally { if ($key) { $key.Close() } }
     # State, control, config, logs and shared-server ownership are deliberately
     # not copied back. Fail-open cleanup owns routing; the worker stays stopped.
