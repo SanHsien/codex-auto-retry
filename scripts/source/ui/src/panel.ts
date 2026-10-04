@@ -327,7 +327,7 @@ function renderService(next: ManagementSnapshot): void {
     elements.serviceLine.textContent = L(`${elements.serviceLine.textContent}；共用後端記憶體保護已觸發（${next.shared_app_server_memory_usage_mb ?? 0} MB/${next.shared_app_server_memory_limit_mb ?? 0} MB），未強制關閉 Codex`, `${elements.serviceLine.textContent}; shared backend memory guard triggered (${next.shared_app_server_memory_usage_mb ?? 0} MB/${next.shared_app_server_memory_limit_mb ?? 0} MB), Codex was not force-closed`);
   }
   if (next.retry_safety_warning) {
-    elements.serviceLine.textContent = `${elements.serviceLine.textContent}；${next.retry_safety_warning}`;
+    elements.serviceLine.textContent = `${elements.serviceLine.textContent}${L("；", "; ")}${next.retry_safety_warning}`;
   }
   elements.pauseDescription.textContent = next.paused ? L("已暫停新重試", "New retries paused") : L("執行中", "Running");
 }

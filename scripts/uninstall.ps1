@@ -141,7 +141,7 @@ if ($sharedStateStillPresent -and -not $KeepData) {
     throw '外掛的共用後端仍在使用中，或無法確認已停止。執行資料沒有刪除，請關閉 Codex 後再解除安裝一次。 / The plugin-owned shared app-server is still in use or could not be verified as stopped. Runtime data was not deleted; close Codex and run uninstall again.'
 }
 if ($startupApprovalError) {
-    throw "開機啟動項目沒有清除完整：$($startupApprovalError.Message) / Startup entry cleanup was incomplete: $($startupApprovalError.Message)"
+    throw "開機啟動項目沒有清除完整。 / Startup entry cleanup was incomplete.`n$($startupApprovalError.Message)"
 }
 if ($startupRemoved -and -not $startupApprovalRemoved) {
     throw '開機啟動項目沒有清除完整：核准標記仍然存在。 / Startup entry cleanup was incomplete: the approval marker is still present.'

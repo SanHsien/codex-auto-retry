@@ -57,6 +57,8 @@ gh repo set-default --view
 - 推送到 `main` 不會自動觸發 CI：GitHub 對「fork 時已含 workflow」的 repo 預設停用（Actions 頁顯示 *Workflows aren't being run on this forked repository*），需維護者在 Actions 頁按下啟用；在那之前每次推送後手動 `gh workflow run ci.yml`（`b4b6f6a` 的手動執行 `37035605853` 全綠）。`go test -race` 需要 gcc，本機未安裝，只能由 CI 驗證。
 - 發佈檔未做程式碼簽章；單檔安裝程式是自解壓執行檔，SmartScreen 與防毒軟體可能示警。
 - 繁體化後每次同步上游都要重跑轉換工具並人工對照 PowerShell 測試裡的字元碼常數。
+- `scripts/startup-fail-open-smoke-test.ps1` 在本機失敗（"A failed shared backend was left enabled during startup."），`013030e`、`0ad4be8` 兩個較早版本也同樣失敗，CI 不跑這支，原因未查。
+- `scripts/status-smoke-test.ps1` 依賴本機實際安裝狀態，在沒安裝的電腦上失敗，改動前後相同。
 
 ## 接受、不改契約
 

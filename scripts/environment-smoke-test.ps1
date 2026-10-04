@@ -23,7 +23,7 @@ try {
     New-Item -ItemType Directory -Force -Path $dataDir, $conflictDir | Out-Null
     $productionWriteRejected = $false
     try { $null = Set-CodexAutoRetrySharedEnvironment -DataDir $dataDir -ConfigPath $configPath -SkipBroadcast }
-    catch { $productionWriteRejected = $_.Exception.Message -like 'Persistent shared routing is disabled*' }
+    catch { $productionWriteRejected = $_.Exception.Message -like '*Persistent shared routing is disabled*' }
     if (-not $productionWriteRejected) { throw 'The production environment writer was not disabled.' }
     [System.IO.File]::WriteAllText(
         $configPath,

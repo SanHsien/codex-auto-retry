@@ -353,7 +353,7 @@ function Invoke-ManagedScript {
     )
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "缺少必要的維護指令碼：$Path / Required maintenance script is missing: $Path" }
     $output = (& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $Path @Arguments 2>&1 | Out-String)
-    if ($LASTEXITCODE -ne 0) { throw "維護指令碼失敗，結束狀態 $LASTEXITCODE。`n$($output.Trim()) / Maintenance script failed with exit code $LASTEXITCODE.`n$($output.Trim())" }
+    if ($LASTEXITCODE -ne 0) { throw "維護指令碼失敗，結束狀態 $LASTEXITCODE。 / Maintenance script failed with exit code $LASTEXITCODE.`n$($output.Trim())" }
     return $output
 }
 

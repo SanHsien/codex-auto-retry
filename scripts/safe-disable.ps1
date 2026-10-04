@@ -156,7 +156,7 @@ if ($stateEndpoint -and $afterEndpoint -eq $stateEndpoint -and $stateEndpoint -m
     if ($listener.Count -eq 0) { throw 'Codex 仍指向已失效的外掛端點。 / Codex still points at a dead plugin endpoint.' }
 }
 if ($startupApprovalError) {
-    throw "開機啟動項目沒有清除完整：$($startupApprovalError.Message) / Startup entry cleanup was incomplete: $($startupApprovalError.Message)"
+    throw "開機啟動項目沒有清除完整。 / Startup entry cleanup was incomplete.`n$($startupApprovalError.Message)"
 }
 if ($startupRemoved -and -not $startupApprovalRemoved) {
     throw '開機啟動項目沒有清除完整：核准標記仍然存在。 / Startup entry cleanup was incomplete: the approval marker is still present.'

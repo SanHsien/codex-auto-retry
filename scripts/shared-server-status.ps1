@@ -1,4 +1,4 @@
-# Shared process verification used by status.ps1 and startup-manager.ps1.
+﻿# Shared process verification used by status.ps1 and startup-manager.ps1.
 # Keep this read-only: it must never stop a process or mutate the endpoint.
 
 function Get-CodexAutoRetryStatusProperty {
@@ -34,10 +34,10 @@ function Get-CodexAutoRetryStatusCompatibility {
 function Get-CodexAutoRetryStatusCompatibilityMessage {
     param([string]$Status)
     switch ($Status) {
-        'legacy_status_schema' { return 'Legacy status format: readable, some new metrics are unavailable' }
-        'status_unreadable' { return 'Status file is unreadable' }
-        'status_missing' { return 'Status file has not been generated' }
-        default { return 'Status format matches the current manager' }
+        'legacy_status_schema' { return '舊版狀態格式：可讀取，但部分新指標不可用 / Legacy status format: readable, some new metrics are unavailable' }
+        'status_unreadable' { return '狀態檔無法讀取 / Status file is unreadable' }
+        'status_missing' { return '狀態檔尚未產生 / Status file has not been generated' }
+        default { return '狀態格式與目前版本相符 / Status format matches the current manager' }
     }
 }
 
