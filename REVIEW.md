@@ -50,14 +50,14 @@ gh repo set-default --view
 | R-13 | P3 | 用單檔安裝程式安裝的人無法開啟啟動管理員（入口只在壓縮檔裡）；新增 `setup.exe -startup-manager`；`assets/` 截圖以 `tools/capture_screenshots.ps1` 重拍為繁體（`177de48`，2026-10-03） |
 | R-14 | P3 | 執行檔只能靠參數切換功能、檔名帶 `-setup` 易誤會成只能安裝；改名並在雙擊時顯示操作選單，刪除資料需輸入 Y 確認（`0ad4be8`，2026-10-03） |
 | R-15 | P2 | 啟動管理員與安全啟動的錯誤視窗只有英文；啟動管理員加繁中／英文切換（共用 `ui-language.json`），兩個錯誤視窗改繁中（`0ad4be8`，2026-10-03） |
-| R-16 | P2 | 英文使用者只看得到中文介面與錯誤訊息，版本號用 `-fork.N` 尾碼；改為整套中英雙語（可切換或並列）、版本號改為 1.0.0（2026-10-04） |
+| R-16 | P2 | 英文使用者只看得到中文介面與錯誤訊息，版本號用 `-fork.N` 尾碼；改為整套中英雙語（可切換或並列）、版本號改為 1.0.0（`72e7641`、`0117a72`，2026-10-04） |
 
 ## 未解風險
 
 - 推送到 `main` 不會自動觸發 CI：GitHub 對「fork 時已含 workflow」的 repo 預設停用（Actions 頁顯示 *Workflows aren't being run on this forked repository*），需維護者在 Actions 頁按下啟用；在那之前每次推送後手動 `gh workflow run ci.yml`（`b4b6f6a` 的手動執行 `37035605853` 全綠）。`go test -race` 需要 gcc，本機未安裝，只能由 CI 驗證。
 - 發佈檔未做程式碼簽章；單檔安裝程式是自解壓執行檔，SmartScreen 與防毒軟體可能示警。
 - 繁體化後每次同步上游都要重跑轉換工具並人工對照 PowerShell 測試裡的字元碼常數。
-- `scripts/startup-fail-open-smoke-test.ps1` 在本機失敗（"A failed shared backend was left enabled during startup."），`013030e`、`0ad4be8` 兩個較早版本也同樣失敗，CI 不跑這支，原因未查。
+- `scripts/startup-fail-open-smoke-test.ps1` 在本機失敗（"A failed shared backend was left enabled during startup."）；`0ad4be8` 同訊息失敗、`013030e` 以不同訊息失敗，所以不是這次改動造成。CI 不跑這支，但它包含在發佈檔與 `scripts/smoke-test.ps1` 裡，原因未查。
 - `scripts/status-smoke-test.ps1` 依賴本機實際安裝狀態，在沒安裝的電腦上失敗，改動前後相同。
 
 ## 接受、不改契約
