@@ -101,7 +101,11 @@ $script:i18n = @{
     'next_running'            = @{ zh = '下次重試：正在執行'; en = 'Next Retry: Running' }
     'next_none'               = @{ zh = '下次重試：--'; en = 'Next Retry: --' }
     'last_scan'               = @{ zh = '最近掃描：'; en = 'Last Scan: ' }
-    'queue_group'             = @{ zh = '任務佇列（僅顯示任務編號，不讀取對話內容）'; en = 'Task Queue (Task IDs only, conversation content not read)' }
+    'queue_group'             = @{ zh = '任務佇列（顯示 Codex 任務標題，不讀取對話內容）'; en = 'Task Queue (Codex task titles; conversation content not read)' }
+    'btn_refresh'             = @{ zh = '重新整理'; en = 'Refresh' }
+    'btn_rescan'              = @{ zh = '重新偵測中斷任務'; en = 'Find Interrupted' }
+    'rescan_requested'        = @{ zh = '已要求重新偵測，中斷的任務會在幾秒內列入佇列，選取後按「重新開始」。'; en = 'Rescan requested; interrupted tasks appear in a few seconds. Select one and press Restart.' }
+    'rescan_failed'           = @{ zh = '無法要求重新偵測，請確認背景服務正在執行。'; en = 'Could not request a rescan; make sure the background service is running.' }
     'col_task'                = @{ zh = '任務'; en = 'Task' }
     'col_status'              = @{ zh = '狀態'; en = 'Status' }
     'col_countdown'           = @{ zh = '倒數計時'; en = 'Countdown' }
@@ -403,12 +407,14 @@ $taskList.View = 'Details'
 $taskList.FullRowSelect = $true
 $taskList.GridLines = $true
 $taskList.HideSelection = $false
-[void]$taskList.Columns.Add((T 'col_task'), 65)
-[void]$taskList.Columns.Add((T 'col_status'), 110)
-[void]$taskList.Columns.Add((T 'col_countdown'), 90)
-[void]$taskList.Columns.Add((T 'col_recovery'), 85)
-[void]$taskList.Columns.Add((T 'col_consecutive'), 85)
-[void]$taskList.Columns.Add((T 'col_class'), 85)
+$taskList.ShowItemToolTips = $true
+$taskColumnWidths = @(160, 100, 60, 70, 70, 75)
+[void]$taskList.Columns.Add((T 'col_task'), $taskColumnWidths[0])
+[void]$taskList.Columns.Add((T 'col_status'), $taskColumnWidths[1])
+[void]$taskList.Columns.Add((T 'col_countdown'), $taskColumnWidths[2])
+[void]$taskList.Columns.Add((T 'col_recovery'), $taskColumnWidths[3])
+[void]$taskList.Columns.Add((T 'col_consecutive'), $taskColumnWidths[4])
+[void]$taskList.Columns.Add((T 'col_class'), $taskColumnWidths[5])
 $queueGroup.Controls.Add($taskList)
 $retryNowButton = [System.Windows.Forms.Button]::new()
 $retryNowButton.Text = T 'btn_retry_now'
@@ -422,7 +428,15 @@ $restartRetryButton = [System.Windows.Forms.Button]::new()
 $restartRetryButton.Text = T 'btn_restart_retry'
 $restartRetryButton.Location = [System.Drawing.Point]::new(472, 153)
 $restartRetryButton.Size = [System.Drawing.Size]::new(86, 27)
-$queueGroup.Controls.AddRange(@($retryNowButton, $cancelRetryButton, $restartRetryButton))
+$refreshButton = [System.Windows.Forms.Button]::new()
+$refreshButton.Text = T 'btn_refresh'
+$refreshButton.Location = [System.Drawing.Point]::new(14, 153)
+$refreshButton.Size = [System.Drawing.Size]::new(86, 27)
+$rescanButton = [System.Windows.Forms.Button]::new()
+$rescanButton.Text = T 'btn_rescan'
+$rescanButton.Location = [System.Drawing.Point]::new(106, 153)
+$rescanButton.Size = [System.Drawing.Size]::new(150, 27)
+$queueGroup.Controls.AddRange(@($refreshButton, $rescanButton, $retryNowButton, $cancelRetryButton, $restartRetryButton))
 
 $settingsGroup = [System.Windows.Forms.GroupBox]::new()
 $settingsGroup.Text = T 'settings_group'
@@ -621,6 +635,7 @@ function Set-SettingsBusy {
     $taskList.Enabled = -not $Busy
     $retryNowButton.Enabled = -not $Busy
     $cancelRetryButton.Enabled = -not $Busy
+    $rescanButton.Enabled = -not $Busy
     $restartRetryButton.Enabled = -not $Busy
     foreach ($control in $settingsInputControls) {
         $control.Enabled = -not $Busy
@@ -653,6 +668,12 @@ function Get-StateText {
 function Get-StoppedStateText {
     param([string]$Reason)
     $lang = $script:currentLanguage
+    if ($Reason -eq 'user_cancelled') {
+        if ($lang -eq 'en') { return 'Cancelled' } else { return '已取消' }
+    }
+    if ($Reason -eq 'interrupted_detected') {
+        if ($lang -eq 'en') { return 'Interrupted' } else { return '偵測到中斷' }
+    }
     if ($Reason -eq 'auth_attempt_limit') {
         if ($lang -eq 'en') { return 'Auth Limit' } else { return '登入異常專用上限' }
     }
@@ -705,19 +726,59 @@ function Get-ClassText {
 }
 
 $stoppedRetryDisplayWindow = [TimeSpan]::FromHours(1)
+# Cancelled and rediscovered tasks wait for the user, so they stay longer.
+$manualStopDisplayWindow = [TimeSpan]::FromHours(24)
 
 function Test-StoppedRetryVisible {
     param($Stopped)
     if (-not $Stopped -or [bool]$Stopped.historical) { return $false }
     $now = [DateTimeOffset]::UtcNow
+    $window = if ([string]$Stopped.reason -in @('user_cancelled', 'interrupted_detected')) { $manualStopDisplayWindow } else { $stoppedRetryDisplayWindow }
     foreach ($timestamp in @([string]$Stopped.failed_at, [string]$Stopped.stopped_at)) {
         if ([string]::IsNullOrWhiteSpace($timestamp)) { continue }
         try {
             $age = $now - [DateTimeOffset]::Parse($timestamp)
-            if ($age -ge [TimeSpan]::Zero -and $age -gt $stoppedRetryDisplayWindow) { return $false }
+            if ($age -ge [TimeSpan]::Zero -and $age -gt $window) { return $false }
         } catch { }
     }
     return $true
+}
+
+# Codex keeps one line per task in session_index.jsonl: id, thread_name and
+# updated_at. Only the title is read; nothing is stored or logged.
+$script:titleCache = @{}
+
+function Get-CodexThreadTitles {
+    param([string[]]$CodexHomes)
+    $titles = @{}
+    foreach ($codexHome in ($CodexHomes | Where-Object { $_ } | Select-Object -Unique)) {
+        $indexPath = Join-Path $codexHome 'session_index.jsonl'
+        try {
+            $info = Get-Item -LiteralPath $indexPath -ErrorAction Stop
+            if ($info.Length -gt 16MB) { continue }
+            $cacheKey = $info.FullName.ToLowerInvariant()
+            $cached = $script:titleCache[$cacheKey]
+            if (-not $cached -or $cached.Stamp -ne $info.LastWriteTimeUtc.Ticks -or $cached.Length -ne $info.Length) {
+                $map = @{}
+                $share = [System.IO.FileShare]([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete)
+                $stream = [System.IO.FileStream]::new($info.FullName, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, $share)
+                $reader = [System.IO.StreamReader]::new($stream, [System.Text.UTF8Encoding]::new($false), $true)
+                try {
+                    while ($null -ne ($line = $reader.ReadLine())) {
+                        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+                        try { $entry = $line | ConvertFrom-Json } catch { continue }
+                        $id = ([string]$entry.id).ToLowerInvariant()
+                        $name = ([string]$entry.thread_name) -replace '\s+', ' '
+                        if ($id -and $name.Trim()) { $map[$id] = $name.Trim() }
+                    }
+                } finally { $reader.Dispose(); $stream.Dispose() }
+                $cached = [pscustomobject]@{ Stamp = $info.LastWriteTimeUtc.Ticks; Length = $info.Length; Titles = $map }
+                $script:titleCache[$cacheKey] = $cached
+            }
+            foreach ($key in $cached.Titles.Keys) { $titles[$key] = $cached.Titles[$key] }
+        } catch { }
+    }
+    return $titles
 }
 
 function Update-ActionButtons {
@@ -787,6 +848,15 @@ function Update-RuntimeView {
     $activeCount = 0
     $stoppedCount = 0
     $nextSeconds = $null
+    $titleHomes = @((Join-Path $env:USERPROFILE '.codex'))
+    if ($state -and $state.threads) {
+        foreach ($property in $state.threads.PSObject.Properties) {
+            foreach ($part in @($property.Value.pending, $property.Value.awaiting, $property.Value.stopped)) {
+                if ($part -and $part.codex_home) { $titleHomes += [string]$part.codex_home }
+            }
+        }
+    }
+    $threadTitles = Get-CodexThreadTitles $titleHomes
     if ($state -and $state.threads) {
         foreach ($property in $state.threads.PSObject.Properties) {
             $threadID = [string]$property.Name
@@ -833,10 +903,13 @@ function Update-RuntimeView {
                 $stopReason = [string]$thread.stopped.reason
             } else { continue }
             $shortID = if ($threadID.Length -gt 8) { $threadID.Substring(0, 8) } else { $threadID }
+            $taskTitle = $threadTitles[$threadID.ToLowerInvariant()]
+            $taskLabel = if ($taskTitle) { $taskTitle } else { $shortID }
             $countdown = if ($null -ne $seconds) { ([int]$seconds).ToString() + (T 'unit_second') } else { '--' }
             $recoveryText = if ($maximum -gt 0) { "$attempt/$maximum" } else { [string]$attempt }
             $consecutiveText = if ($maxConsecutive -gt 0) { "$consecutive/$maxConsecutive" } else { [string]$consecutive }
-            $item = [System.Windows.Forms.ListViewItem]::new($shortID)
+            $item = [System.Windows.Forms.ListViewItem]::new($taskLabel)
+            $item.ToolTipText = if ($taskTitle) { "$taskTitle`n$threadID" } else { $threadID }
             $stateText = if ($rowState -eq 'stopped') { Get-StoppedStateText $stopReason } else { Get-StateText $rowState }
             [void]$item.SubItems.Add($stateText)
             [void]$item.SubItems.Add($countdown)
@@ -901,18 +974,15 @@ function Apply-Language {
     $langButton.Text = T 'lang_button'
     $statusGroup.Text = T 'status_group'
     $queueGroup.Text = T 'queue_group'
+    foreach ($column in 0..5) { $taskList.Columns[$column].Width = $taskColumnWidths[$column] }
     $taskList.Columns[0].Text = T 'col_task'
-    $taskList.Columns[0].Width = 65
     $taskList.Columns[1].Text = T 'col_status'
-    $taskList.Columns[1].Width = 110
     $taskList.Columns[2].Text = T 'col_countdown'
-    $taskList.Columns[2].Width = 90
     $taskList.Columns[3].Text = T 'col_recovery'
-    $taskList.Columns[3].Width = 85
     $taskList.Columns[4].Text = T 'col_consecutive'
-    $taskList.Columns[4].Width = 85
     $taskList.Columns[5].Text = T 'col_class'
-    $taskList.Columns[5].Width = 85
+    $refreshButton.Text = T 'btn_refresh'
+    $rescanButton.Text = T 'btn_rescan'
     $retryNowButton.Text = T 'btn_retry_now'
     $cancelRetryButton.Text = T 'btn_cancel_retry'
     $restartRetryButton.Text = T 'btn_restart_retry'
@@ -956,6 +1026,18 @@ $taskList.add_SelectedIndexChanged({ Update-ActionButtons })
 $retryNowButton.add_Click({ Invoke-TaskAction 'retry_now' })
 $cancelRetryButton.add_Click({ Invoke-TaskAction 'cancel_retry' })
 $restartRetryButton.add_Click({ Invoke-TaskAction 'restart_retry' })
+$refreshButton.add_Click({ Update-RuntimeView })
+$rescanButton.add_Click({
+    $exitCode = Start-LocalCommand 'control' @{ CODEX_AUTO_RETRY_ACTION = 'rescan_interrupted'; CODEX_AUTO_RETRY_THREAD_ID = '' }
+    if ($exitCode -eq 0) {
+        $noticeLabel.Text = T 'rescan_requested'
+        $noticeLabel.ForeColor = [System.Drawing.Color]::SeaGreen
+    } else {
+        $noticeLabel.Text = T 'rescan_failed'
+        $noticeLabel.ForeColor = [System.Drawing.Color]::Firebrick
+    }
+    Update-RuntimeView
+})
 $safeLaunchButton.add_Click({ Start-SafeCodexLaunch })
 $strategyBox.add_SelectedIndexChanged({ Update-DelayPreview })
 $initialDelayBox.add_ValueChanged({ Update-DelayPreview })

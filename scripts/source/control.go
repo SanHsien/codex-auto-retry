@@ -27,6 +27,8 @@ const (
 	commandRetryNow     ControlCommandAction = "retry_now"
 	commandCancelRetry  ControlCommandAction = "cancel_retry"
 	commandRestartRetry ControlCommandAction = "restart_retry"
+	// commandRescanInterrupted applies to every watched task and carries no thread id.
+	commandRescanInterrupted ControlCommandAction = "rescan_interrupted"
 )
 
 type ControlCommand struct {
@@ -107,11 +109,17 @@ func (c ControlCommand) validate() error {
 	if c.Version != currentControlVersion {
 		return fmt.Errorf("command version must be %d", currentControlVersion)
 	}
-	if c.Action != commandRetryNow && c.Action != commandCancelRetry && c.Action != commandRestartRetry {
+	switch c.Action {
+	case commandRescanInterrupted:
+		if c.ThreadID != "" {
+			return errors.New("rescan does not take a thread id")
+		}
+	case commandRetryNow, commandCancelRetry, commandRestartRetry:
+		if c.ThreadID == "" || threadIDFromPath(c.ThreadID+".jsonl") != strings.ToLower(c.ThreadID) {
+			return errors.New("invalid thread id")
+		}
+	default:
 		return errors.New("unsupported control command")
-	}
-	if threadIDFromPath(c.ThreadID+".jsonl") != strings.ToLower(c.ThreadID) {
-		return errors.New("invalid thread id")
 	}
 	if c.CreatedAt.IsZero() {
 		return errors.New("command timestamp is required")

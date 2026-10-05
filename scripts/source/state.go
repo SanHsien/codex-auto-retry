@@ -220,7 +220,7 @@ func trimInactiveThreads(threads map[string]ThreadState, limit int, now time.Tim
 			at = thread.GoalStop.RequestedAt
 		}
 		if thread.Stopped != nil && !thread.Stopped.Historical &&
-			(thread.Stopped.StoppedAt.IsZero() || now.Sub(thread.Stopped.StoppedAt) <= stoppedRetryDisplayWindow) {
+			(thread.Stopped.StoppedAt.IsZero() || now.Sub(thread.Stopped.StoppedAt) <= stoppedDisplayWindow(thread.Stopped)) {
 			continue
 		}
 		entries = append(entries, entry{id: id, at: at})

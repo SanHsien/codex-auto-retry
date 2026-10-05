@@ -129,6 +129,7 @@ const elements = {
   settingsError: required<HTMLElement>("settings-error"),
   notificationsToggle: required<HTMLInputElement>("notifications-toggle"),
   saveSettings: required<HTMLButtonElement>("save-settings"),
+  rescanButton: required<HTMLButtonElement>("rescan-button"),
   languageButton: required<HTMLButtonElement>("language-button"),
 };
 
@@ -523,6 +524,12 @@ function actionLabel(value?: string): string {
 }
 
 function stopReasonLabel(retry: ManagedRetry): string {
+  if (retry.stop_reason === "user_cancelled") {
+    return L("已取消，按重新開始可接回", "Cancelled; press restart to resume");
+  }
+  if (retry.stop_reason === "interrupted_detected") {
+    return L("偵測到中斷，按重新開始可接回", "Interrupted; press restart to resume");
+  }
   if (retry.stop_reason === "auth_attempt_limit") {
     return L("觸發登入異常專用上限", "Sign-in error limit reached");
   }
@@ -576,6 +583,10 @@ function stopReasonLabel(retry: ManagedRetry): string {
 
 function stoppedStateLabel(retry: ManagedRetry): string {
   switch (retry.stop_reason) {
+    case "user_cancelled":
+      return L("已取消", "Cancelled");
+    case "interrupted_detected":
+      return L("偵測到中斷", "Interrupted");
     case "auth_attempt_limit":
       return L("登入異常專用上限", "Sign-in error limit");
     case "shared_app_server_disabled":
@@ -811,6 +822,11 @@ function showNotice(message: string, isError: boolean): void {
 }
 
 elements.refreshButton.addEventListener("click", () => void callTool("get_auto_retry_status"));
+elements.rescanButton.addEventListener("click", () => {
+  void callTool("rescan_interrupted_tasks");
+  // The watchdog applies the rescan on its next scan; refresh shortly after.
+  window.setTimeout(() => void callTool("get_auto_retry_status", {}, true), 4000);
+});
 elements.languageButton.addEventListener("click", () => {
   const next = language === "en" ? "zh" : "en";
   if (!app) {
@@ -851,7 +867,7 @@ window.setInterval(() => {
 if (new URLSearchParams(window.location.search).has("preview")) {
   render(previewSnapshot());
 } else {
-  app = new App({ name: "Codex Auto Retry", version: "1.0.0" });
+  app = new App({ name: "Codex Auto Retry", version: "1.1.0" });
   app.onerror = (error) => showNotice(error instanceof Error ? error.message : L("連線失敗", "Connection failed"), true);
   app.onhostcontextchanged = handleHostContext;
   app.ontoolresult = (result) => {
@@ -872,7 +888,7 @@ function previewSnapshot(): ManagementSnapshot {
   const previewLanguage = new URLSearchParams(window.location.search).get("lang") === "en" ? "en" : "zh";
   return {
     ui_language: previewLanguage,
-    version: "1.0.0",
+    version: "1.1.0",
     running: true,
     heartbeat_stale: false,
     paused: false,

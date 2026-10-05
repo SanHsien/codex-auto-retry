@@ -429,6 +429,19 @@ func (m *managementService) restartRetry(threadID string, now time.Time) (Manage
 	return m.queueThreadCommand(commandRestartRetry, threadID, now)
 }
 
+func (m *managementService) rescanInterrupted(now time.Time) (ManagementSnapshot, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, err := queueControlCommand(m.commandDir, commandRescanInterrupted, "", now); err != nil {
+		return ManagementSnapshot{}, err
+	}
+	snapshot, err := m.snapshotLocked(now.UTC())
+	if err == nil {
+		snapshot.Notice = text(snapshot.UILanguage, "已要求重新偵測中斷的任務，結果會在下一次掃描後出現在佇列", "Rescan requested; interrupted tasks appear in the queue after the next scan")
+	}
+	return snapshot, err
+}
+
 func (m *managementService) queueThreadCommand(action ControlCommandAction, threadID string, now time.Time) (ManagementSnapshot, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -552,11 +565,12 @@ func stoppedRetryIsVisible(stopped *StoppedRetry, now time.Time) bool {
 	if stopped.Historical {
 		return false
 	}
-	if !stopped.FailedAt.IsZero() && !stopped.FailedAt.After(now) && now.Sub(stopped.FailedAt) > stoppedRetryDisplayWindow {
+	window := stoppedDisplayWindow(stopped)
+	if !stopped.FailedAt.IsZero() && !stopped.FailedAt.After(now) && now.Sub(stopped.FailedAt) > window {
 		return false
 	}
 	if stopped.StoppedAt.After(now) {
 		return true
 	}
-	return now.Sub(stopped.StoppedAt) <= stoppedRetryDisplayWindow
+	return now.Sub(stopped.StoppedAt) <= window
 }

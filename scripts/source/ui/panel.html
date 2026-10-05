@@ -54,7 +54,10 @@
             <h2 id="queue-heading" data-en="Retry queue">重試佇列</h2>
             <p id="queue-summary">正在讀取 / Loading</p>
           </div>
-          <span class="scan-time" id="scan-time"></span>
+          <div class="queue-tools">
+            <button class="language-button" id="rescan-button" type="button" title="掃描最近 24 小時中斷的任務" data-en="Find interrupted" data-en-title="Scan the last 24 hours for interrupted tasks">重新偵測</button>
+            <span class="scan-time" id="scan-time"></span>
+          </div>
         </div>
         <div class="queue-list" id="queue-list" aria-live="polite">
           <div class="empty-state loading-state">

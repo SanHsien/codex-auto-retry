@@ -39,11 +39,29 @@ try {
     [IO.File]::WriteAllText((Join-Path $dataDir 'config.json'), ($config | ConvertTo-Json), $utf8)
     [IO.File]::WriteAllText((Join-Path $dataDir 'control.json'), '{"paused":false}', $utf8)
     $now = [DateTimeOffset]::UtcNow
-    $state = @{ threads = @{ '019fa94e-0103-7183-b405-36bd307b6dca' = @{ stopped = @{
-        class = 'rate_limit'; attempts = 15; consecutive_retries = 5
-        max_attempts = 15; max_consecutive_retries = 5; reason = 'recovery_attempt_limit'
-        failed_at = $now.AddMinutes(-20).ToString('o'); stopped_at = $now.AddMinutes(-2).ToString('o')
-    } } } }
+    # Sample Codex home with task titles, so the queue shows titles not IDs.
+    $sampleHome = Join-Path $dataDir 'codex-home'
+    New-Item -ItemType Directory -Path $sampleHome | Out-Null
+    $limitID = '019fa94e-0103-7183-b405-36bd307b6dca'
+    $cancelledID = '019fa94e-0103-7183-b405-36bd307b6dcb'
+    $sampleTitles = if ($Language -eq 'en') { @('Refactor the sign-in flow', 'Write release notes') } else { @('重構登入流程', '撰寫發佈說明') }
+    $index = @(
+        (@{ id = $limitID; thread_name = $sampleTitles[0]; updated_at = $now.ToString('o') } | ConvertTo-Json -Compress),
+        (@{ id = $cancelledID; thread_name = $sampleTitles[1]; updated_at = $now.ToString('o') } | ConvertTo-Json -Compress)
+    ) -join "`n"
+    [IO.File]::WriteAllText((Join-Path $sampleHome 'session_index.jsonl'), $index + "`n", $utf8)
+    $state = @{ threads = @{
+        $limitID = @{ stopped = @{
+            class = 'rate_limit'; attempts = 15; consecutive_retries = 5; codex_home = $sampleHome
+            max_attempts = 15; max_consecutive_retries = 5; reason = 'recovery_attempt_limit'
+            failed_at = $now.AddMinutes(-20).ToString('o'); stopped_at = $now.AddMinutes(-2).ToString('o')
+        } }
+        $cancelledID = @{ stopped = @{
+            class = 'transient'; attempts = 1; consecutive_retries = 1; codex_home = $sampleHome
+            max_attempts = 15; max_consecutive_retries = 5; reason = 'user_cancelled'
+            failed_at = $now.AddMinutes(-40).ToString('o'); stopped_at = $now.AddMinutes(-30).ToString('o')
+        } }
+    } }
     [IO.File]::WriteAllText((Join-Path $dataDir 'state.json'), ($state | ConvertTo-Json -Depth 6), $utf8)
     # The window shows "running" only for a live process whose path matches
     # -Executable. This host process stands in for the watchdog.

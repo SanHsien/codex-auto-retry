@@ -189,6 +189,17 @@ func newManagementMCPServer(service *managementService) *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Meta:        managementToolMeta(),
+		Name:        "rescan_interrupted_tasks",
+		Title:       "重新偵測中斷的任務 / Find interrupted tasks",
+		Description: "掃描最近 24 小時的任務，把最後一輪因可重試錯誤而中斷、之後沒有再繼續的任務列入佇列等待使用者按重新開始；不會自動送出重試。 / Scan tasks from the last 24 hours and list those whose last turn ended with a retryable failure and was never continued; they wait for the user to restart them and are never retried automatically.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPointer(false), IdempotentHint: true, OpenWorldHint: boolPointer(false), Title: "重新偵測中斷的任務 / Find interrupted tasks"},
+	}, func(_ context.Context, _ *mcp.CallToolRequest, _ emptyToolInput) (*mcp.CallToolResult, ManagementSnapshot, error) {
+		snapshot, err := service.rescanInterrupted(time.Now().UTC())
+		return nil, snapshot, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Meta:        managementToolMeta(),
 		Name:        "retry_now",
 		Title:       "立即重試 / Retry now",
 		Description: "讓佇列中指定 Codex 任務儘快重試；暫停期間會保持待處理，恢復後執行。 / Retry the queued Codex task as soon as possible; while paused it stays pending and runs after resuming.",

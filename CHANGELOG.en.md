@@ -10,6 +10,18 @@ English | [繁體中文](CHANGELOG.md)
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-05
+
+### Added
+- The settings window queue shows Codex task titles (read from Codex's `session_index.jsonl`; only the title is read, never conversation content, and it is neither stored nor logged; hover for the full ID). Titles stay in the local settings window and are not added to the panel data returned to Codex.
+- Refresh and Find Interrupted buttons; the panel gains a Find interrupted button and the MCP tool `rescan_interrupted_tasks`. The rescan lists tasks from the last 24 hours whose last turn ended with a retryable failure and was never continued, as Interrupted; they wait for Restart and are never sent automatically.
+
+### Changed
+- Cancelling a pending retry no longer removes it: it stays in the queue as Cancelled for 24 hours and can be restarted, and it clears when the task is continued manually in Codex.
+
+### Fixed
+- Control commands accepted an empty task ID.
+
 ## [1.0.0] - 2026-10-04
 
 This fork now has its own semantic version line starting at 1.0.0; product logic matches upstream `sybxxx/codex-auto-retry` 0.7.12. All earlier `0.7.12-fork.N` builds are folded into this release, and only 1.0.0 remains on the release page.

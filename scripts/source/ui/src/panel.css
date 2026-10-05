@@ -786,3 +786,9 @@ textarea:disabled {
     border-color: #7f3737;
   }
 }
+
+.queue-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

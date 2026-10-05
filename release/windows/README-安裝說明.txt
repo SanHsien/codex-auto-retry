@@ -1,4 +1,4 @@
-Codex Auto Retry 1.0.0 - Windows x64 安裝說明 / Installation Guide
+Codex Auto Retry 1.1.0 - Windows x64 安裝說明 / Installation Guide
 ==================================================================
 
 （English version follows the Chinese section.）
@@ -30,8 +30,13 @@ Codex Auto Retry 1.0.0 - Windows x64 安裝說明 / Installation Guide
 6. 驗證是否安裝成功：
    開啟 Codex App 新建一個任務，傳送提示詞：「開啟 Codex Auto Retry 管理面板」。若能正常彈出內嵌管理面板並顯示心跳健康，即代表就緒！
 
-版本特性說明（1.0.0）
+版本特性說明（1.1.0）
 --------------------
+1.1.0 新增：
+- 設定視窗的任務佇列改為顯示 Codex 任務標題（滑鼠停在上面可看完整 ID），並新增「重新整理」與「重新偵測中斷任務」按鈕。
+- 取消等待中的重試後，任務改為「已取消」保留在佇列 24 小時，選取後按「重新開始」即可接回。
+- 「重新偵測中斷任務」會找出最近 24 小時最後一輪因可重試錯誤中斷、之後沒有再繼續的任務，列為「偵測到中斷」，不會自動送出。
+
 1.0.0 是本 fork 自己的版本線（產品邏輯對應上游 sybxxx/codex-auto-retry 0.7.12）：
 - 整套繁體中文／英文雙語：設定視窗、啟動管理員、內嵌面板與系統匣可切換語言，安裝與錯誤訊息中英並列。
 - 單一執行檔 Codex-Auto-Retry-<版本>-windows-x64.exe：雙擊顯示選單，不必解壓縮。
@@ -136,6 +141,7 @@ Startup manager and emergency tools
 Settings window
 ---------------
 - Live task queue with countdowns.
+- The queue shows Codex task titles (hover for the full ID), with Refresh and Find Interrupted buttons. A cancelled retry stays in the queue as Cancelled for 24 hours and can be restarted; Find Interrupted lists tasks from the last 24 hours whose last turn failed with a retryable error and was never continued. Nothing found this way is retried automatically.
 - Two safety limits: per-outage recovery limit (default 15, up to 1000) and no-progress limit (default 5, up to 100).
 - Fixed, linear, or exponential waits with configurable first wait, step, and maximum.
 - Language toggle shared with the startup manager and the panel.

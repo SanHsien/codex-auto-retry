@@ -149,7 +149,8 @@ The settings window allows configuring:
 - Delay curves (fixed, linear increment, or doubling backoff, with custom initial and max caps);
 - Fallback retry text (up to 500 characters);
 - Watchdog notification preferences;
-- One-click Traditional Chinese/English toggle, shared with the startup manager and the panel.
+- One-click Traditional Chinese/English toggle, shared with the startup manager and the panel;
+- A queue that shows Codex task titles, with Refresh and Find Interrupted buttons; a cancelled retry stays as Cancelled for 24 hours and can be restarted.
 
 <p align="center">
   <img src="assets/settings_en.png" alt="Codex Auto Retry Settings Window (English)" width="520" />

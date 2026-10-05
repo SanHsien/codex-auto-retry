@@ -108,6 +108,10 @@ func (d *daemon) stopPendingRetryLocked(threadID string, thread ThreadState, now
 }
 
 func (d *daemon) applyControlCommandLocked(command ControlCommand, now time.Time) {
+	if command.Action == commandRescanInterrupted {
+		d.rescanInterruptedLocked(now)
+		return
+	}
 	thread, found := d.state.Threads[command.ThreadID]
 	if !found {
 		d.logger.Printf("control command ignored thread=%s reason=retry_not_found", shortThreadID(command.ThreadID))
@@ -127,6 +131,9 @@ func (d *daemon) applyControlCommandLocked(command ControlCommand, now time.Time
 			d.logger.Printf("control command ignored thread=%s reason=retry_not_pending", shortThreadID(command.ThreadID))
 			return
 		}
+		// Keep the task in the queue as cancelled so the user can restart it
+		// later; a new manual turn in Codex clears it as usual.
+		thread.Stopped = cancelledRetryStop(thread.Pending, now)
 		thread.Pending = nil
 		thread.RecoveryAttempts = 0
 		thread.ConsecutiveRetries = 0
