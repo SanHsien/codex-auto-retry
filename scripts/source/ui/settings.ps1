@@ -763,31 +763,37 @@ function Get-CodexThreadTitles {
             $cached = [pscustomobject]@{ Stamp = $info.LastWriteTimeUtc.Ticks; Length = $info.Length; Titles = @{}; Checked = @{} }
             $script:titleCache[$cacheKey] = $cached
         }
-        # Parse only lines that mention a task in the queue, and remember the
-        # IDs already looked up (found or not) until the index file changes.
+        # Find the last line for each task shown in the queue (later lines are
+        # renames) with a native search, parse only those lines, and remember
+        # looked-up ids until the file changes.
         $needed = @($wanted | Where-Object { -not $cached.Checked.ContainsKey($_) })
         if ($needed.Count -gt 0) {
-            foreach ($id in $needed) { $cached.Checked[$id] = $true }
+            $completed = $false
             $stream = $null
             $reader = $null
             try {
                 $share = [System.IO.FileShare]([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete)
                 $stream = [System.IO.FileStream]::new($info.FullName, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, $share)
                 $reader = [System.IO.StreamReader]::new($stream, [System.Text.UTF8Encoding]::new($false), $true)
-                while ($null -ne ($line = $reader.ReadLine())) {
-                    $lower = $line.ToLowerInvariant()
-                    $match = $null
-                    foreach ($id in $needed) { if ($lower.Contains($id)) { $match = $id; break } }
-                    if (-not $match) { continue }
-                    try { $entry = $line | ConvertFrom-Json } catch { continue }
+                $text = $reader.ReadToEnd()
+                foreach ($id in $needed) {
+                    $position = $text.LastIndexOf('"' + $id + '"', [System.StringComparison]::OrdinalIgnoreCase)
+                    if ($position -lt 0) { continue }
+                    $lineStart = $text.LastIndexOf([char]10, $position) + 1
+                    $lineEnd = $text.IndexOf([char]10, $position)
+                    if ($lineEnd -lt 0) { $lineEnd = $text.Length }
+                    try { $entry = $text.Substring($lineStart, $lineEnd - $lineStart) | ConvertFrom-Json } catch { continue }
                     $name = ([string]$entry.thread_name) -replace '\s+', ' '
-                    if (([string]$entry.id).ToLowerInvariant() -eq $match -and $name.Trim()) { $cached.Titles[$match] = $name.Trim() }
+                    if (([string]$entry.id).ToLowerInvariant() -eq $id -and $name.Trim()) { $cached.Titles[$id] = $name.Trim() }
                 }
+                $completed = $true
             } catch {
             } finally {
                 if ($reader) { $reader.Dispose() }
                 if ($stream) { $stream.Dispose() }
             }
+            # A failed read (for example a sharing violation) is retried next time.
+            if ($completed) { foreach ($id in $needed) { $cached.Checked[$id] = $true } }
         }
         foreach ($id in $wanted) { if ($cached.Titles.ContainsKey($id) -and -not $titles.ContainsKey($id)) { $titles[$id] = $cached.Titles[$id] } }
     }
@@ -869,7 +875,17 @@ function Update-RuntimeView {
             }
         }
     }
-    $threadTitles = Get-CodexThreadTitles $titleHomes @($state.threads.PSObject.Properties | ForEach-Object { $_.Name })
+    $shownIDs = @()
+    if ($state -and $state.threads) {
+        foreach ($property in $state.threads.PSObject.Properties) {
+            $candidate = $property.Value
+            if ((($candidate.pending -or $candidate.awaiting) -and $running) -or
+                (-not $candidate.pending -and -not $candidate.awaiting -and $candidate.stopped -and (Test-StoppedRetryVisible $candidate.stopped))) {
+                $shownIDs += [string]$property.Name
+            }
+        }
+    }
+    $threadTitles = Get-CodexThreadTitles $titleHomes $shownIDs
     if ($state -and $state.threads) {
         foreach ($property in $state.threads.PSObject.Properties) {
             $threadID = [string]$property.Name

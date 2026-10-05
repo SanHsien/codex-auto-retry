@@ -171,7 +171,12 @@ func TestRescanPrefersTheKnownStoreSkipsArchivedAndOldFailures(t *testing.T) {
 	if err := os.Chtimes(primaryPath, earlier, earlier); err != nil {
 		t.Fatal(err)
 	}
-	d.state.Files[strings.ToLower(filepath.Clean(primaryPath))] = FileCursor{Offset: 1, LastSeen: now}
+	// The real daemon has scanned both stores (so both are known files) before
+	// a rescan; the recovery transport serves CODEX_HOME.
+	t.Setenv("CODEX_HOME", primary)
+	if _, err := scanSessions(discoverSessionRoots(config), &d.state, now, false); err != nil {
+		t.Fatal(err)
+	}
 
 	writeRolloutLines(t, filepath.Join(primary, "archived_sessions", name(archived)),
 		makeEventLine(t, at(-10*time.Minute), "task_complete", "turn-x", "HTTP 503 Service Unavailable"))

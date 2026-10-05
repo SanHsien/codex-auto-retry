@@ -18,8 +18,8 @@ const (
 	manualStopDisplayWindow       = 24 * time.Hour
 	rescanWindow                  = 24 * time.Hour
 	rescanMaxRolloutBytes         = 64 << 20
-	// rescanMaxTotalBytes bounds one rescan, which runs while the watchdog
-	// holds its state lock.
+	// rescanMaxTotalBytes bounds the rollout bytes one rescan reads while the
+	// watchdog holds its state lock; the directory walk itself is not bounded.
 	rescanMaxTotalBytes = 512 << 20
 )
 
@@ -58,20 +58,32 @@ func cancelledRetryStop(pending *PendingRetry, now time.Time) *StoppedRetry {
 }
 
 type rescanCandidate struct {
-	path    string
-	root    sessionRoot
-	modTime time.Time
-	size    int64
-	known   bool
+	path      string
+	root      sessionRoot
+	modTime   time.Time
+	size      int64
+	preferred bool
 }
 
-// better prefers the store the regular scan already follows (it owns the
-// thread; other copies are mirrors), then the most recently written file.
+// better prefers the Codex home the recovery transport serves (the restart
+// path refuses any other home, so a mirror copy could never be resumed),
+// then the most recently written file.
 func (c rescanCandidate) better(other rescanCandidate) bool {
-	if c.known != other.known {
-		return c.known
+	if c.preferred != other.preferred {
+		return c.preferred
 	}
 	return c.modTime.After(other.modTime)
+}
+
+// recoveryCodexHome mirrors how the shared recovery transport picks its home.
+func recoveryCodexHome() string {
+	if home := strings.TrimSpace(os.Getenv("CODEX_HOME")); home != "" {
+		return filepath.Clean(expandPath(home))
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".codex")
+	}
+	return ""
 }
 
 // rescanInterruptedLocked lists recently active tasks whose last turn ended
@@ -79,7 +91,9 @@ func (c rescanCandidate) better(other rescanCandidate) bool {
 // only lifecycle events, the same ones the regular scan reads.
 func (d *daemon) rescanInterruptedLocked(now time.Time) int {
 	latest := map[string]rescanCandidate{}
+	recoveryHome := recoveryCodexHome()
 	for _, root := range discoverSessionRoots(d.config) {
+		preferred := recoveryHome != "" && strings.EqualFold(filepath.Clean(root.CodexHome), recoveryHome)
 		// Archived tasks were put away by the user; only live sessions count.
 		if strings.TrimSpace(root.Sessions) == "" {
 			continue
@@ -97,8 +111,7 @@ func (d *daemon) rescanInterruptedLocked(now time.Time) int {
 				if err != nil || info.Size() > rescanMaxRolloutBytes || now.Sub(info.ModTime()) > rescanWindow {
 					return nil
 				}
-				_, known := d.state.Files[strings.ToLower(filepath.Clean(path))]
-				candidate := rescanCandidate{path: path, root: root, modTime: info.ModTime(), size: info.Size(), known: known}
+				candidate := rescanCandidate{path: path, root: root, modTime: info.ModTime(), size: info.Size(), preferred: preferred}
 				if current, ok := latest[threadID]; !ok || candidate.better(current) {
 					latest[threadID] = candidate
 				}
@@ -110,7 +123,14 @@ func (d *daemon) rescanInterruptedLocked(now time.Time) int {
 	for threadID := range latest {
 		threadIDs = append(threadIDs, threadID)
 	}
-	sort.Strings(threadIDs)
+	// Newest first, so the read budget never drops the most recent tasks.
+	sort.Slice(threadIDs, func(i, j int) bool {
+		a, b := latest[threadIDs[i]], latest[threadIDs[j]]
+		if !a.modTime.Equal(b.modTime) {
+			return a.modTime.After(b.modTime)
+		}
+		return threadIDs[i] < threadIDs[j]
+	})
 
 	found := 0
 	var readBytes int64
@@ -125,8 +145,8 @@ func (d *daemon) rescanInterruptedLocked(now time.Time) int {
 			continue
 		}
 		if readBytes+candidate.size > rescanMaxTotalBytes {
-			d.logger.Printf("interrupted task rescan stopped reason=byte_budget")
-			break
+			d.logger.Printf("interrupted task rescan skipped thread=%s reason=byte_budget", shortThreadID(threadID))
+			continue
 		}
 		readBytes += candidate.size
 		events, _, err := readAppendedEvents(candidate.path, 0, threadID, candidate.root, false)
