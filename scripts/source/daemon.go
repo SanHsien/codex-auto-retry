@@ -44,6 +44,7 @@ type daemon struct {
 	writeStatusFile                     func(string, any) error
 	stateWriteDeferred                  bool
 	statusWriteDeferred                 bool
+	rescansThisTick                     int
 }
 
 func newDaemon(config Config, dataDir string, logger *safeLogger, runner resumeRunner) (*daemon, error) {
@@ -408,6 +409,7 @@ func (d *daemon) reopenRestartRequiredLocked(now time.Time) {
 }
 
 func (d *daemon) refreshControlsLocked(now time.Time) {
+	d.rescansThisTick = 0
 	control, err := loadOrCreateControlState(d.controlPath)
 	if err != nil {
 		d.lastError = err.Error()

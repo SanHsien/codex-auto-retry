@@ -160,8 +160,13 @@ the explicit launcher, existing-process, stale-shell and self-update boundaries.
    lock that owns `state.json`.
 7. `set_retry_settings` atomically updates the prompt, both retry limits, wait
    strategy, first/fixed delay, maximum delay, and notification preference.
-   `restart_retry` converts only an exhausted entry into an immediate first
-   attempt with a fresh budget.
+   `restart_retry` converts a stopped entry (exhausted, `user_cancelled`, or
+   `interrupted_detected`) into an immediate first attempt with a fresh budget.
+   `rescan_interrupted_tasks` queues a `rescan_interrupted` command; the
+   watchdog then reads lifecycle events of live sessions changed in the last
+   24 hours and lists tasks whose last turn failed retryably and was never
+   continued as `interrupted_detected`. Nothing it lists is dispatched until the
+   user restarts it.
 
 The MCP process never edits retry state directly. A retry-now command applies
 only while the task remains pending. Cancellation also applies only before

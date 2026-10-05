@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -143,5 +144,79 @@ func TestRescanFindsOnlyTasksWhoseLastTurnFailed(t *testing.T) {
 	d.applyControlCommandLocked(ControlCommand{Version: currentControlVersion, Action: commandRestartRetry, ThreadID: interrupted, CreatedAt: now}, now)
 	if restarted := d.state.Threads[interrupted]; restarted.Pending == nil || restarted.Pending.FailedTurnID != "turn-a" {
 		t.Fatalf("detected task could not be restarted: %+v", restarted)
+	}
+}
+
+func TestRescanPrefersTheKnownStoreSkipsArchivedAndOldFailures(t *testing.T) {
+	base := t.TempDir()
+	primary := filepath.Join(base, "primary", ".codex")
+	mirror := filepath.Join(base, "mirror", ".codex")
+	config := isolatedConfig(primary)
+	config.SessionRoots = []string{primary, mirror}
+	d := newTestDaemon(t, config, successfulRunner())
+	now := time.Now().UTC()
+	at := func(offset time.Duration) string { return now.Add(offset).Format(time.RFC3339Nano) }
+	name := func(id string) string { return "rollout-2026-10-05T10-00-00-" + id + ".jsonl" }
+
+	mirrored := "019f9d5d-9c82-75b1-b7c0-20a658af0451"
+	archived := "019f9d5d-9c82-75b1-b7c0-20a658af0452"
+	oldFailure := "019f9d5d-9c82-75b1-b7c0-20a658af0453"
+	failed := makeEventLine(t, at(-10*time.Minute), "task_complete", "turn-m", "HTTP 503 Service Unavailable")
+
+	primaryPath := filepath.Join(primary, "sessions", "2026", "10", "05", name(mirrored))
+	mirrorPath := filepath.Join(mirror, "sessions", "2026", "10", "05", name(mirrored))
+	writeRolloutLines(t, primaryPath, failed)
+	writeRolloutLines(t, mirrorPath, failed)
+	earlier := now.Add(-time.Hour)
+	if err := os.Chtimes(primaryPath, earlier, earlier); err != nil {
+		t.Fatal(err)
+	}
+	d.state.Files[strings.ToLower(filepath.Clean(primaryPath))] = FileCursor{Offset: 1, LastSeen: now}
+
+	writeRolloutLines(t, filepath.Join(primary, "archived_sessions", name(archived)),
+		makeEventLine(t, at(-10*time.Minute), "task_complete", "turn-x", "HTTP 503 Service Unavailable"))
+	writeRolloutLines(t, filepath.Join(primary, "sessions", "2026", "10", "05", name(oldFailure)),
+		makeEventLine(t, at(-30*time.Hour), "task_complete", "turn-o", "HTTP 503 Service Unavailable"))
+
+	if found := d.rescanInterruptedLocked(now); found != 1 {
+		t.Fatalf("expected only the mirrored task, found %d: %+v", found, d.state.Threads)
+	}
+	if stopped := d.state.Threads[mirrored].Stopped; stopped == nil || stopped.CodexHome != primary ||
+		!strings.EqualFold(stopped.RolloutPath, filepath.Clean(primaryPath)) {
+		t.Fatalf("rescan did not keep the store the watchdog already follows: %+v", stopped)
+	}
+	for _, id := range []string{archived, oldFailure} {
+		if d.state.Threads[id].Stopped != nil {
+			t.Fatalf("task %s should not be listed: %+v", id, d.state.Threads[id].Stopped)
+		}
+	}
+}
+
+func TestRepeatedRescanCommandsRunOncePerTick(t *testing.T) {
+	d := newTestDaemon(t, isolatedConfig(filepath.Join(t.TempDir(), ".codex")), successfulRunner())
+	now := time.Now().UTC()
+	for i := 0; i < 3; i++ {
+		if _, err := queueControlCommand(d.commandDir, commandRescanInterrupted, "", now.Add(time.Duration(i)*time.Millisecond)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d.refreshControlsLocked(now)
+	if d.rescansThisTick != 1 {
+		t.Fatalf("expected one rescan for three queued commands, got %d", d.rescansThisTick)
+	}
+	if entries, _ := os.ReadDir(d.commandDir); len(entries) != 0 {
+		t.Fatalf("queued rescan commands were not consumed: %d left", len(entries))
+	}
+}
+
+func TestTrayCountIgnoresCancelledAndInterruptedEntries(t *testing.T) {
+	retries := []ManagedRetry{
+		{State: "stopped", StopReason: stopReasonUserCancelled},
+		{State: "stopped", StopReason: stopReasonInterruptedDetected},
+		{State: "stopped", StopReason: "recovery_attempt_limit"},
+		{State: "pending"},
+	}
+	if got := attentionStoppedCount(retries); got != 1 {
+		t.Fatalf("tray would report %d stopped tasks, want 1", got)
 	}
 }

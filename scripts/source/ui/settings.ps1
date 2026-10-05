@@ -104,7 +104,7 @@ $script:i18n = @{
     'queue_group'             = @{ zh = '任務佇列（顯示 Codex 任務標題，不讀取對話內容）'; en = 'Task Queue (Codex task titles; conversation content not read)' }
     'btn_refresh'             = @{ zh = '重新整理'; en = 'Refresh' }
     'btn_rescan'              = @{ zh = '重新偵測中斷任務'; en = 'Find Interrupted' }
-    'rescan_requested'        = @{ zh = '已要求重新偵測，中斷的任務會在幾秒內列入佇列，選取後按「重新開始」。'; en = 'Rescan requested; interrupted tasks appear in a few seconds. Select one and press Restart.' }
+    'rescan_requested'        = @{ zh = '已送出重新偵測要求；背景服務下一次掃描後，中斷的任務會列入佇列，選取後按「重新開始」。'; en = 'Rescan requested; after the next background scan, interrupted tasks appear in the queue. Select one and press Restart.' }
     'rescan_failed'           = @{ zh = '無法要求重新偵測，請確認背景服務正在執行。'; en = 'Could not request a rescan; make sure the background service is running.' }
     'col_task'                = @{ zh = '任務'; en = 'Task' }
     'col_status'              = @{ zh = '狀態'; en = 'Status' }
@@ -749,34 +749,47 @@ function Test-StoppedRetryVisible {
 $script:titleCache = @{}
 
 function Get-CodexThreadTitles {
-    param([string[]]$CodexHomes)
+    param([string[]]$CodexHomes, [string[]]$ThreadIDs)
     $titles = @{}
+    $wanted = @($ThreadIDs | Where-Object { $_ } | ForEach-Object { $_.ToLowerInvariant() } | Select-Object -Unique)
+    if ($wanted.Count -eq 0) { return $titles }
     foreach ($codexHome in ($CodexHomes | Where-Object { $_ } | Select-Object -Unique)) {
         $indexPath = Join-Path $codexHome 'session_index.jsonl'
-        try {
-            $info = Get-Item -LiteralPath $indexPath -ErrorAction Stop
-            if ($info.Length -gt 16MB) { continue }
-            $cacheKey = $info.FullName.ToLowerInvariant()
-            $cached = $script:titleCache[$cacheKey]
-            if (-not $cached -or $cached.Stamp -ne $info.LastWriteTimeUtc.Ticks -or $cached.Length -ne $info.Length) {
-                $map = @{}
+        $info = Get-Item -LiteralPath $indexPath -ErrorAction SilentlyContinue
+        if (-not $info -or $info.Length -gt 16MB) { continue }
+        $cacheKey = $info.FullName.ToLowerInvariant()
+        $cached = $script:titleCache[$cacheKey]
+        if (-not $cached -or $cached.Stamp -ne $info.LastWriteTimeUtc.Ticks -or $cached.Length -ne $info.Length) {
+            $cached = [pscustomobject]@{ Stamp = $info.LastWriteTimeUtc.Ticks; Length = $info.Length; Titles = @{}; Checked = @{} }
+            $script:titleCache[$cacheKey] = $cached
+        }
+        # Parse only lines that mention a task in the queue, and remember the
+        # IDs already looked up (found or not) until the index file changes.
+        $needed = @($wanted | Where-Object { -not $cached.Checked.ContainsKey($_) })
+        if ($needed.Count -gt 0) {
+            foreach ($id in $needed) { $cached.Checked[$id] = $true }
+            $stream = $null
+            $reader = $null
+            try {
                 $share = [System.IO.FileShare]([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete)
                 $stream = [System.IO.FileStream]::new($info.FullName, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, $share)
                 $reader = [System.IO.StreamReader]::new($stream, [System.Text.UTF8Encoding]::new($false), $true)
-                try {
-                    while ($null -ne ($line = $reader.ReadLine())) {
-                        if ([string]::IsNullOrWhiteSpace($line)) { continue }
-                        try { $entry = $line | ConvertFrom-Json } catch { continue }
-                        $id = ([string]$entry.id).ToLowerInvariant()
-                        $name = ([string]$entry.thread_name) -replace '\s+', ' '
-                        if ($id -and $name.Trim()) { $map[$id] = $name.Trim() }
-                    }
-                } finally { $reader.Dispose(); $stream.Dispose() }
-                $cached = [pscustomobject]@{ Stamp = $info.LastWriteTimeUtc.Ticks; Length = $info.Length; Titles = $map }
-                $script:titleCache[$cacheKey] = $cached
+                while ($null -ne ($line = $reader.ReadLine())) {
+                    $lower = $line.ToLowerInvariant()
+                    $match = $null
+                    foreach ($id in $needed) { if ($lower.Contains($id)) { $match = $id; break } }
+                    if (-not $match) { continue }
+                    try { $entry = $line | ConvertFrom-Json } catch { continue }
+                    $name = ([string]$entry.thread_name) -replace '\s+', ' '
+                    if (([string]$entry.id).ToLowerInvariant() -eq $match -and $name.Trim()) { $cached.Titles[$match] = $name.Trim() }
+                }
+            } catch {
+            } finally {
+                if ($reader) { $reader.Dispose() }
+                if ($stream) { $stream.Dispose() }
             }
-            foreach ($key in $cached.Titles.Keys) { $titles[$key] = $cached.Titles[$key] }
-        } catch { }
+        }
+        foreach ($id in $wanted) { if ($cached.Titles.ContainsKey($id) -and -not $titles.ContainsKey($id)) { $titles[$id] = $cached.Titles[$id] } }
     }
     return $titles
 }
@@ -856,7 +869,7 @@ function Update-RuntimeView {
             }
         }
     }
-    $threadTitles = Get-CodexThreadTitles $titleHomes
+    $threadTitles = Get-CodexThreadTitles $titleHomes @($state.threads.PSObject.Properties | ForEach-Object { $_.Name })
     if ($state -and $state.threads) {
         foreach ($property in $state.threads.PSObject.Properties) {
             $threadID = [string]$property.Name

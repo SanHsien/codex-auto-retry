@@ -109,6 +109,11 @@ func (d *daemon) stopPendingRetryLocked(threadID string, thread ThreadState, now
 
 func (d *daemon) applyControlCommandLocked(command ControlCommand, now time.Time) {
 	if command.Action == commandRescanInterrupted {
+		// Several clicks between two ticks need only one walk.
+		if d.rescansThisTick > 0 {
+			return
+		}
+		d.rescansThisTick++
 		d.rescanInterruptedLocked(now)
 		return
 	}

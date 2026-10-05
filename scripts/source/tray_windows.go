@@ -308,7 +308,7 @@ func (a *trayApp) refresh() {
 	if snapshot.ControllerState == "codex_restart_required" {
 		tip = L("Codex Auto Retry - 目前為官方後端；請透過安全啟動入口接入共用通道", "Codex Auto Retry - On the official backend; relaunch Codex with the safe launcher")
 		iconState = "paused"
-	} else if snapshot.ControllerState == "codex_not_running" && snapshot.StoppedRetries > 0 {
+	} else if snapshot.ControllerState == "codex_not_running" && attentionStoppedCount(snapshot.Retries) > 0 {
 		tip = L("Codex Auto Retry - Codex 已結束，重試已停止", "Codex Auto Retry - Codex exited; retries stopped")
 		iconState = "stopped"
 	} else if snapshot.ControllerState == "shared_app_server_disabled" {
@@ -332,8 +332,8 @@ func (a *trayApp) refresh() {
 	} else if seconds, ok := nextRetrySeconds(snapshot.Retries); ok {
 		tip = fmt.Sprintf(L("Codex Auto Retry - %d 秒後自動重試", "Codex Auto Retry - Retrying in %d s"), seconds)
 		iconState = "waiting"
-	} else if snapshot.StoppedRetries > 0 {
-		tip = fmt.Sprintf(L("Codex Auto Retry - %d 個任務已停止重試", "Codex Auto Retry - %d task(s) stopped retrying"), snapshot.StoppedRetries)
+	} else if stopped := attentionStoppedCount(snapshot.Retries); stopped > 0 {
+		tip = fmt.Sprintf(L("Codex Auto Retry - %d 個任務已停止重試", "Codex Auto Retry - %d task(s) stopped retrying"), stopped)
 		iconState = "stopped"
 	}
 	a.setVisual(iconState, tip)

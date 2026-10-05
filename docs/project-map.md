@@ -60,7 +60,8 @@ Source code lives under `scripts/source`.
 | `retry_state.go` | Generic retry transitions, dual attempt limits, visible-progress resets, startup reconciliation, later external-turn attribution, and management command application. |
 | `goal_recovery.go` | Goal lifecycle holds, native-turn adoption, stale-update protection, bounded post-limit goal blocking, and goal-specific controller reconciliation. |
 | `subagent_recovery.go` | Durable acknowledgement of deterministic parent recovery events for the exact existing child. |
-| `control.go` | Persistent pause state and atomic retry-now/cancel/restart command files shared with management surfaces. |
+| `control.go` | Persistent pause state and atomic retry-now/cancel/restart/rescan command files shared with management surfaces. |
+| `manual_recovery.go` | Keeps cancelled retries restartable for 24 hours and lists interrupted tasks found by an explicit rescan. |
 | `management.go` | Privacy-bounded queue snapshots, process-backed heartbeat freshness, Windows StartupApproved status, settings updates, and management command submission. |
 | `mcp_server.go` | Official Go MCP SDK wiring, management tools, and the embedded MCP App resource. |
 | `tray_windows.go` | Native notification-area icon, live tooltip/countdown, menu controls, and graphical settings-process lifecycle. |

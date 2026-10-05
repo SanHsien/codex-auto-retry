@@ -153,6 +153,8 @@ try {
         'set_retry_settings',
         'set_auto_retry_paused',
         'set_shared_app_server_enabled',
+        'set_ui_language',
+        'rescan_interrupted_tasks',
         'retry_now',
         'cancel_retry',
         'restart_retry'

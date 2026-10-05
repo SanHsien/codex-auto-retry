@@ -112,8 +112,14 @@ compatibility fallback text.
   that pausing terminates a retry that already started.
 - Use `retry_now` or `cancel_retry` only with a task ID returned in the pending
   queue. Cancel cannot undo a retry that already started.
-- Use `restart_retry` only for a task reported as stopped at its retry limit.
-  It starts a fresh attempt budget and requests an immediate retry.
+- Use `restart_retry` for a task reported as stopped: at its retry limit,
+  cancelled by the user (`user_cancelled`), or listed by a rescan
+  (`interrupted_detected`). It starts a fresh attempt budget and requests an
+  immediate retry. Cancelled and rescanned entries stay listed for 24 hours.
+- Use `rescan_interrupted_tasks` when the user asks to find tasks that were
+  interrupted earlier. It lists tasks from the last 24 hours whose last turn
+  ended with a retryable failure and was never continued; it never retries
+  them by itself, so ask the user before calling `restart_retry`.
 - Never open the panel automatically, navigate to another task, or focus Codex.
 
 ## Status

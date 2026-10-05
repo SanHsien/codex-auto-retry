@@ -18,10 +18,25 @@ const (
 	manualStopDisplayWindow       = 24 * time.Hour
 	rescanWindow                  = 24 * time.Hour
 	rescanMaxRolloutBytes         = 64 << 20
+	// rescanMaxTotalBytes bounds one rescan, which runs while the watchdog
+	// holds its state lock.
+	rescanMaxTotalBytes = 512 << 20
 )
 
 func isManualStopReason(reason string) bool {
 	return reason == stopReasonUserCancelled || reason == stopReasonInterruptedDetected
+}
+
+// attentionStoppedCount counts stopped tasks the tray should flag. Tasks the
+// user cancelled, or that a rescan listed, are waiting for them on purpose.
+func attentionStoppedCount(retries []ManagedRetry) int {
+	count := 0
+	for _, retry := range retries {
+		if retry.State == "stopped" && !isManualStopReason(retry.StopReason) {
+			count++
+		}
+	}
+	return count
 }
 
 func stoppedDisplayWindow(stopped *StoppedRetry) time.Duration {
@@ -47,6 +62,16 @@ type rescanCandidate struct {
 	root    sessionRoot
 	modTime time.Time
 	size    int64
+	known   bool
+}
+
+// better prefers the store the regular scan already follows (it owns the
+// thread; other copies are mirrors), then the most recently written file.
+func (c rescanCandidate) better(other rescanCandidate) bool {
+	if c.known != other.known {
+		return c.known
+	}
+	return c.modTime.After(other.modTime)
 }
 
 // rescanInterruptedLocked lists recently active tasks whose last turn ended
@@ -55,7 +80,11 @@ type rescanCandidate struct {
 func (d *daemon) rescanInterruptedLocked(now time.Time) int {
 	latest := map[string]rescanCandidate{}
 	for _, root := range discoverSessionRoots(d.config) {
-		for _, directory := range root.scanDirectories() {
+		// Archived tasks were put away by the user; only live sessions count.
+		if strings.TrimSpace(root.Sessions) == "" {
+			continue
+		}
+		for _, directory := range []string{root.Sessions} {
 			_ = filepath.WalkDir(directory, func(path string, entry os.DirEntry, walkErr error) error {
 				if walkErr != nil || entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".jsonl") {
 					return nil
@@ -68,8 +97,10 @@ func (d *daemon) rescanInterruptedLocked(now time.Time) int {
 				if err != nil || info.Size() > rescanMaxRolloutBytes || now.Sub(info.ModTime()) > rescanWindow {
 					return nil
 				}
-				if current, ok := latest[threadID]; !ok || info.ModTime().After(current.modTime) {
-					latest[threadID] = rescanCandidate{path: path, root: root, modTime: info.ModTime(), size: info.Size()}
+				_, known := d.state.Files[strings.ToLower(filepath.Clean(path))]
+				candidate := rescanCandidate{path: path, root: root, modTime: info.ModTime(), size: info.Size(), known: known}
+				if current, ok := latest[threadID]; !ok || candidate.better(current) {
+					latest[threadID] = candidate
 				}
 				return nil
 			})
@@ -82,6 +113,7 @@ func (d *daemon) rescanInterruptedLocked(now time.Time) int {
 	sort.Strings(threadIDs)
 
 	found := 0
+	var readBytes int64
 	for _, threadID := range threadIDs {
 		candidate := latest[threadID]
 		thread := d.state.Threads[threadID]
@@ -92,12 +124,18 @@ func (d *daemon) rescanInterruptedLocked(now time.Time) int {
 		if _, active := d.active[threadID]; active {
 			continue
 		}
+		if readBytes+candidate.size > rescanMaxTotalBytes {
+			d.logger.Printf("interrupted task rescan stopped reason=byte_budget")
+			break
+		}
+		readBytes += candidate.size
 		events, _, err := readAppendedEvents(candidate.path, 0, threadID, candidate.root, false)
 		if err != nil {
 			continue
 		}
 		failure, startedAt, ok := lastTurnFailure(events, threadID)
-		if !ok || failure.TurnID == thread.LastAbortedTurnID {
+		if !ok || failure.TurnID == thread.LastAbortedTurnID ||
+			failure.Timestamp.IsZero() || now.Sub(failure.Timestamp) > rescanWindow {
 			continue
 		}
 		decision := classifyCompletionFailure(failure, d.config)
