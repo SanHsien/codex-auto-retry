@@ -1,6 +1,8 @@
 @echo off
 setlocal
 chcp 65001 >nul
+rem A PSModulePath inherited from PowerShell 7 hides Get-FileHash from Windows PowerShell 5.1.
+set "PSModulePath="
 title Codex Auto Retry 解除安裝 / Uninstaller
 echo.
 echo Codex Auto Retry - 一鍵解除安裝 / one-click uninstaller

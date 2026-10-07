@@ -10,6 +10,11 @@
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-08
+
+### Fixed
+- 從 PowerShell 7 終端機執行安裝執行檔或 `.cmd` 時，安裝在「驗證發佈檔」失敗，顯示找不到 `Get-FileHash`。原因是繼承了 PowerShell 7 的模組路徑（`PSModulePath`），讓 Windows PowerShell 5.1 載入不相容的模組；現在啟動前會清掉這個變數。從檔案總管雙擊不受影響。
+
 ## [1.1.0] - 2026-10-05
 
 ### Added

@@ -10,6 +10,11 @@ English | [繁體中文](CHANGELOG.md)
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-08
+
+### Fixed
+- Running the installer exe or a `.cmd` from a PowerShell 7 terminal failed at "Verifying release files" because `Get-FileHash` was not found. The inherited PowerShell 7 module path (`PSModulePath`) made Windows PowerShell 5.1 load incompatible modules; the variable is now cleared before launch. Double-clicking from File Explorer was not affected.
+
 ## [1.1.0] - 2026-10-05
 
 ### Added

@@ -1,6 +1,8 @@
 @echo off
 setlocal
 chcp 65001 >nul
+rem A PSModulePath inherited from PowerShell 7 hides Get-FileHash from Windows PowerShell 5.1.
+set "PSModulePath="
 title Codex Auto Retry 緊急停用 / Safe Disable
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0startup-manager.ps1" -Action safe-disable
 set "EXIT_CODE=%ERRORLEVEL%"

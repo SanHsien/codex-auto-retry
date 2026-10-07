@@ -312,7 +312,15 @@ function userInputCount(body) {
     if (!resolvedHome.startsWith(safePrefix) || !path.basename(resolvedHome).startsWith('codex-shared-server-')) {
       throw new Error(`Refusing to clean unsafe test path: ${resolvedHome}`);
     }
-    fs.rmSync(resolvedHome, { recursive: true, force: true });
+    // Codex child processes can hold the SQLite files for several seconds after
+    // the app-server exits. Cleanup is not what this test checks, so a folder
+    // that stays locked is left in %TEMP% with a warning instead of failing.
+    try {
+      fs.rmSync(resolvedHome, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+    } catch (error) {
+      if (!['EPERM', 'EBUSY', 'ENOTEMPTY'].includes(error.code)) throw error;
+      console.error(`Warning: test folder still in use, left for later cleanup: ${resolvedHome}`);
+    }
   }
 })().catch(error => {
   console.error(error.stack || String(error));

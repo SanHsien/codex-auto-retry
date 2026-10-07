@@ -195,3 +195,18 @@ func TestStatusReadsPackagedAndInstalledVersions(t *testing.T) {
 		t.Fatalf("unexpected status after install: %s", status)
 	}
 }
+
+func TestWindowsPowerShellEnvironmentDropsInheritedModulePath(t *testing.T) {
+	// PowerShell 7 puts its own module folders first in PSModulePath. Windows
+	// PowerShell 5.1 then loads the 7.x Utility module and loses Get-FileHash.
+	got := windowsPowerShellEnvironment([]string{
+		`PATH=C:\Windows`,
+		`PSModulePath=C:\Program Files\PowerShell\Modules`,
+		`psmodulepath=C:\other`,
+		`PSModulePathExtra=keep`,
+	})
+	want := []string{`PATH=C:\Windows`, `PSModulePathExtra=keep`}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("environment = %q, want %q", got, want)
+	}
+}

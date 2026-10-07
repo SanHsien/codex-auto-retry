@@ -403,6 +403,21 @@ func extractFile(file *zip.File, target string) error {
 	return output.Close()
 }
 
+// windowsPowerShellEnvironment drops an inherited PSModulePath. When this exe
+// starts from a PowerShell 7 terminal, that path lists the 7.x modules first and
+// Windows PowerShell 5.1 then cannot find Get-FileHash. Without the variable,
+// 5.1 rebuilds its own default module path.
+func windowsPowerShellEnvironment(environment []string) []string {
+	kept := make([]string, 0, len(environment))
+	for _, entry := range environment {
+		if name, _, found := strings.Cut(entry, "="); found && strings.EqualFold(name, "PSModulePath") {
+			continue
+		}
+		kept = append(kept, entry)
+	}
+	return kept
+}
+
 func runPowerShell(script string, args []string, ownConsole bool, stdout, stderr io.Writer) (int, error) {
 	systemRoot := os.Getenv("SystemRoot")
 	if systemRoot == "" {
@@ -412,6 +427,7 @@ func runPowerShell(script string, args []string, ownConsole bool, stdout, stderr
 	command := exec.Command(powershell, append([]string{
 		"-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script,
 	}, args...)...)
+	command.Env = windowsPowerShellEnvironment(os.Environ())
 	if ownConsole {
 		useHiddenConsole(command)
 	} else {
