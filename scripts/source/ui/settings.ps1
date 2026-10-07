@@ -1,0 +1,1199 @@
+﻿param(
+    [Parameter(Mandatory = $true)][string]$DataDir,
+    [Parameter(Mandatory = $true)][string]$Executable,
+    [switch]$SmokeTest
+)
+
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+[System.Windows.Forms.Application]::EnableVisualStyles()
+
+# A shared-backend health check can involve starting Codex and waiting for a
+# WebSocket handshake. Keep the settings window responsive while it runs, and
+# never allow a broken child process to hold the window open indefinitely.
+$localCommandTimeoutMilliseconds = 35000
+$localCommandExitPortReserved = 2
+$localCommandExitPortConflict = 3
+$script:localCommandProcess = $null
+$script:localCommandTimedOut = $false
+$script:localCommandInProgress = $false
+$script:safeLaunchInProgress = $false
+$script:memoryGuardTriggered = $false
+
+$configPath = Join-Path $DataDir 'config.json'
+$controlPath = Join-Path $DataDir 'control.json'
+$statusPath = Join-Path $DataDir 'status.json'
+$statePath = Join-Path $DataDir 'state.json'
+$smokeClosePath = Join-Path $DataDir 'settings-smoke-close.signal'
+$uiLangPath = Join-Path $DataDir 'ui-language.json'
+$safeLauncherPath = Join-Path $env:USERPROFILE 'plugins\codex-auto-retry\scripts\launch-codex.ps1'
+
+function Get-SharedModeRequested($Config) {
+    if (-not $Config) { return $false }
+    if ($Config.PSObject.Properties['shared_app_server_requested']) { return [bool]$Config.shared_app_server_requested }
+    return [bool]$Config.shared_app_server_enabled
+}
+
+function Read-JsonFile {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    $stream = $null
+    $reader = $null
+    try {
+        $share = [System.IO.FileShare]([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete)
+        $stream = [System.IO.FileStream]::new(
+            $Path,
+            [System.IO.FileMode]::Open,
+            [System.IO.FileAccess]::Read,
+            $share
+        )
+        $reader = [System.IO.StreamReader]::new(
+            $stream,
+            [System.Text.UTF8Encoding]::new($false),
+            $true,
+            1024,
+            $true
+        )
+        return $reader.ReadToEnd() | ConvertFrom-Json
+    } catch {
+        return $null
+    } finally {
+        if ($reader) { $reader.Dispose() }
+        if ($stream) { $stream.Dispose() }
+    }
+}
+
+$script:currentLanguage = 'zh'
+if (Test-Path -LiteralPath $uiLangPath) {
+    try {
+        $savedLangRecord = Read-JsonFile $uiLangPath
+        if ($savedLangRecord -and $savedLangRecord.language -eq 'en') {
+            $script:currentLanguage = 'en'
+        }
+    } catch { }
+}
+
+$script:i18n = @{
+    'form_title'              = @{ zh = 'Codex Auto Retry 設定'; en = 'Codex Auto Retry Settings' }
+    'lang_button'             = @{ zh = 'English'; en = '中文' }
+    'status_group'            = @{ zh = '目前狀態'; en = 'Current Status' }
+    'status_loading'          = @{ zh = '正在讀取…'; en = 'Loading...' }
+    'status_not_running'      = @{ zh = '背景服務未執行'; en = 'Service Not Running' }
+    'status_disconnected'     = @{ zh = 'Codex 未接入共用後端'; en = 'Codex Not Connected' }
+    'status_disconnected_hint' = @{ zh = '共用後端已啟動；請使用安全啟動入口重新啟動 Codex。'; en = 'Shared backend is running; relaunch Codex with the safe launcher.' }
+    'startup_approval_enabled' = @{ zh = '登入啟動已啟用'; en = 'Sign-in startup enabled' }
+    'startup_approval_disabled' = @{ zh = '登入啟動已停用'; en = 'Sign-in startup disabled' }
+    'startup_approval_unknown' = @{ zh = '登入啟動狀態未知'; en = 'Sign-in startup unknown' }
+    'status_exited'           = @{ zh = 'Codex 已結束，重試已停止'; en = 'Codex Exited (Stopped)' }
+    'status_shared_temp_unavail' = @{ zh = '共用後端暫不可用'; en = 'Shared Backend Unavailable' }
+    'status_shared_disabled'  = @{ zh = '共用後端已關閉'; en = 'Shared Backend Disabled' }
+    'status_port_reserved'    = @{ zh = '共用埠被 Windows 保留，重試未執行'; en = 'Port Reserved by Windows' }
+    'status_port_conflict'    = @{ zh = '偏好共用埠不可用，啟用時將自動選擇安全埠'; en = 'Port Conflict (Auto-Selecting)' }
+    'status_migration_deferred' = @{ zh = '等待 Codex 關閉後完成共用後端遷移'; en = 'Waiting for Codex to Exit' }
+    'status_config_invalid'   = @{ zh = '共用後端設定不相容，已切回官方後端'; en = 'Shared Config Reverted' }
+    'status_paused'           = @{ zh = '已暫停'; en = 'Paused' }
+    'status_running'          = @{ zh = '執行中'; en = 'Running' }
+    'queue_summary'           = @{ zh = '佇列：{0} 等待 / {1} 執行 / {2} 停止'; en = 'Queue: {0} wait / {1} run / {2} stop' }
+    'next_waiting_service'    = @{ zh = '下次重試：等待服務啟動'; en = 'Next Retry: Waiting for Service' }
+    'next_waiting_resume'     = @{ zh = '下次重試：等待恢復'; en = 'Next Retry: Waiting for Resume' }
+    'next_seconds'            = @{ zh = '下次重試：{0} 秒'; en = 'Next Retry: {0}s' }
+    'next_running'            = @{ zh = '下次重試：正在執行'; en = 'Next Retry: Running' }
+    'next_none'               = @{ zh = '下次重試：--'; en = 'Next Retry: --' }
+    'last_scan'               = @{ zh = '最近掃描：'; en = 'Last Scan: ' }
+    'queue_group'             = @{ zh = '任務佇列（顯示 Codex 任務標題，不讀取對話內容）'; en = 'Task Queue (Codex task titles; conversation content not read)' }
+    'btn_refresh'             = @{ zh = '重新整理'; en = 'Refresh' }
+    'btn_rescan'              = @{ zh = '重新偵測中斷任務'; en = 'Find Interrupted' }
+    'rescan_requested'        = @{ zh = '已送出重新偵測要求；背景服務下一次掃描後，中斷的任務會列入佇列，選取後按「重新開始」。'; en = 'Rescan requested; after the next background scan, interrupted tasks appear in the queue. Select one and press Restart.' }
+    'rescan_failed'           = @{ zh = '無法要求重新偵測，請確認背景服務正在執行。'; en = 'Could not request a rescan; make sure the background service is running.' }
+    'col_task'                = @{ zh = '任務'; en = 'Task' }
+    'col_status'              = @{ zh = '狀態'; en = 'Status' }
+    'col_countdown'           = @{ zh = '倒數計時'; en = 'Countdown' }
+    'col_recovery'            = @{ zh = '本次恢復'; en = 'Recoveries' }
+    'col_consecutive'         = @{ zh = '連續重試'; en = 'Repeats' }
+    'col_class'               = @{ zh = '故障類型'; en = 'Type' }
+    'btn_retry_now'           = @{ zh = '立即重試'; en = 'Retry Now' }
+    'btn_cancel_retry'        = @{ zh = '取消等待'; en = 'Cancel Wait' }
+    'btn_restart_retry'       = @{ zh = '重新開始'; en = 'Restart' }
+    'btn_safe_launch'         = @{ zh = '安全啟動 Codex'; en = 'Safe Launch Codex' }
+    'safe_launch_running'     = @{ zh = '正在等待 Codex 關閉並透過安全入口啟動…'; en = 'Waiting for Codex to close, then launching safely...' }
+    'safe_launch_done'        = @{ zh = '已請求安全啟動 Codex，請稍候重新整理狀態。'; en = 'Safe Codex launch requested; status will refresh shortly.' }
+    'safe_launch_failed'      = @{ zh = '安全啟動失敗，請確認 Codex 已完全結束。'; en = 'Safe launch failed; confirm that Codex is fully closed.' }
+    'safe_launch_missing'     = @{ zh = '找不到安全啟動指令碼，請重新安裝外掛。'; en = 'Safe launcher is missing; reinstall the plugin.' }
+    'safe_launch_disabled'    = @{ zh = '請先啟用共用 Codex 後端。'; en = 'Enable the shared Codex backend first.' }
+    'settings_group'          = @{ zh = '自動重試設定'; en = 'Auto Retry Settings' }
+    'check_enabled'           = @{ zh = '啟用自動重試'; en = 'Enable Auto Retry' }
+    'check_shared'            = @{ zh = '啟用共用 Codex 後端（健康檢查）'; en = 'Enable Shared Codex Backend' }
+    'shared_port_prefix'      = @{ zh = '目前共用埠：'; en = 'Shared Port: ' }
+    'check_notifications'     = @{ zh = '達到重試上限時顯示外掛通知'; en = 'Show Alert on Retry Limit' }
+    'label_prompt'            = @{ zh = '後備重試文字'; en = 'Fallback Retry Prompt' }
+    'label_recovery'          = @{ zh = '本次故障恢復上限'; en = 'Outage Recovery Limit' }
+    'label_consecutive'       = @{ zh = '連續無進展重試上限'; en = 'No-Progress Limit' }
+    'label_auth_limit'         = @{ zh = '登入異常恢復上限'; en = 'Auth Error Limit' }
+    'label_memory'            = @{ zh = '記憶體保護上限（MB）'; en = 'Memory Limit (MB)' }
+    'label_strategy'          = @{ zh = '等待策略'; en = 'Wait Strategy' }
+    'strategy_exponential'    = @{ zh = '翻倍遞增'; en = 'Exponential' }
+    'strategy_linear'         = @{ zh = '等差遞增'; en = 'Linear' }
+    'strategy_fixed'          = @{ zh = '固定間隔'; en = 'Fixed Interval' }
+    'label_initial_delay'     = @{ zh = '首次等待（秒）'; en = 'Initial Wait (s)' }
+    'label_fixed_interval'    = @{ zh = '固定間隔（秒）'; en = 'Fixed Interval (s)' }
+    'label_max_delay'         = @{ zh = '最大等待（秒）'; en = 'Max Wait (s)' }
+    'label_increment'         = @{ zh = '每次增加（秒）'; en = 'Increment (s)' }
+    'wait_seq_prefix'         = @{ zh = '等待序列：'; en = 'Wait Sequence: ' }
+    'unit_second'             = @{ zh = ' 秒'; en = 's' }
+    'unit_minute'             = @{ zh = ' 分鐘'; en = 'm' }
+    'unit_hour'               = @{ zh = ' 小時'; en = 'h' }
+    'btn_save'                = @{ zh = '儲存設定'; en = 'Save Settings' }
+    'btn_close'               = @{ zh = '關閉'; en = 'Close' }
+    'busy_checking'           = @{ zh = '檢查中…'; en = 'Checking...' }
+    'busy_notice'             = @{ zh = '正在執行設定檢查，請稍候…'; en = 'Checking settings, please wait...' }
+    'save_saved'              = @{ zh = '設定已儲存，將在下一次掃描時生效。'; en = 'Settings saved; will take effect on next scan.' }
+    'save_checking_health'    = @{ zh = '正在執行共用後端健康檢查，Codex 仍保持原後端…'; en = 'Running shared backend health check; Codex remains on official backend...' }
+    'save_closing_shared'     = @{ zh = '正在關閉共用後端並恢復官方後端…'; en = 'Disabling shared backend and reverting to official backend...' }
+    'save_saving'             = @{ zh = '正在儲存設定…'; en = 'Saving settings...' }
+    'save_timeout'            = @{ zh = '設定檢查逾時，Codex 後端未切換，設定未儲存。'; en = 'Settings check timed out; Codex backend not changed, settings not saved.' }
+    'save_validation_failed'  = @{ zh = '設定驗證失敗'; en = 'Settings validation failed' }
+    'save_fail_reserved'      = @{ zh = '儲存失敗：埠 {0} 被 Windows 保留，共用後端未啟用。'; en = 'Save failed: Port {0} is reserved by Windows; shared backend not enabled.' }
+    'save_fail_conflict'      = @{ zh = '儲存失敗：埠 {0} 被其他程式佔用，共用後端未啟用。'; en = 'Save failed: Port {0} is in use; shared backend not enabled.' }
+    'save_fail_timeout'       = @{ zh = '儲存逾時：共用後端健康檢查未完成，Codex 仍使用原後端。'; en = 'Save timed out: Health check did not finish; Codex remains on official backend.' }
+    'save_fail_health'        = @{ zh = '儲存失敗：共用後端健康檢查未通過，Codex 仍使用原後端。'; en = 'Save failed: Health check did not pass; Codex remains on official backend.' }
+    'save_fail_close'         = @{ zh = '儲存失敗：共用後端未能關閉，設定未完成。'; en = 'Save failed: Shared backend could not be disabled.' }
+    'save_fail_range'         = @{ zh = '儲存失敗，請檢查設定範圍。'; en = 'Save failed: please verify settings range.' }
+    'msg_prompt_empty'        = @{ zh = '後備重試文字不能為空。'; en = 'Fallback retry prompt cannot be empty.' }
+    'msg_max_less_initial'    = @{ zh = '最大等待時間不能小於首次等待時間。'; en = 'Maximum wait time cannot be less than initial wait time.' }
+    'msg_action_failed'       = @{ zh = '操作沒有生效，任務狀態可能已經改變。'; en = 'Action did not take effect; task state may have changed.' }
+    'memory_guard_msg'        = @{ zh = '設定視窗私有記憶體已達到 {0} MB，超過上限 {1} MB。視窗將關閉，Codex 任務資料未被刪除。'; en = 'Settings window memory reached {0} MB, exceeding limit of {1} MB. Window will close; Codex task data is preserved.' }
+    'memory_guard_title'      = @{ zh = 'Codex Auto Retry 記憶體保護'; en = 'Codex Auto Retry Memory Guard' }
+    'layout_overlap_err'      = @{ zh = '設定版面發生遮擋：'; en = 'Layout overlap detected: ' }
+    'layout_bounds_err'       = @{ zh = '設定輸入框超出可見區域。'; en = 'Control bounds exceed visible area.' }
+    'config_read_err'         = @{ zh = '無法讀取自動重試設定。'; en = 'Cannot read auto-retry settings.' }
+}
+
+function T($Key) {
+    $item = $script:i18n[$Key]
+    if ($item) {
+        $val = $item[$script:currentLanguage]
+        if ($val) { return $val }
+    }
+    return $Key
+}
+
+function Stop-LocalCommandProcess {
+    param($Process)
+    if ($null -eq $Process) { return }
+    try {
+        if ($Process.HasExited) { return }
+    } catch { return }
+    try {
+        $killer = Start-Process -FilePath 'taskkill.exe' -ArgumentList @('/PID', [string]$Process.Id, '/T', '/F') -WindowStyle Hidden -Wait -PassThru
+        if ($killer) { $killer.Dispose() }
+    } catch { }
+    try {
+        if (-not $Process.HasExited) { $Process.Kill() }
+    } catch { }
+}
+
+function Start-LocalCommand {
+    param(
+        [string]$Mode,
+        [hashtable]$Environment,
+        [int]$TimeoutMilliseconds = $localCommandTimeoutMilliseconds
+    )
+    $script:localCommandTimedOut = $false
+    $info = [System.Diagnostics.ProcessStartInfo]::new()
+    $info.FileName = $Executable
+    $info.Arguments = $Mode
+    $info.UseShellExecute = $false
+    $info.CreateNoWindow = $true
+    $info.EnvironmentVariables['CODEX_AUTO_RETRY_DATA_DIR'] = $DataDir
+    foreach ($entry in $Environment.GetEnumerator()) {
+        $info.EnvironmentVariables[[string]$entry.Key] = [string]$entry.Value
+    }
+    $process = $null
+    try {
+        $process = [System.Diagnostics.Process]::Start($info)
+        $script:localCommandProcess = $process
+        $deadline = [DateTimeOffset]::UtcNow.AddMilliseconds($TimeoutMilliseconds)
+        while (-not $process.HasExited) {
+            [System.Windows.Forms.Application]::DoEvents()
+            Start-Sleep -Milliseconds 50
+            if ([DateTimeOffset]::UtcNow -ge $deadline) {
+                $script:localCommandTimedOut = $true
+                Stop-LocalCommandProcess $process
+                return -2
+            }
+        }
+        return $process.ExitCode
+    } catch {
+        return -1
+    } finally {
+        $script:localCommandProcess = $null
+        if ($process) { $process.Dispose() }
+    }
+}
+
+function Get-StartupApprovalStatus {
+    $key = $null
+    try {
+        $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey(
+            'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run',
+            $false
+        )
+        if ($null -eq $key) { return 'unknown' }
+        $bytes = $key.GetValue('CodexAutoRetry', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        if ($bytes -isnot [byte[]] -or $bytes.Length -lt 4 -or $bytes[1] -ne 0 -or $bytes[2] -ne 0 -or $bytes[3] -ne 0) { return 'unknown' }
+        if ($bytes[0] -eq 2) { return 'enabled' }
+        if ($bytes[0] -eq 3) { return 'disabled' }
+        return 'unknown'
+    } catch {
+        return 'unknown'
+    } finally {
+        if ($key) { $key.Close() }
+    }
+}
+
+function ConvertTo-ProcessArgument {
+    param([string]$Value)
+    if ($Value -notmatch '[\s"]') { return $Value }
+    return '"' + $Value.Replace('"', '\"') + '"'
+}
+
+function Start-SafeCodexLaunch {
+    if ($script:localCommandInProgress) { return }
+    $currentConfig = Read-JsonFile $configPath
+    if (-not (Get-SharedModeRequested $currentConfig)) {
+        $noticeLabel.Text = T 'safe_launch_disabled'
+        $noticeLabel.ForeColor = [System.Drawing.Color]::DarkOrange
+        return
+    }
+    if (-not (Test-Path -LiteralPath $safeLauncherPath -PathType Leaf)) {
+        $noticeLabel.Text = T 'safe_launch_missing'
+        $noticeLabel.ForeColor = [System.Drawing.Color]::Firebrick
+        return
+    }
+    $powershellPath = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    if (-not (Test-Path -LiteralPath $powershellPath -PathType Leaf)) { $powershellPath = 'powershell.exe' }
+    $arguments = @(
+        '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+        '-File', (ConvertTo-ProcessArgument $safeLauncherPath),
+        '-DataDir', (ConvertTo-ProcessArgument $DataDir),
+        '-WaitForExitSeconds', '120'
+    ) -join ' '
+    $script:localCommandInProgress = $true
+    $script:safeLaunchInProgress = $true
+    Set-SettingsBusy $true
+    $noticeLabel.Text = T 'safe_launch_running'
+    $noticeLabel.ForeColor = [System.Drawing.Color]::DarkOrange
+    try {
+        $script:localCommandProcess = Start-Process -FilePath $powershellPath -ArgumentList $arguments -WindowStyle Hidden -PassThru
+    } catch {
+        $script:localCommandProcess = $null
+        $script:safeLaunchInProgress = $false
+        $script:localCommandInProgress = $false
+        Set-SettingsBusy $false
+        $noticeLabel.Text = T 'safe_launch_failed'
+        $noticeLabel.ForeColor = [System.Drawing.Color]::Firebrick
+    }
+}
+
+function Complete-SafeCodexLaunch {
+    if (-not $script:safeLaunchInProgress -or -not $script:localCommandProcess) { return }
+    $process = $script:localCommandProcess
+    try {
+        if (-not $process.HasExited) { return }
+        $exitCode = $process.ExitCode
+    } catch {
+        $exitCode = 1
+    }
+    $process.Dispose()
+    $script:localCommandProcess = $null
+    $script:safeLaunchInProgress = $false
+    $script:localCommandInProgress = $false
+    Set-SettingsBusy $false
+    if ($exitCode -eq 0) {
+        $noticeLabel.Text = T 'safe_launch_done'
+        $noticeLabel.ForeColor = [System.Drawing.Color]::SeaGreen
+    } else {
+        $noticeLabel.Text = T 'safe_launch_failed'
+        $noticeLabel.ForeColor = [System.Drawing.Color]::Firebrick
+    }
+    Update-RuntimeView
+}
+
+function New-Label {
+    param([string]$Text, [int]$X, [int]$Y, [int]$Width, [int]$Height)
+    $label = [System.Windows.Forms.Label]::new()
+    $label.Text = $Text
+    $label.Location = [System.Drawing.Point]::new($X, $Y)
+    $label.Size = [System.Drawing.Size]::new($Width, $Height)
+    return $label
+}
+
+function New-NumberBox {
+    param([int]$X, [int]$Y, [int]$Minimum, [int]$Maximum, [int]$Value, [int]$Width = 100)
+    $box = [System.Windows.Forms.NumericUpDown]::new()
+    $box.Location = [System.Drawing.Point]::new($X, $Y)
+    $box.Size = [System.Drawing.Size]::new($Width, 24)
+    $box.Minimum = $Minimum
+    $box.Maximum = $Maximum
+    $box.Value = [Math]::Min($Maximum, [Math]::Max($Minimum, $Value))
+    return $box
+}
+
+$config = Read-JsonFile $configPath
+$control = Read-JsonFile $controlPath
+$runtimeStatus = Read-JsonFile $statusPath
+if (-not $config) {
+    [System.Windows.Forms.MessageBox]::Show((T 'config_read_err'), 'Codex Auto Retry', 'OK', 'Error') | Out-Null
+    exit 1
+}
+
+$form = [System.Windows.Forms.Form]::new()
+$form.Text = T 'form_title'
+$form.StartPosition = 'CenterScreen'
+$form.FormBorderStyle = 'FixedDialog'
+$form.MaximizeBox = $false
+$form.MinimizeBox = $false
+$form.ClientSize = [System.Drawing.Size]::new(620, 840)
+$form.Font = [System.Drawing.Font]::new('Microsoft YaHei UI', 9)
+$form.Icon = [System.Drawing.SystemIcons]::Application
+if ($SmokeTest) {
+    $form.Opacity = 0
+    $form.ShowInTaskbar = $false
+}
+
+$title = New-Label 'Codex Auto Retry' 22 18 280 30
+$title.Font = [System.Drawing.Font]::new('Microsoft YaHei UI', 15, [System.Drawing.FontStyle]::Bold)
+$form.Controls.Add($title)
+
+$versionText = ''
+if ($runtimeStatus -and $runtimeStatus.version) { $versionText = 'v' + [string]$runtimeStatus.version }
+$versionLabel = New-Label $versionText 415 22 80 22
+$versionLabel.TextAlign = 'MiddleRight'
+$versionLabel.ForeColor = [System.Drawing.Color]::DimGray
+$form.Controls.Add($versionLabel)
+
+$langButton = [System.Windows.Forms.Button]::new()
+$langButton.Location = [System.Drawing.Point]::new(505, 18)
+$langButton.Size = [System.Drawing.Size]::new(95, 26)
+$langButton.Text = T 'lang_button'
+$langButton.Font = [System.Drawing.Font]::new('Microsoft YaHei UI', 8.5)
+$langButton.FlatStyle = 'Standard'
+$langButton.Cursor = [System.Windows.Forms.Cursors]::Hand
+$form.Controls.Add($langButton)
+
+$statusGroup = [System.Windows.Forms.GroupBox]::new()
+$statusGroup.Text = T 'status_group'
+$statusGroup.Location = [System.Drawing.Point]::new(20, 58)
+$statusGroup.Size = [System.Drawing.Size]::new(580, 105)
+$form.Controls.Add($statusGroup)
+$serviceValue = New-Label (T 'status_loading') 18 25 180 24
+$serviceValue.Font = [System.Drawing.Font]::new('Microsoft YaHei UI', 10, [System.Drawing.FontStyle]::Bold)
+$queueValue = New-Label ([string]::Format((T 'queue_summary'), '--', '--', '--')) 204 25 195 24
+$nextValue = New-Label (T 'next_none') 404 25 165 24
+$scanValue = New-Label '' 18 62 535 22
+$scanValue.ForeColor = [System.Drawing.Color]::DimGray
+$statusGroup.Controls.AddRange(@($serviceValue, $queueValue, $nextValue, $scanValue))
+
+$queueGroup = [System.Windows.Forms.GroupBox]::new()
+$queueGroup.Text = T 'queue_group'
+$queueGroup.Location = [System.Drawing.Point]::new(20, 175)
+$queueGroup.Size = [System.Drawing.Size]::new(580, 190)
+$form.Controls.Add($queueGroup)
+$taskList = [System.Windows.Forms.ListView]::new()
+$taskList.Location = [System.Drawing.Point]::new(14, 25)
+$taskList.Size = [System.Drawing.Size]::new(550, 120)
+$taskList.View = 'Details'
+$taskList.FullRowSelect = $true
+$taskList.GridLines = $true
+$taskList.HideSelection = $false
+$taskList.ShowItemToolTips = $true
+$taskColumnWidths = @(160, 100, 60, 70, 70, 75)
+[void]$taskList.Columns.Add((T 'col_task'), $taskColumnWidths[0])
+[void]$taskList.Columns.Add((T 'col_status'), $taskColumnWidths[1])
+[void]$taskList.Columns.Add((T 'col_countdown'), $taskColumnWidths[2])
+[void]$taskList.Columns.Add((T 'col_recovery'), $taskColumnWidths[3])
+[void]$taskList.Columns.Add((T 'col_consecutive'), $taskColumnWidths[4])
+[void]$taskList.Columns.Add((T 'col_class'), $taskColumnWidths[5])
+$queueGroup.Controls.Add($taskList)
+$retryNowButton = [System.Windows.Forms.Button]::new()
+$retryNowButton.Text = T 'btn_retry_now'
+$retryNowButton.Location = [System.Drawing.Point]::new(284, 153)
+$retryNowButton.Size = [System.Drawing.Size]::new(86, 27)
+$cancelRetryButton = [System.Windows.Forms.Button]::new()
+$cancelRetryButton.Text = T 'btn_cancel_retry'
+$cancelRetryButton.Location = [System.Drawing.Point]::new(378, 153)
+$cancelRetryButton.Size = [System.Drawing.Size]::new(86, 27)
+$restartRetryButton = [System.Windows.Forms.Button]::new()
+$restartRetryButton.Text = T 'btn_restart_retry'
+$restartRetryButton.Location = [System.Drawing.Point]::new(472, 153)
+$restartRetryButton.Size = [System.Drawing.Size]::new(86, 27)
+$refreshButton = [System.Windows.Forms.Button]::new()
+$refreshButton.Text = T 'btn_refresh'
+$refreshButton.Location = [System.Drawing.Point]::new(14, 153)
+$refreshButton.Size = [System.Drawing.Size]::new(86, 27)
+$rescanButton = [System.Windows.Forms.Button]::new()
+$rescanButton.Text = T 'btn_rescan'
+$rescanButton.Location = [System.Drawing.Point]::new(106, 153)
+$rescanButton.Size = [System.Drawing.Size]::new(150, 27)
+$queueGroup.Controls.AddRange(@($refreshButton, $rescanButton, $retryNowButton, $cancelRetryButton, $restartRetryButton))
+
+$settingsGroup = [System.Windows.Forms.GroupBox]::new()
+$settingsGroup.Text = T 'settings_group'
+$settingsGroup.Location = [System.Drawing.Point]::new(20, 378)
+$settingsGroup.Size = [System.Drawing.Size]::new(580, 390)
+$form.Controls.Add($settingsGroup)
+
+$enabledCheck = [System.Windows.Forms.CheckBox]::new()
+$enabledCheck.Text = T 'check_enabled'
+$enabledCheck.Location = [System.Drawing.Point]::new(18, 25)
+$enabledCheck.Size = [System.Drawing.Size]::new(160, 24)
+$enabledCheck.Checked = -not [bool]$control.paused
+$sharedCheck = [System.Windows.Forms.CheckBox]::new()
+$sharedCheck.Text = T 'check_shared'
+$sharedCheck.Location = [System.Drawing.Point]::new(18, 52)
+$sharedCheck.Size = [System.Drawing.Size]::new(260, 24)
+$sharedCheck.Checked = Get-SharedModeRequested $config
+$sharedPortValue = New-Label ((T 'shared_port_prefix') + [int]$config.shared_app_server_port) 300 25 255 24
+$sharedPortValue.ForeColor = [System.Drawing.Color]::DimGray
+$safeLaunchButton = [System.Windows.Forms.Button]::new()
+$safeLaunchButton.Text = T 'btn_safe_launch'
+$safeLaunchButton.Location = [System.Drawing.Point]::new(300, 82)
+$safeLaunchButton.Size = [System.Drawing.Size]::new(255, 25)
+$safeLaunchButton.FlatStyle = 'Standard'
+$safeLaunchButton.Cursor = [System.Windows.Forms.Cursors]::Hand
+$notificationsCheck = [System.Windows.Forms.CheckBox]::new()
+$notificationsCheck.Text = T 'check_notifications'
+$notificationsCheck.Location = [System.Drawing.Point]::new(300, 52)
+$notificationsCheck.Size = [System.Drawing.Size]::new(255, 24)
+$notificationsCheck.Checked = [bool]$config.show_notifications
+$settingsGroup.Controls.AddRange(@($enabledCheck, $sharedCheck, $sharedPortValue, $safeLaunchButton, $notificationsCheck))
+
+$promptLabel = New-Label (T 'label_prompt') 18 85 180 22
+$settingsGroup.Controls.Add($promptLabel)
+$promptBox = [System.Windows.Forms.TextBox]::new()
+$promptBox.Location = [System.Drawing.Point]::new(18, 108)
+$promptBox.Size = [System.Drawing.Size]::new(540, 54)
+$promptBox.Multiline = $true
+$promptBox.MaxLength = 500
+$promptBox.ScrollBars = 'Vertical'
+$promptBox.Text = [string]$config.retry_prompt
+$settingsGroup.Controls.Add($promptBox)
+
+$recoveryLabel = New-Label (T 'label_recovery') 18 176 145 22
+$recoveryBox = New-NumberBox 168 173 1 1000 ([int]$config.max_recovery_attempts) 120
+$consecutiveLabel = New-Label (T 'label_consecutive') 310 176 128 22
+$consecutiveBox = New-NumberBox 438 173 1 100 ([int]$config.max_consecutive_retries) 120
+$authLabel = New-Label (T 'label_auth_limit') 310 302 128 22
+$authBox = New-NumberBox 438 299 1 1000 ([int]$config.auth_max_attempts) 120
+$memoryLabel = New-Label (T 'label_memory') 18 302 145 22
+$memoryBox = New-NumberBox 168 299 128 65536 ([int]$config.memory_limit_mb) 120
+$settingsGroup.Controls.AddRange(@($recoveryLabel, $recoveryBox, $consecutiveLabel, $consecutiveBox, $authLabel, $authBox, $memoryLabel, $memoryBox))
+
+$strategyLabel = New-Label (T 'label_strategy') 18 218 145 22
+$strategyBox = [System.Windows.Forms.ComboBox]::new()
+$strategyBox.Location = [System.Drawing.Point]::new(168, 215)
+$strategyBox.Size = [System.Drawing.Size]::new(120, 24)
+$strategyBox.DropDownStyle = 'DropDownList'
+[void]$strategyBox.Items.Add((T 'strategy_exponential'))
+[void]$strategyBox.Items.Add((T 'strategy_linear'))
+[void]$strategyBox.Items.Add((T 'strategy_fixed'))
+$strategyBox.SelectedIndex = switch ([string]$config.delay_strategy) {
+    'linear' { 1 }
+    'fixed' { 2 }
+    default { 0 }
+}
+
+function Test-SettingsMemoryLimit {
+    if ($script:memoryGuardTriggered) { return $true }
+    $limitMB = 1024
+    try {
+        if ($config.memory_limit_mb) { $limitMB = [int]$config.memory_limit_mb }
+        $process = Get-Process -Id $PID -ErrorAction Stop
+        $usageMB = [int][Math]::Ceiling($process.PrivateMemorySize64 / 1MB)
+        if ($limitMB -ge 128 -and $usageMB -ge $limitMB) {
+            $script:memoryGuardTriggered = $true
+            $logPath = Join-Path $DataDir 'logs\daemon.log'
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $logPath) | Out-Null
+            Add-Content -LiteralPath $logPath -Value ("{0} memory guard triggered component=settings pid={1} private_memory_mb={2} limit_mb={3}" -f ([DateTime]::UtcNow.ToString('o')), $PID, $usageMB, $limitMB)
+            [System.Windows.Forms.MessageBox]::Show(
+                ([string]::Format((T 'memory_guard_msg'), $usageMB, $limitMB)),
+                (T 'memory_guard_title'),
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Warning
+            ) | Out-Null
+            $form.Close()
+            return $true
+        }
+    }
+    catch { }
+    return $false
+}
+$initialDelayLabel = New-Label (T 'label_initial_delay') 310 218 118 22
+$initialDelayBox = New-NumberBox 438 215 1 3600 ([int]$config.initial_delay_seconds) 120
+$settingsGroup.Controls.AddRange(@($strategyLabel, $strategyBox, $initialDelayLabel, $initialDelayBox))
+
+$maxDelayLabel = New-Label (T 'label_max_delay') 18 260 145 22
+$maxDelayBox = New-NumberBox 168 257 1 86400 ([int]$config.max_delay_seconds) 120
+$incrementLabel = New-Label (T 'label_increment') 310 260 128 22
+$incrementBox = New-NumberBox 438 257 1 3600 ([int]$config.delay_increment_seconds) 120
+$previewLabel = New-Label '' 18 335 540 38
+$previewLabel.ForeColor = [System.Drawing.Color]::DimGray
+$settingsGroup.Controls.AddRange(@($maxDelayLabel, $maxDelayBox, $incrementLabel, $incrementBox, $previewLabel))
+
+function Assert-SettingsLayout {
+    foreach ($pair in @(
+        @($recoveryLabel, $recoveryBox, (T 'label_recovery')),
+        @($consecutiveLabel, $consecutiveBox, (T 'label_consecutive')),
+        @($authLabel, $authBox, (T 'label_auth_limit')),
+        @($memoryLabel, $memoryBox, (T 'label_memory')),
+        @($strategyLabel, $strategyBox, (T 'label_strategy')),
+        @($initialDelayLabel, $initialDelayBox, (T 'label_initial_delay')),
+        @($maxDelayLabel, $maxDelayBox, (T 'label_max_delay')),
+        @($incrementLabel, $incrementBox, (T 'label_increment'))
+    )) {
+        if ($pair[0].Right -gt $pair[1].Left) {
+            throw ((T 'layout_overlap_err') + [string]$pair[2])
+        }
+    }
+    foreach ($box in @($recoveryBox, $consecutiveBox, $authBox, $memoryBox, $strategyBox, $initialDelayBox, $maxDelayBox, $incrementBox)) {
+        if ($box.Left -lt 0 -or $box.Right -gt $settingsGroup.ClientSize.Width) {
+            throw (T 'layout_bounds_err')
+        }
+    }
+}
+Assert-SettingsLayout
+
+function Get-DelayStrategy {
+    switch ($strategyBox.SelectedIndex) {
+        1 { return 'linear' }
+        2 { return 'fixed' }
+        default { return 'exponential' }
+    }
+}
+
+function Format-PreviewDelay {
+    param([long]$Seconds)
+    if ($Seconds -lt 60) { return ([string]$Seconds + (T 'unit_second')) }
+    if ($Seconds % 3600 -eq 0) { return ([string]($Seconds / 3600) + (T 'unit_hour')) }
+    if ($Seconds % 60 -eq 0) { return ([string]($Seconds / 60) + (T 'unit_minute')) }
+    return ([string]$Seconds + (T 'unit_second'))
+}
+
+function Update-DelayPreview {
+    $strategy = Get-DelayStrategy
+    $initial = [long]$initialDelayBox.Value
+    $maximum = [long]$maxDelayBox.Value
+    $increment = [long]$incrementBox.Value
+    $count = [Math]::Min([int]$consecutiveBox.Value, 6)
+    $values = @()
+    $delay = $initial
+    for ($index = 0; $index -lt $count; $index++) {
+        $value = if ($strategy -eq 'fixed') { $initial } else { [Math]::Min($delay, $maximum) }
+        $values += (Format-PreviewDelay $value)
+        if ($strategy -eq 'exponential') { $delay = [Math]::Min($delay * 2, $maximum) }
+        if ($strategy -eq 'linear') { $delay = [Math]::Min($delay + $increment, $maximum) }
+    }
+    $sep = if ($script:currentLanguage -eq 'en') { ', ' } else { '，' }
+    $suffix = ''
+    if ([int]$consecutiveBox.Value -gt $count) {
+        $suffix = if ($script:currentLanguage -eq 'en') { ', ...' } else { '，…' }
+    }
+    $previewLabel.Text = (T 'wait_seq_prefix') + ($values -join $sep) + $suffix
+    $maxDelayBox.Enabled = $strategy -ne 'fixed'
+    $incrementBox.Enabled = $strategy -eq 'linear'
+    $initialDelayLabel.Text = if ($strategy -eq 'fixed') { T 'label_fixed_interval' } else { T 'label_initial_delay' }
+}
+
+Update-DelayPreview
+
+$noticeLabel = New-Label '' 22 782 375 28
+$noticeLabel.ForeColor = [System.Drawing.Color]::SeaGreen
+$form.Controls.Add($noticeLabel)
+$saveButton = [System.Windows.Forms.Button]::new()
+$saveButton.Text = T 'btn_save'
+$saveButton.Location = [System.Drawing.Point]::new(405, 782)
+$saveButton.Size = [System.Drawing.Size]::new(100, 30)
+$saveButton.BackColor = [System.Drawing.Color]::FromArgb(35, 39, 37)
+$saveButton.ForeColor = [System.Drawing.Color]::White
+$saveButton.FlatStyle = 'Flat'
+$closeButton = [System.Windows.Forms.Button]::new()
+$closeButton.Text = T 'btn_close'
+$closeButton.Location = [System.Drawing.Point]::new(515, 782)
+$closeButton.Size = [System.Drawing.Size]::new(85, 30)
+$form.Controls.AddRange(@($saveButton, $closeButton))
+$form.CancelButton = $closeButton
+
+$settingsInputControls = @(
+    $enabledCheck, $sharedCheck, $safeLaunchButton, $notificationsCheck, $promptBox,
+    $recoveryBox, $consecutiveBox, $strategyBox, $initialDelayBox,
+    $maxDelayBox, $incrementBox, $authBox, $memoryBox
+)
+
+function Set-SettingsBusy {
+    param([bool]$Busy)
+    $taskList.Enabled = -not $Busy
+    $retryNowButton.Enabled = -not $Busy
+    $cancelRetryButton.Enabled = -not $Busy
+    $rescanButton.Enabled = -not $Busy
+    $restartRetryButton.Enabled = -not $Busy
+    foreach ($control in $settingsInputControls) {
+        $control.Enabled = -not $Busy
+    }
+    $saveButton.Enabled = -not $Busy
+    $closeButton.Enabled = -not $Busy
+    if ($Busy) {
+        $saveButton.Text = T 'busy_checking'
+        $noticeLabel.Text = T 'busy_notice'
+        $noticeLabel.ForeColor = [System.Drawing.Color]::DarkOrange
+    } else {
+        $saveButton.Text = T 'btn_save'
+        Update-DelayPreview
+        Update-ActionButtons
+    }
+}
+
+function Get-StateText {
+    param([string]$State)
+    $lang = $script:currentLanguage
+    switch ($State) {
+        'pending'  { if ($lang -eq 'en') { return 'Pending' } else { return '等待中' } }
+        'starting' { if ($lang -eq 'en') { return 'Starting' } else { return '啟動中' } }
+        'running'  { if ($lang -eq 'en') { return 'Running' } else { return '執行中' } }
+        'stopped'  { if ($lang -eq 'en') { return 'Limit Reached' } else { return '達到上限' } }
+        default { return $State }
+    }
+}
+
+function Get-StoppedStateText {
+    param([string]$Reason)
+    $lang = $script:currentLanguage
+    if ($Reason -eq 'user_cancelled') {
+        if ($lang -eq 'en') { return 'Cancelled' } else { return '已取消' }
+    }
+    if ($Reason -eq 'interrupted_detected') {
+        if ($lang -eq 'en') { return 'Interrupted' } else { return '偵測到中斷' }
+    }
+    if ($Reason -eq 'auth_attempt_limit') {
+        if ($lang -eq 'en') { return 'Auth Limit' } else { return '登入異常專用上限' }
+    }
+    if ($Reason -eq 'codex_not_running') {
+        if ($lang -eq 'en') { return 'Codex Exited' } else { return 'Codex 已結束' }
+    }
+    if ($Reason -eq 'shared_app_server_disabled') {
+        if ($lang -eq 'en') { return 'Shared Backend Disabled' } else { return '共用後端已關閉' }
+    }
+    if ($Reason -eq 'codex_restart_required') {
+        if ($lang -eq 'en') { return 'Codex Not Connected' } else { return 'Codex 未接入共用後端' }
+    }
+    if ($Reason -eq 'codex_home_not_shared') {
+        if ($lang -eq 'en') { return 'Task Dir Not Shared' } else { return '任務目錄未接入' }
+    }
+    if ($Reason -eq 'shared_app_server_port_conflict') {
+        if ($lang -eq 'en') { return 'Port Conflict' } else { return '恢復埠衝突' }
+    }
+    if ($Reason -eq 'shared_app_server_port_reserved') {
+        if ($lang -eq 'en') { return 'Port Reserved by Windows' } else { return '埠被 Windows 保留' }
+    }
+    if ($Reason -eq 'shared_app_server_config_invalid') {
+        if ($lang -eq 'en') { return 'Config Incompatible; Reverted' } else { return '共用後端設定不相容，已切回官方後端' }
+    }
+    if ($Reason -like 'controller_*' -or $Reason -like 'codex_background_*' -or $Reason -eq 'app_server_request_failed') {
+        if ($lang -eq 'en') { return 'Recovery Channel Failed' } else { return '恢復通道失敗' }
+    }
+    if ($Reason -eq 'goal_empty_response_limit_block_failed') {
+        if ($lang -eq 'en') { return 'Goal Stop Failed' } else { return '目標停止失敗' }
+    }
+    if ($Reason -eq 'goal_empty_response_limit') {
+        if ($lang -eq 'en') { return 'Goal Stopped (Empty Replies)' } else { return '目標空回覆已停止' }
+    }
+    if ($lang -eq 'en') { return 'Limit Reached' } else { return '達到上限' }
+}
+
+function Get-ClassText {
+    param([string]$Class)
+    $lang = $script:currentLanguage
+    switch ($Class) {
+        'transient'      { if ($lang -eq 'en') { return 'Connection Dropped' } else { return '連線中斷' } }
+        'rate_limit'     { if ($lang -eq 'en') { return 'Rate Limited' } else { return '請求限流' } }
+        'server'         { if ($lang -eq 'en') { return 'Provider Failure' } else { return '供應商故障' } }
+        'auth_transient' { if ($lang -eq 'en') { return 'Auth Service Error' } else { return '登入服務異常' } }
+        'auth_limited'   { if ($lang -eq 'en') { return 'Auth Error' } else { return '登入異常' } }
+        'empty_response' { if ($lang -eq 'en') { return 'Empty Model Reply' } else { return '模型空回覆' } }
+        'unknown'        { if ($lang -eq 'en') { return 'Unknown Fault' } else { return '未知故障' } }
+        default          { if ($lang -eq 'en') { return 'Unclassified' } else { return '未分類' } }
+    }
+}
+
+$stoppedRetryDisplayWindow = [TimeSpan]::FromHours(1)
+# Cancelled and rediscovered tasks wait for the user, so they stay longer.
+$manualStopDisplayWindow = [TimeSpan]::FromHours(24)
+
+function Test-StoppedRetryVisible {
+    param($Stopped)
+    if (-not $Stopped -or [bool]$Stopped.historical) { return $false }
+    $now = [DateTimeOffset]::UtcNow
+    $window = if ([string]$Stopped.reason -in @('user_cancelled', 'interrupted_detected')) { $manualStopDisplayWindow } else { $stoppedRetryDisplayWindow }
+    foreach ($timestamp in @([string]$Stopped.failed_at, [string]$Stopped.stopped_at)) {
+        if ([string]::IsNullOrWhiteSpace($timestamp)) { continue }
+        try {
+            $age = $now - [DateTimeOffset]::Parse($timestamp)
+            if ($age -ge [TimeSpan]::Zero -and $age -gt $window) { return $false }
+        } catch { }
+    }
+    return $true
+}
+
+# Codex keeps one line per task in session_index.jsonl: id, thread_name and
+# updated_at. Only the title is read; nothing is stored or logged.
+$script:titleCache = @{}
+
+function Get-CodexThreadTitles {
+    param([string[]]$CodexHomes, [string[]]$ThreadIDs)
+    $titles = @{}
+    $wanted = @($ThreadIDs | Where-Object { $_ } | ForEach-Object { $_.ToLowerInvariant() } | Select-Object -Unique)
+    if ($wanted.Count -eq 0) { return $titles }
+    foreach ($codexHome in ($CodexHomes | Where-Object { $_ } | Select-Object -Unique)) {
+        $indexPath = Join-Path $codexHome 'session_index.jsonl'
+        $info = Get-Item -LiteralPath $indexPath -ErrorAction SilentlyContinue
+        if (-not $info -or $info.Length -gt 16MB) { continue }
+        $cacheKey = $info.FullName.ToLowerInvariant()
+        $cached = $script:titleCache[$cacheKey]
+        if (-not $cached -or $cached.Stamp -ne $info.LastWriteTimeUtc.Ticks -or $cached.Length -ne $info.Length) {
+            $cached = [pscustomobject]@{ Stamp = $info.LastWriteTimeUtc.Ticks; Length = $info.Length; Titles = @{}; Checked = @{} }
+            $script:titleCache[$cacheKey] = $cached
+        }
+        # Find the last line for each task shown in the queue (later lines are
+        # renames) with a native search, parse only those lines, and remember
+        # looked-up ids until the file changes.
+        $needed = @($wanted | Where-Object { -not $cached.Checked.ContainsKey($_) })
+        if ($needed.Count -gt 0) {
+            $completed = $false
+            $stream = $null
+            $reader = $null
+            try {
+                $share = [System.IO.FileShare]([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete)
+                $stream = [System.IO.FileStream]::new($info.FullName, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, $share)
+                $reader = [System.IO.StreamReader]::new($stream, [System.Text.UTF8Encoding]::new($false), $true)
+                $text = $reader.ReadToEnd()
+                foreach ($id in $needed) {
+                    $position = $text.LastIndexOf('"' + $id + '"', [System.StringComparison]::OrdinalIgnoreCase)
+                    if ($position -lt 0) { continue }
+                    $lineStart = $text.LastIndexOf([char]10, $position) + 1
+                    $lineEnd = $text.IndexOf([char]10, $position)
+                    if ($lineEnd -lt 0) { $lineEnd = $text.Length }
+                    try { $entry = $text.Substring($lineStart, $lineEnd - $lineStart) | ConvertFrom-Json } catch { continue }
+                    $name = ([string]$entry.thread_name) -replace '\s+', ' '
+                    if (([string]$entry.id).ToLowerInvariant() -eq $id -and $name.Trim()) { $cached.Titles[$id] = $name.Trim() }
+                }
+                $completed = $true
+            } catch {
+            } finally {
+                if ($reader) { $reader.Dispose() }
+                if ($stream) { $stream.Dispose() }
+            }
+            # A failed read (for example a sharing violation) is retried next time.
+            if ($completed) { foreach ($id in $needed) { $cached.Checked[$id] = $true } }
+        }
+        foreach ($id in $wanted) { if ($cached.Titles.ContainsKey($id) -and -not $titles.ContainsKey($id)) { $titles[$id] = $cached.Titles[$id] } }
+    }
+    return $titles
+}
+
+function Update-ActionButtons {
+    $retryNowButton.Enabled = $false
+    $cancelRetryButton.Enabled = $false
+    $restartRetryButton.Enabled = $false
+    if ($script:localCommandInProgress) { return }
+    if ($taskList.SelectedItems.Count -eq 0) { return }
+    $stateName = [string]$taskList.SelectedItems[0].Tag.State
+    $retryNowButton.Enabled = $stateName -eq 'pending'
+    $cancelRetryButton.Enabled = $stateName -eq 'pending'
+    $restartRetryButton.Enabled = $stateName -eq 'stopped'
+}
+
+function Update-RuntimeView {
+    $status = Read-JsonFile $statusPath
+    $state = Read-JsonFile $statePath
+    $currentControl = Read-JsonFile $controlPath
+    $currentConfig = Read-JsonFile $configPath
+    if ($currentConfig -and [int]$currentConfig.shared_app_server_port -gt 0) {
+        $sharedPortValue.Text = (T 'shared_port_prefix') + [int]$currentConfig.shared_app_server_port
+    }
+    $running = $false
+    if ($status -and [bool]$status.running -and [int]$status.pid -gt 0) {
+        try {
+            $process = Get-Process -Id ([int]$status.pid) -ErrorAction Stop
+            $running = [string]::Equals($process.Path, $Executable, [System.StringComparison]::OrdinalIgnoreCase)
+        } catch { $running = $false }
+    }
+    $paused = if ($currentControl) { [bool]$currentControl.paused } else { $false }
+    if (-not $running) {
+        $serviceValue.Text = T 'status_not_running'
+        $serviceValue.ForeColor = [System.Drawing.Color]::Firebrick
+    } elseif ([string]$status.controller_state -eq 'codex_restart_required') {
+        $serviceValue.Text = T 'status_disconnected'
+        $serviceValue.ForeColor = [System.Drawing.Color]::DarkOrange
+    } elseif ([string]$status.controller_state -eq 'codex_not_running') {
+        $serviceValue.Text = T 'status_exited'
+        $serviceValue.ForeColor = [System.Drawing.Color]::Firebrick
+    } elseif ([string]$status.controller_state -eq 'shared_app_server_disabled') {
+        $serviceValue.Text = if (Get-SharedModeRequested (Read-JsonFile $configPath)) { T 'status_shared_temp_unavail' } else { T 'status_shared_disabled' }
+        $serviceValue.ForeColor = [System.Drawing.Color]::DarkOrange
+    } elseif ([string]$status.controller_state -eq 'shared_app_server_port_reserved') {
+        $serviceValue.Text = T 'status_port_reserved'
+        $serviceValue.ForeColor = [System.Drawing.Color]::Firebrick
+    } elseif ([string]$status.controller_state -eq 'shared_app_server_port_conflict') {
+        $serviceValue.Text = T 'status_port_conflict'
+        $serviceValue.ForeColor = [System.Drawing.Color]::DarkOrange
+    } elseif ([string]$status.controller_state -eq 'shared_app_server_migration_deferred') {
+        $serviceValue.Text = T 'status_migration_deferred'
+        $serviceValue.ForeColor = [System.Drawing.Color]::DarkOrange
+    } elseif ([string]$status.controller_state -eq 'shared_app_server_config_invalid') {
+        $serviceValue.Text = T 'status_config_invalid'
+        $serviceValue.ForeColor = [System.Drawing.Color]::Firebrick
+    } elseif ($paused) {
+        $serviceValue.Text = T 'status_paused'
+        $serviceValue.ForeColor = [System.Drawing.Color]::DarkOrange
+    } else {
+        $serviceValue.Text = T 'status_running'
+        $serviceValue.ForeColor = [System.Drawing.Color]::SeaGreen
+    }
+
+    $selectedID = if ($taskList.SelectedItems.Count -gt 0) { [string]$taskList.SelectedItems[0].Tag.ThreadID } else { '' }
+    $taskList.BeginUpdate()
+    $taskList.Items.Clear()
+    $pendingCount = 0
+    $activeCount = 0
+    $stoppedCount = 0
+    $nextSeconds = $null
+    $titleHomes = @((Join-Path $env:USERPROFILE '.codex'))
+    if ($state -and $state.threads) {
+        foreach ($property in $state.threads.PSObject.Properties) {
+            foreach ($part in @($property.Value.pending, $property.Value.awaiting, $property.Value.stopped)) {
+                if ($part -and $part.codex_home) { $titleHomes += [string]$part.codex_home }
+            }
+        }
+    }
+    $shownIDs = @()
+    if ($state -and $state.threads) {
+        foreach ($property in $state.threads.PSObject.Properties) {
+            $candidate = $property.Value
+            if ((($candidate.pending -or $candidate.awaiting) -and $running) -or
+                (-not $candidate.pending -and -not $candidate.awaiting -and $candidate.stopped -and (Test-StoppedRetryVisible $candidate.stopped))) {
+                $shownIDs += [string]$property.Name
+            }
+        }
+    }
+    $threadTitles = Get-CodexThreadTitles $titleHomes $shownIDs
+    if ($state -and $state.threads) {
+        foreach ($property in $state.threads.PSObject.Properties) {
+            $threadID = [string]$property.Name
+            $thread = $property.Value
+            $rowState = ''
+            $failureClass = ''
+            $attempt = 0
+            $maximum = 0
+            $consecutive = 0
+            $maxConsecutive = 0
+            $seconds = $null
+            $stopReason = ''
+            if (-not $running -and ($thread.pending -or $thread.awaiting)) { continue }
+            if ($thread.pending) {
+                $rowState = 'pending'
+                $pendingCount++
+                $failureClass = [string]$thread.pending.class
+                $attempt = [int]$thread.pending.attempt
+                $maximum = [int]$thread.pending.max_attempts
+                $consecutive = [int]$thread.pending.consecutive_retry
+                $maxConsecutive = [int]$thread.pending.max_consecutive_retries
+                try {
+                    $dueAt = [DateTimeOffset]::Parse([string]$thread.pending.due_at)
+                    $seconds = [Math]::Max(0, [Math]::Ceiling(($dueAt - [DateTimeOffset]::UtcNow).TotalSeconds))
+                    if ($null -eq $nextSeconds -or $seconds -lt $nextSeconds) { $nextSeconds = $seconds }
+                } catch { $seconds = 0 }
+            } elseif ($thread.awaiting) {
+                $rowState = if ([string]$thread.awaiting.retry_turn_id) { 'running' } else { 'starting' }
+                $activeCount++
+                $failureClass = [string]$thread.awaiting.class
+                $attempt = [int]$thread.awaiting.attempt
+                $maximum = [int]$thread.awaiting.max_attempts
+                $consecutive = [int]$thread.awaiting.consecutive_retry
+                $maxConsecutive = [int]$thread.awaiting.max_consecutive_retries
+            } elseif ($thread.stopped) {
+                if (-not (Test-StoppedRetryVisible $thread.stopped)) { continue }
+                $rowState = 'stopped'
+                $stoppedCount++
+                $failureClass = [string]$thread.stopped.class
+                $attempt = [int]$thread.stopped.attempts
+                $maximum = [int]$thread.stopped.max_attempts
+                $consecutive = [int]$thread.stopped.consecutive_retries
+                $maxConsecutive = [int]$thread.stopped.max_consecutive_retries
+                $stopReason = [string]$thread.stopped.reason
+            } else { continue }
+            $shortID = if ($threadID.Length -gt 8) { $threadID.Substring(0, 8) } else { $threadID }
+            $taskTitle = $threadTitles[$threadID.ToLowerInvariant()]
+            $taskLabel = if ($taskTitle) { $taskTitle } else { $shortID }
+            $countdown = if ($null -ne $seconds) { ([int]$seconds).ToString() + (T 'unit_second') } else { '--' }
+            $recoveryText = if ($maximum -gt 0) { "$attempt/$maximum" } else { [string]$attempt }
+            $consecutiveText = if ($maxConsecutive -gt 0) { "$consecutive/$maxConsecutive" } else { [string]$consecutive }
+            $item = [System.Windows.Forms.ListViewItem]::new($taskLabel)
+            $item.ToolTipText = if ($taskTitle) { "$taskTitle`n$threadID" } else { $threadID }
+            $stateText = if ($rowState -eq 'stopped') { Get-StoppedStateText $stopReason } else { Get-StateText $rowState }
+            [void]$item.SubItems.Add($stateText)
+            [void]$item.SubItems.Add($countdown)
+            [void]$item.SubItems.Add($recoveryText)
+            [void]$item.SubItems.Add($consecutiveText)
+            [void]$item.SubItems.Add((Get-ClassText $failureClass))
+            $item.Tag = [pscustomobject]@{ ThreadID = $threadID; State = $rowState }
+            [void]$taskList.Items.Add($item)
+            if ($threadID -eq $selectedID) { $item.Selected = $true }
+        }
+    }
+    $taskList.EndUpdate()
+    $queueValue.Text = [string]::Format((T 'queue_summary'), $pendingCount, $activeCount, $stoppedCount)
+    if (-not $running) {
+        $nextValue.Text = T 'next_waiting_service'
+    } elseif ($paused -and $pendingCount -gt 0) {
+        $nextValue.Text = T 'next_waiting_resume'
+    } elseif ($null -ne $nextSeconds) {
+        $nextValue.Text = [string]::Format((T 'next_seconds'), [int]$nextSeconds)
+    } elseif ($activeCount -gt 0) {
+        $nextValue.Text = T 'next_running'
+    } else {
+        $nextValue.Text = T 'next_none'
+    }
+    if ($status -and $status.last_scan_at) {
+        try { $scanValue.Text = (T 'last_scan') + ([DateTimeOffset]::Parse([string]$status.last_scan_at).ToLocalTime().ToString('HH:mm:ss')) } catch { $scanValue.Text = '' }
+    } else { $scanValue.Text = '' }
+    if ($status -and [string]$status.controller_state -eq 'codex_restart_required') {
+        if ($scanValue.Text) { $scanValue.Text += '  ·  ' }
+        $scanValue.Text += T 'status_disconnected_hint'
+    }
+    $startupApproval = Get-StartupApprovalStatus
+    if ($scanValue.Text) { $scanValue.Text += '  ·  ' }
+    $scanValue.Text += switch ($startupApproval) {
+        'enabled' { T 'startup_approval_enabled'; break }
+        'disabled' { T 'startup_approval_disabled'; break }
+        default { T 'startup_approval_unknown' }
+    }
+    $sharedRequested = Get-SharedModeRequested $currentConfig
+    $needsSafeLaunch = $status -and [string]$status.controller_state -in @('codex_restart_required', 'codex_not_running', 'codex_app_not_ready')
+    $safeLaunchButton.Enabled = -not $script:localCommandInProgress -and $sharedRequested -and $needsSafeLaunch
+    Update-ActionButtons
+}
+
+function Invoke-TaskAction {
+    param([string]$Action)
+    if ($taskList.SelectedItems.Count -eq 0) { return }
+    $threadID = [string]$taskList.SelectedItems[0].Tag.ThreadID
+    $exitCode = Start-LocalCommand 'control' @{
+        CODEX_AUTO_RETRY_ACTION = $Action
+        CODEX_AUTO_RETRY_THREAD_ID = $threadID
+    }
+    if ($exitCode -ne 0) {
+        [System.Windows.Forms.MessageBox]::Show((T 'msg_action_failed'), 'Codex Auto Retry', 'OK', 'Warning') | Out-Null
+    }
+    Start-Sleep -Milliseconds 250
+    Update-RuntimeView
+}
+
+function Apply-Language {
+    $form.Text = T 'form_title'
+    $langButton.Text = T 'lang_button'
+    $statusGroup.Text = T 'status_group'
+    $queueGroup.Text = T 'queue_group'
+    foreach ($column in 0..5) { $taskList.Columns[$column].Width = $taskColumnWidths[$column] }
+    $taskList.Columns[0].Text = T 'col_task'
+    $taskList.Columns[1].Text = T 'col_status'
+    $taskList.Columns[2].Text = T 'col_countdown'
+    $taskList.Columns[3].Text = T 'col_recovery'
+    $taskList.Columns[4].Text = T 'col_consecutive'
+    $taskList.Columns[5].Text = T 'col_class'
+    $refreshButton.Text = T 'btn_refresh'
+    $rescanButton.Text = T 'btn_rescan'
+    $retryNowButton.Text = T 'btn_retry_now'
+    $cancelRetryButton.Text = T 'btn_cancel_retry'
+    $restartRetryButton.Text = T 'btn_restart_retry'
+    $settingsGroup.Text = T 'settings_group'
+    $enabledCheck.Text = T 'check_enabled'
+    $sharedCheck.Text = T 'check_shared'
+    $safeLaunchButton.Text = T 'btn_safe_launch'
+    $notificationsCheck.Text = T 'check_notifications'
+    $promptLabel.Text = T 'label_prompt'
+    $recoveryLabel.Text = T 'label_recovery'
+    $consecutiveLabel.Text = T 'label_consecutive'
+    $authLabel.Text = T 'label_auth_limit'
+    $strategyLabel.Text = T 'label_strategy'
+    $maxDelayLabel.Text = T 'label_max_delay'
+    $incrementLabel.Text = T 'label_increment'
+    $memoryLabel.Text = T 'label_memory'
+    $saveButton.Text = if ($script:localCommandInProgress) { T 'busy_checking' } else { T 'btn_save' }
+    $closeButton.Text = T 'btn_close'
+
+    $prevStrategyIndex = $strategyBox.SelectedIndex
+    $strategyBox.Items.Clear()
+    [void]$strategyBox.Items.Add((T 'strategy_exponential'))
+    [void]$strategyBox.Items.Add((T 'strategy_linear'))
+    [void]$strategyBox.Items.Add((T 'strategy_fixed'))
+    $strategyBox.SelectedIndex = if ($prevStrategyIndex -ge 0 -and $prevStrategyIndex -le 2) { $prevStrategyIndex } else { 0 }
+
+    Update-DelayPreview
+    Update-RuntimeView
+}
+
+$langButton.add_Click({
+    $script:currentLanguage = if ($script:currentLanguage -eq 'zh') { 'en' } else { 'zh' }
+    try {
+        $langConfig = [ordered]@{ language = $script:currentLanguage }
+        [System.IO.File]::WriteAllText($uiLangPath, ($langConfig | ConvertTo-Json), [System.Text.UTF8Encoding]::new($false))
+    } catch { }
+    Apply-Language
+})
+
+$taskList.add_SelectedIndexChanged({ Update-ActionButtons })
+$retryNowButton.add_Click({ Invoke-TaskAction 'retry_now' })
+$cancelRetryButton.add_Click({ Invoke-TaskAction 'cancel_retry' })
+$restartRetryButton.add_Click({ Invoke-TaskAction 'restart_retry' })
+$refreshButton.add_Click({ Update-RuntimeView })
+$rescanButton.add_Click({
+    $exitCode = Start-LocalCommand 'control' @{ CODEX_AUTO_RETRY_ACTION = 'rescan_interrupted'; CODEX_AUTO_RETRY_THREAD_ID = '' }
+    if ($exitCode -eq 0) {
+        $noticeLabel.Text = T 'rescan_requested'
+        $noticeLabel.ForeColor = [System.Drawing.Color]::SeaGreen
+    } else {
+        $noticeLabel.Text = T 'rescan_failed'
+        $noticeLabel.ForeColor = [System.Drawing.Color]::Firebrick
+    }
+    Update-RuntimeView
+})
+$safeLaunchButton.add_Click({ Start-SafeCodexLaunch })
+$strategyBox.add_SelectedIndexChanged({ Update-DelayPreview })
+$initialDelayBox.add_ValueChanged({ Update-DelayPreview })
+$maxDelayBox.add_ValueChanged({ Update-DelayPreview })
+$incrementBox.add_ValueChanged({ Update-DelayPreview })
+$consecutiveBox.add_ValueChanged({ Update-DelayPreview })
+$closeButton.add_Click({ $form.Close() })
+$saveButton.add_Click({
+    if ($script:localCommandInProgress) { return }
+    $prompt = $promptBox.Text.Trim()
+    if (-not $prompt) {
+        [System.Windows.Forms.MessageBox]::Show((T 'msg_prompt_empty'), 'Codex Auto Retry', 'OK', 'Warning') | Out-Null
+        return
+    }
+    $delayStrategy = Get-DelayStrategy
+    if ($delayStrategy -ne 'fixed' -and [int]$maxDelayBox.Value -lt [int]$initialDelayBox.Value) {
+        [System.Windows.Forms.MessageBox]::Show((T 'msg_max_less_initial'), 'Codex Auto Retry', 'OK', 'Warning') | Out-Null
+        return
+    }
+    $payload = [ordered]@{
+        retry_prompt = $prompt
+        max_recovery_attempts = [int]$recoveryBox.Value
+        max_consecutive_retries = [int]$consecutiveBox.Value
+        auth_max_attempts = [int]$authBox.Value
+        initial_delay_seconds = [int]$initialDelayBox.Value
+        max_delay_seconds = [int]$maxDelayBox.Value
+        delay_increment_seconds = [int]$incrementBox.Value
+        memory_limit_mb = [int]$memoryBox.Value
+        delay_strategy = $delayStrategy
+        show_notifications = [bool]$notificationsCheck.Checked
+        paused = -not [bool]$enabledCheck.Checked
+        shared_app_server_enabled = [bool]$sharedCheck.Checked
+    }
+    $currentConfig = Read-JsonFile $configPath
+    $storedSharedEnabled = if ($currentConfig) { Get-SharedModeRequested $currentConfig } else { Get-SharedModeRequested $config }
+    $storedSharedPort = if ($currentConfig) { [int]$currentConfig.shared_app_server_port } else { [int]$config.shared_app_server_port }
+    $sharedModeChanged = [bool]$sharedCheck.Checked -ne $storedSharedEnabled
+    $sharedModeEnabling = [bool]$sharedCheck.Checked -and -not $storedSharedEnabled
+    $requestPath = Join-Path $DataDir ('settings-request-' + [guid]::NewGuid().ToString('N') + '.json')
+    $script:localCommandInProgress = $true
+    Set-SettingsBusy $true
+    if ($sharedModeEnabling) {
+        $noticeLabel.Text = T 'save_checking_health'
+    } elseif ($sharedModeChanged) {
+        $noticeLabel.Text = T 'save_closing_shared'
+    } else {
+        $noticeLabel.Text = T 'save_saving'
+    }
+    try {
+        [System.IO.File]::WriteAllText($requestPath, ($payload | ConvertTo-Json -Depth 4), [System.Text.UTF8Encoding]::new($false))
+        $exitCode = Start-LocalCommand 'save-settings' @{
+            CODEX_AUTO_RETRY_SETTINGS_FILE = $requestPath
+        }
+        if ($exitCode -eq -2) {
+            throw (T 'save_timeout')
+        }
+        if ($exitCode -ne 0) { throw (T 'save_validation_failed') }
+        $noticeLabel.Text = T 'save_saved'
+        $noticeLabel.ForeColor = [System.Drawing.Color]::SeaGreen
+        Update-RuntimeView
+    } catch {
+        if ($sharedModeChanged) {
+            $latestConfig = Read-JsonFile $configPath
+            if ($latestConfig) {
+                $sharedCheck.Checked = Get-SharedModeRequested $latestConfig
+            } else {
+                $sharedCheck.Checked = $storedSharedEnabled
+            }
+        }
+        if ($sharedModeEnabling -and $exitCode -eq $localCommandExitPortReserved) {
+            $noticeLabel.Text = [string]::Format((T 'save_fail_reserved'), $storedSharedPort)
+        } elseif ($sharedModeEnabling -and $exitCode -eq $localCommandExitPortConflict) {
+            $noticeLabel.Text = [string]::Format((T 'save_fail_conflict'), $storedSharedPort)
+        } elseif ($script:localCommandTimedOut) {
+            $noticeLabel.Text = T 'save_fail_timeout'
+        } elseif ($sharedModeEnabling) {
+            $noticeLabel.Text = T 'save_fail_health'
+        } elseif ($sharedModeChanged) {
+            $noticeLabel.Text = T 'save_fail_close'
+        } else {
+            $noticeLabel.Text = T 'save_fail_range'
+        }
+        $noticeLabel.ForeColor = [System.Drawing.Color]::Firebrick
+    } finally {
+        Remove-Item -LiteralPath $requestPath -Force -ErrorAction SilentlyContinue
+        $script:localCommandInProgress = $false
+        Set-SettingsBusy $false
+    }
+})
+
+$form.add_FormClosing({
+    if ($script:localCommandProcess) {
+        Stop-LocalCommandProcess $script:localCommandProcess
+    }
+})
+
+$timer = [System.Windows.Forms.Timer]::new()
+$timer.Interval = if ($SmokeTest) { 100 } else { 1000 }
+$smokeDeadline = [DateTimeOffset]::UtcNow.AddSeconds(15)
+$timer.add_Tick({
+    if (Test-SettingsMemoryLimit) { return }
+    Complete-SafeCodexLaunch
+    if ($SmokeTest) {
+        Update-RuntimeView
+        if ((Test-Path -LiteralPath $smokeClosePath) -or [DateTimeOffset]::UtcNow -ge $smokeDeadline) {
+            $form.Close()
+        }
+        return
+    }
+    Update-RuntimeView
+})
+$form.add_Shown({
+    Apply-Language
+    Update-RuntimeView
+    if ($SmokeTest) {
+        [System.IO.File]::WriteAllText(
+            (Join-Path $DataDir 'settings-smoke.ok'),
+            'passed',
+            [System.Text.UTF8Encoding]::new($false)
+        )
+        [System.IO.File]::WriteAllText(
+            (Join-Path $DataDir 'settings-layout-smoke.ok'),
+            'separated',
+            [System.Text.UTF8Encoding]::new($false)
+        )
+    }
+    $timer.Start()
+})
+$form.add_FormClosed({ $timer.Stop(); $timer.Dispose() })
+[void]$form.ShowDialog()

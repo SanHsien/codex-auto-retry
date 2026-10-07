@@ -1,0 +1,185 @@
+﻿[CmdletBinding()]
+param(
+    [switch]$KeepData,
+    [string]$RunName = 'CodexAutoRetry'
+)
+
+$ErrorActionPreference = 'Stop'
+$installDir = Join-Path $env:LOCALAPPDATA 'CodexAutoRetry'
+$watchdogTarget = Join-Path $installDir 'codex-auto-retry.exe'
+$mcpTarget = Join-Path $installDir 'codex-auto-retry-mcp.exe'
+$settingsTarget = Join-Path $installDir 'settings.ps1'
+$stopSignal = Join-Path $installDir 'stop.signal'
+$supervisorStop = Join-Path $installDir 'supervisor.stop'
+$runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+. (Join-Path $PSScriptRoot 'environment.ps1')
+. (Join-Path $PSScriptRoot 'path-safety.ps1')
+. (Join-Path $PSScriptRoot 'startup-approval.ps1')
+
+if (Test-Path -LiteralPath $installDir -PathType Container) {
+    [void](Assert-CodexAutoRetryHostPath -Path $installDir)
+}
+
+function Test-OwnedStartupValue {
+    param([AllowNull()][string]$Value)
+    if ([string]::IsNullOrWhiteSpace($Value)) { return $false }
+    $trimmed = $Value.Trim()
+    if ($trimmed.StartsWith('"')) {
+        $closingQuote = $trimmed.IndexOf('"', 1)
+        if ($closingQuote -le 1) { return $false }
+        $executable = $trimmed.Substring(1, $closingQuote - 1)
+    }
+    else {
+        $executable = ($trimmed -split '[\s\t]', 2)[0]
+    }
+    return [string]::Equals($executable, $watchdogTarget, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+$runProperty = Get-ItemProperty -Path $runKey -Name $runName -ErrorAction SilentlyContinue
+$runValue = if ($null -eq $runProperty) { '' } else { [string]$runProperty.$runName }
+if (-not [string]::IsNullOrWhiteSpace($runValue) -and -not (Test-OwnedStartupValue $runValue)) {
+    throw '目前使用者的開機啟動項目屬於其他程式，沒有移除。 / The current-user startup entry belongs to another command and was not removed.'
+}
+$stateEndpoint = $null
+$statePath = Join-Path $installDir 'shared-server.json'
+if (Test-Path -LiteralPath $statePath -PathType Leaf) {
+    try {
+        $state = Get-Content -Raw -Encoding UTF8 -LiteralPath $statePath | ConvertFrom-Json
+        if ([string]$state.owner -eq 'codex-auto-retry' -and [string]$state.endpoint -match '^ws://127\.0\.0\.1:\d+$') {
+            $stateEndpoint = [string]$state.endpoint
+        }
+    } catch { }
+}
+$legacyOwnedEndpoint = @()
+if ($stateEndpoint) { $legacyOwnedEndpoint += $stateEndpoint }
+if (-not $legacyOwnedEndpoint -and $runValue.IndexOf((Join-Path $installDir 'codex-auto-retry.exe'), [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+    $legacyPort = Get-CodexAutoRetrySharedAppServerPort -ConfigPath (Join-Path $installDir 'config.json')
+    $legacyOwnedEndpoint += 'ws://127.0.0.1:' + $legacyPort
+    $legacyOwnedEndpoint += 'ws://127.0.0.1:49621', 'ws://127.0.0.1:49321'
+}
+
+# Persist fail-open before tearing down the route. This also protects a later
+# startup if the uninstaller is interrupted after stopping the worker.
+$sharedModeDisabled = Disable-CodexAutoRetrySharedMode -DataDir $installDir
+
+if (Test-Path -LiteralPath $installDir) {
+    New-Item -ItemType File -Force -Path $supervisorStop | Out-Null
+    New-Item -ItemType File -Force -Path $stopSignal | Out-Null
+}
+$deadline = (Get-Date).AddSeconds(12)
+do {
+    $process = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object { $_.ExecutablePath -and [string]::Equals($_.ExecutablePath, $watchdogTarget, [System.StringComparison]::OrdinalIgnoreCase) }
+    if ($process) { Start-Sleep -Milliseconds 250 }
+} while ($process -and (Get-Date) -lt $deadline)
+if ($process) {
+    $process | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+}
+$mcpProcesses = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+    Where-Object { $_.ExecutablePath -and [string]::Equals($_.ExecutablePath, $mcpTarget, [System.StringComparison]::OrdinalIgnoreCase) }
+if ($mcpProcesses) {
+    $mcpProcesses | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+}
+$settingsProcesses = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+    Where-Object {
+        $_.CommandLine -and
+        $_.CommandLine.IndexOf($settingsTarget, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+    }
+if ($settingsProcesses) {
+    $settingsProcesses | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+}
+
+$startupApprovalError = $null
+$startupRemoved = $false
+$startupApprovalRemoved = $false
+$oldApproval = Get-CodexAutoRetryStartupApproval -RunName $RunName
+$currentRunProperty = Get-ItemProperty -Path $runKey -Name $runName -ErrorAction SilentlyContinue
+$currentRunValue = if ($null -eq $currentRunProperty) { '' } else { [string]$currentRunProperty.$runName }
+if ($currentRunValue -ne $runValue) {
+    $startupApprovalError = [InvalidOperationException]::new('The plugin startup entry changed while uninstall was running; it was not removed.')
+}
+else {
+    try {
+        Remove-ItemProperty -Path $runKey -Name $runName -ErrorAction SilentlyContinue
+        $startupRemoved = [string]::IsNullOrWhiteSpace([string](Get-ItemProperty -Path $runKey -Name $runName -ErrorAction SilentlyContinue).$runName)
+        $null = Remove-CodexAutoRetryStartupApproval -RunName $runName
+        $startupApprovalRemoved = -not (Get-CodexAutoRetryStartupApproval -RunName $runName).Present
+    }
+    catch {
+        $startupApprovalError = $_.Exception
+        try {
+            # Roll back only an unchanged post-delete state. Never overwrite a
+            # foreign command that appeared concurrently.
+            $currentRunAfterFailure = Get-ItemProperty -Path $runKey -Name $RunName -ErrorAction SilentlyContinue
+            $currentRunAfterFailure = if ($null -eq $currentRunAfterFailure) { '' } else { [string]$currentRunAfterFailure.$RunName }
+            $currentApprovalAfterFailure = Get-CodexAutoRetryStartupApproval -RunName $RunName
+            $currentApprovalBytes = if ($currentApprovalAfterFailure.Present) { [byte[]]$currentApprovalAfterFailure.Bytes } else { $null }
+            $oldApprovalBytes = if ($oldApproval.Present) { [byte[]]$oldApproval.Bytes } else { $null }
+            $approvalWasOld = Test-CodexAutoRetryStartupApprovalBytes -Left $currentApprovalBytes -Right $oldApprovalBytes
+            $approvalWasRemoved = -not $currentApprovalAfterFailure.Present
+            $runWasRemoved = [string]::IsNullOrWhiteSpace($currentRunAfterFailure)
+            $runWasUnchanged = $currentRunAfterFailure -eq $runValue
+            if (($runWasRemoved -or $runWasUnchanged) -and ($approvalWasOld -or $approvalWasRemoved)) {
+                if ($runWasRemoved -and -not [string]::IsNullOrWhiteSpace($runValue)) {
+                    $runRegistryKey = Open-CodexAutoRetryRunKey -Writable $true
+                    if ($null -eq $runRegistryKey) { throw '還原先前的值時無法開啟目前使用者的開機啟動登錄機碼。 / The current-user startup registry key could not be opened while restoring the previous value.' }
+                    try { $runRegistryKey.SetValue($RunName, $runValue, [Microsoft.Win32.RegistryValueKind]::String) }
+                    finally { $runRegistryKey.Close() }
+                }
+                if ($approvalWasRemoved -and $oldApproval.Present) {
+                    Restore-CodexAutoRetryStartupApproval -RunName $RunName -Bytes ([byte[]]$oldApproval.Bytes)
+                }
+            }
+        }
+        catch { }
+    }
+}
+$environmentResult = Restore-CodexAutoRetrySharedEnvironment -DataDir $installDir -LegacyOwnedEndpoint $legacyOwnedEndpoint
+$sharedServerStopped = Stop-CodexAutoRetrySharedServerIfUnused -DataDir $installDir
+$sharedStateStillPresent = Test-Path -LiteralPath $statePath -PathType Leaf
+if ($sharedStateStillPresent -and -not $KeepData) {
+    throw '外掛的共用後端仍在使用中，或無法確認已停止。執行資料沒有刪除，請關閉 Codex 後再解除安裝一次。 / The plugin-owned shared app-server is still in use or could not be verified as stopped. Runtime data was not deleted; close Codex and run uninstall again.'
+}
+if ($startupApprovalError) {
+    throw "開機啟動項目沒有清除完整。 / Startup entry cleanup was incomplete.`n$($startupApprovalError.Message)"
+}
+if ($startupRemoved -and -not $startupApprovalRemoved) {
+    throw '開機啟動項目沒有清除完整：核准標記仍然存在。 / Startup entry cleanup was incomplete: the approval marker is still present.'
+}
+if (-not $startupRemoved -and $startupApprovalRemoved) {
+    throw '開機啟動項目沒有清除完整：啟動項目仍然存在。 / Startup entry cleanup was incomplete: the startup entry is still present.'
+}
+if ((-not [string]::IsNullOrWhiteSpace($runValue) -or $oldApproval.Present) -and
+    (-not $startupRemoved -or -not $startupApprovalRemoved)) {
+    throw '開機啟動項目沒有清除完整：登錄檔最後狀態沒有完全移除。 / Startup entry cleanup was incomplete: final registry state was not fully removed.'
+}
+if (Test-Path -LiteralPath $installDir) {
+    if ($KeepData) {
+        foreach ($runtimeFile in @(
+            $watchdogTarget,
+            $mcpTarget,
+            $stopSignal,
+            $supervisorStop,
+            (Join-Path $installDir 'daemon.lock'),
+            (Join-Path $installDir 'status.json'),
+            (Join-Path $installDir 'settings.ps1')
+        )) {
+            Remove-Item -LiteralPath $runtimeFile -Force -ErrorAction SilentlyContinue
+        }
+    }
+    else {
+        Remove-Item -LiteralPath $installDir -Recurse -Force
+    }
+}
+
+[pscustomobject]@{
+    Installed = $false
+    DataPreserved = [bool]$KeepData
+    EnvironmentRestored = [bool]$environmentResult.Restored
+    EnvironmentChangedByUser = [bool]$environmentResult.ChangedByUser
+    SharedServerStopped = [bool]$sharedServerStopped
+    SharedServerCleanupDeferred = [bool]$sharedStateStillPresent
+    SharedModeDisabled = [bool]$sharedModeDisabled
+    StartupRemoved = $startupRemoved
+    StartupApprovalRemoved = $startupApprovalRemoved
+}

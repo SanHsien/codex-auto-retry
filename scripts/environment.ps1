@@ -1,0 +1,310 @@
+﻿function Test-CodexAutoRetryEnvironmentValue {
+    param([AllowNull()][string]$Left, [AllowNull()][string]$Right)
+    if ($null -eq $Left -or $null -eq $Right) { return $null -eq $Left -and $null -eq $Right }
+    return [string]::Equals($Left, $Right, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Remove-CodexAutoRetryUserEnvironmentValue {
+    param([Parameter(Mandatory = $true)][string]$Name)
+    # PowerShell/.NET versions can serialize a null User value as an empty
+    # registry value. Delete the value explicitly so cleanup leaves no stale
+    # endpoint key behind.
+    [Environment]::SetEnvironmentVariable($Name, $null, 'User')
+    Remove-ItemProperty -Path 'HKCU:\Environment' -Name $Name -ErrorAction SilentlyContinue
+    Remove-Item -Path "Env:$Name" -ErrorAction SilentlyContinue
+}
+
+function Send-CodexAutoRetryEnvironmentChange {
+    # Do not compile a new P/Invoke type here. Codex can expose a very large
+    # inherited environment block, and Add-Type starts a compiler process whose
+    # CreateProcess call then fails before the installer can finish. Use the
+    # Windows-provided helper from a minimal environment instead. Broadcasting
+    # is advisory: the registry write is the durable operation, and a failure to
+    # notify already-running applications must never make installation roll back.
+    $rundll32 = Join-Path $env:WINDIR 'System32\rundll32.exe'
+    if (-not (Test-Path -LiteralPath $rundll32 -PathType Leaf)) { return }
+    try {
+        $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+        $startInfo.FileName = $rundll32
+        $startInfo.Arguments = 'user32.dll,UpdatePerUserSystemParameters'
+        $startInfo.UseShellExecute = $false
+        $startInfo.CreateNoWindow = $true
+        # A minimal environment avoids inheriting Codex's oversized process
+        # environment while retaining the system root used by rundll32.
+        $startInfo.EnvironmentVariables.Clear()
+        $startInfo.EnvironmentVariables['SystemRoot'] = [string]$env:SystemRoot
+        $startInfo.EnvironmentVariables['WINDIR'] = [string]$env:WINDIR
+        $process = [System.Diagnostics.Process]::Start($startInfo)
+        if ($process) {
+            [void]$process.WaitForExit(5000)
+            $process.Dispose()
+        }
+    }
+    catch {
+        # Environment propagation is best effort and must not break the
+        # transaction or expose the underlying environment to the UI.
+    }
+}
+
+function Write-CodexAutoRetryJsonAtomic {
+    param([Parameter(Mandatory = $true)][string]$Path, [Parameter(Mandatory = $true)]$Value)
+    $temporary = $Path + '.tmp-' + [guid]::NewGuid().ToString('N')
+    try {
+        [System.IO.File]::WriteAllText(
+            $temporary,
+            (($Value | ConvertTo-Json -Depth 8) + [Environment]::NewLine),
+            [System.Text.UTF8Encoding]::new($false)
+        )
+        Move-Item -LiteralPath $temporary -Destination $Path -Force
+    }
+    finally {
+        Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Invoke-CodexAutoRetryConfigLocked {
+    param(
+        [Parameter(Mandatory = $true)][string]$ConfigPath,
+        [Parameter(Mandatory = $true)][scriptblock]$ScriptBlock
+    )
+    $lockPath = $ConfigPath + '.lock'
+    $deadline = [DateTime]::UtcNow.AddSeconds(10)
+    $stream = $null
+    try {
+        do {
+            try {
+                $stream = [System.IO.File]::Open(
+                    $lockPath,
+                    [System.IO.FileMode]::OpenOrCreate,
+                    [System.IO.FileAccess]::ReadWrite,
+                    [System.IO.FileShare]::None
+                )
+                break
+            }
+            catch [System.IO.IOException] {
+                if ([DateTime]::UtcNow -ge $deadline) {
+                    throw 'Codex Auto Retry 的設定正被其他程式鎖定。 / The Codex Auto Retry configuration is locked by another process.'
+                }
+                Start-Sleep -Milliseconds 25
+            }
+        } while ($null -eq $stream)
+        return (& $ScriptBlock)
+    }
+    finally {
+        if ($null -ne $stream) { $stream.Dispose() }
+    }
+}
+
+function Disable-CodexAutoRetrySharedMode {
+    param([Parameter(Mandatory = $true)][string]$DataDir)
+    $configPath = Join-Path $DataDir 'config.json'
+    if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) { return $false }
+    return (Invoke-CodexAutoRetryConfigLocked -ConfigPath $configPath -ScriptBlock {
+        try { $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom-Json }
+        catch {
+            # Break-glass cleanup must continue even when the settings file is
+            # damaged. Do not replace it with guessed defaults; endpoint and
+            # process cleanup are independently ownership-checked by the caller.
+            return $false
+        }
+        if ($null -eq $config.PSObject.Properties['shared_app_server_enabled']) {
+            $config | Add-Member -NotePropertyName shared_app_server_enabled -NotePropertyValue $false
+        }
+        else { $config.shared_app_server_enabled = $false }
+        if ($null -eq $config.PSObject.Properties['shared_app_server_requested']) {
+            $config | Add-Member -NotePropertyName shared_app_server_requested -NotePropertyValue $false
+        }
+        else { $config.shared_app_server_requested = $false }
+        Write-CodexAutoRetryJsonAtomic -Path $configPath -Value $config
+        return $true
+    })
+}
+
+function Disable-CodexAutoRetryLegacyRouting {
+    param([Parameter(Mandatory = $true)][string]$DataDir)
+    $ownedEndpoint = $null
+    $statePath = Join-Path $DataDir 'shared-server.json'
+    if (Test-Path -LiteralPath $statePath -PathType Leaf) {
+        try {
+            $state = Get-Content -Raw -Encoding UTF8 -LiteralPath $statePath | ConvertFrom-Json
+            if ([string]$state.owner -eq 'codex-auto-retry' -and
+                [string]$state.endpoint -match '^ws://127\.0\.0\.1:\d+$') { $ownedEndpoint = [string]$state.endpoint }
+        } catch { }
+    }
+    $null = Disable-CodexAutoRetrySharedMode -DataDir $DataDir
+    $null = Restore-CodexAutoRetrySharedEnvironment -DataDir $DataDir -LegacyOwnedEndpoint $ownedEndpoint
+}
+
+function Get-CodexAutoRetrySharedAppServerPort {
+    param([Parameter(Mandatory = $true)][string]$ConfigPath)
+    $defaultPort = 49621
+    if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) { return $defaultPort }
+    try {
+        $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $ConfigPath | ConvertFrom-Json
+        $port = [int]$config.shared_app_server_port
+        if ($port -ge 1024 -and $port -le 65535) { return $port }
+    }
+    catch { }
+    return $defaultPort
+}
+
+function Set-CodexAutoRetrySharedEnvironment {
+    param(
+        [Parameter(Mandatory = $true)][string]$DataDir,
+        [Parameter(Mandatory = $true)][string]$ConfigPath,
+        [string]$EnvironmentName = 'CODEX_APP_SERVER_WS_URL',
+        [switch]$SkipBroadcast
+    )
+    # Persistent Desktop routing is retired. Retain the old writer only for
+    # isolated ownership tests; production callers must use a child environment.
+    if ($EnvironmentName -notmatch '^CODEX_AUTO_RETRY_ENV_TEST_[0-9a-f]{32}$') {
+        throw '永久共用路由已停用，請改用安全啟動 Codex（只對單一行程路由）。 / Persistent shared routing is disabled. Use the safe Codex launcher (process-scoped routing).'
+    }
+    $name = $EnvironmentName
+    $backupPath = Join-Path $DataDir 'environment-backup.json'
+    $port = Get-CodexAutoRetrySharedAppServerPort -ConfigPath $ConfigPath
+    $desired = "ws://127.0.0.1:$port"
+    $current = [Environment]::GetEnvironmentVariable($name, 'User')
+    $backup = $null
+    if (Test-Path -LiteralPath $backupPath -PathType Leaf) {
+        try { $backup = Get-Content -Raw -Encoding UTF8 -LiteralPath $backupPath | ConvertFrom-Json }
+        catch { throw "已儲存的 $name 備份無效：$backupPath / The saved $name backup is invalid: $backupPath" }
+        if ([int]$backup.schema_version -ne 1 -or [string]$backup.name -ne $name) {
+            throw "無法辨識已儲存的 $name 備份：$backupPath / The saved $name backup is not recognized: $backupPath"
+        }
+        $expected = if ([bool]$backup.previous_present) { [string]$backup.previous_value } else { $null }
+        $installed = [string]$backup.installed_value
+        if (-not (Test-CodexAutoRetryEnvironmentValue $current $installed) -and
+            -not (Test-CodexAutoRetryEnvironmentValue $current $expected) -and
+            -not (Test-CodexAutoRetryEnvironmentValue $current $desired)) {
+            throw "$name 已有不同的使用者設定值，沒有覆寫：$current / $name already has a different user value. It was not overwritten: $current"
+        }
+    }
+    else {
+        if ($null -ne $current -and -not (Test-CodexAutoRetryEnvironmentValue $current $desired)) {
+            throw "$name 已有不同的使用者設定值，沒有覆寫：$current / $name already has a different user value. It was not overwritten: $current"
+        }
+        $backup = [pscustomobject][ordered]@{
+            schema_version = 1
+            name = $name
+            previous_present = $null -ne $current
+            previous_value = if ($null -ne $current) { $current } else { '' }
+            installed_value = $desired
+            recorded_at = [DateTime]::UtcNow.ToString('o')
+        }
+    }
+    $backupExisted = Test-Path -LiteralPath $backupPath -PathType Leaf
+    $backupBytes = if ($backupExisted) { [System.IO.File]::ReadAllBytes($backupPath) } else { $null }
+    $backup.installed_value = $desired
+    try {
+        [Environment]::SetEnvironmentVariable($name, $desired, 'User')
+        Set-Item -Path "Env:$name" -Value $desired
+        Write-CodexAutoRetryJsonAtomic -Path $backupPath -Value $backup
+        if (-not $SkipBroadcast) { Send-CodexAutoRetryEnvironmentChange }
+    }
+    catch {
+        [Environment]::SetEnvironmentVariable($name, $current, 'User')
+        if ($null -eq $current) { Remove-CodexAutoRetryUserEnvironmentValue -Name $name }
+        else { Set-Item -Path "Env:$name" -Value $current }
+        if ($backupExisted) { [System.IO.File]::WriteAllBytes($backupPath, $backupBytes) }
+        else { Remove-Item -LiteralPath $backupPath -Force -ErrorAction SilentlyContinue }
+        if (-not $SkipBroadcast) { Send-CodexAutoRetryEnvironmentChange }
+        throw
+    }
+    return [pscustomobject]@{
+        Name = $name
+        Value = $desired
+        Changed = -not (Test-CodexAutoRetryEnvironmentValue $current $desired)
+    }
+}
+
+function Restore-CodexAutoRetrySharedEnvironment {
+    param(
+        [Parameter(Mandatory = $true)][string]$DataDir,
+        [string]$EnvironmentName = 'CODEX_APP_SERVER_WS_URL',
+        [AllowNull()][string[]]$LegacyOwnedEndpoint,
+        [switch]$SkipBroadcast
+    )
+    $name = $EnvironmentName
+    $backupPath = Join-Path $DataDir 'environment-backup.json'
+    if (-not (Test-Path -LiteralPath $backupPath -PathType Leaf)) {
+        # Releases before ownership records existed could leave the endpoint
+        # behind. Only clear that legacy value when the caller has independently
+        # proved that this exact endpoint belonged to the plugin.
+        $current = [Environment]::GetEnvironmentVariable($name, 'User')
+        foreach ($endpoint in @($LegacyOwnedEndpoint)) {
+            if (-not [string]::IsNullOrWhiteSpace([string]$endpoint) -and
+                (Test-CodexAutoRetryEnvironmentValue $current ([string]$endpoint))) {
+                Remove-CodexAutoRetryUserEnvironmentValue -Name $name
+                if (-not $SkipBroadcast) { Send-CodexAutoRetryEnvironmentChange }
+                return [pscustomobject]@{ Restored = $true; ChangedByUser = $false }
+            }
+        }
+        return [pscustomobject]@{ Restored = $false; ChangedByUser = $false }
+    }
+    try { $backup = Get-Content -Raw -Encoding UTF8 -LiteralPath $backupPath | ConvertFrom-Json }
+    catch { throw "已儲存的 $name 備份無效：$backupPath / The saved $name backup is invalid: $backupPath" }
+    if ([int]$backup.schema_version -ne 1 -or [string]$backup.name -ne $name) {
+        throw "無法辨識已儲存的 $name 備份：$backupPath / The saved $name backup is not recognized: $backupPath"
+    }
+    $current = [Environment]::GetEnvironmentVariable($name, 'User')
+    $installed = [string]$backup.installed_value
+    $previous = if ([bool]$backup.previous_present) { [string]$backup.previous_value } else { $null }
+    if ($name -eq 'CODEX_APP_SERVER_WS_URL' -and $installed -notmatch '^ws://127\.0\.0\.1:\d+$') {
+        throw '已儲存的共用端點不是可辨識的外掛本機端點。 / The saved shared endpoint is not a recognized plugin loopback endpoint.'
+    }
+    # Older releases could back up their own already-installed endpoint. Never
+    # resurrect that endpoint when retiring persistent routing, even on rollback.
+    foreach ($owned in @($installed) + @($LegacyOwnedEndpoint)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$owned) -and
+            (Test-CodexAutoRetryEnvironmentValue $previous ([string]$owned))) { $previous = $null }
+    }
+    $changedByUser = -not (Test-CodexAutoRetryEnvironmentValue $current $installed) -and
+        -not (Test-CodexAutoRetryEnvironmentValue $current $previous)
+    $restored = $false
+    if (-not $changedByUser -and -not (Test-CodexAutoRetryEnvironmentValue $current $previous)) {
+        if ($null -eq $previous) {
+            Remove-CodexAutoRetryUserEnvironmentValue -Name $name
+        }
+        else {
+            [Environment]::SetEnvironmentVariable($name, $previous, 'User')
+            Set-Item -Path "Env:$name" -Value $previous
+        }
+        if (-not $SkipBroadcast) { Send-CodexAutoRetryEnvironmentChange }
+        $restored = $true
+    }
+    Remove-Item -LiteralPath $backupPath -Force
+    return [pscustomobject]@{ Restored = $restored; ChangedByUser = $changedByUser }
+}
+
+function Stop-CodexAutoRetrySharedServerIfUnused {
+    param([Parameter(Mandatory = $true)][string]$DataDir)
+    $statePath = Join-Path $DataDir 'shared-server.json'
+    if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) { return $false }
+    try { $state = Get-Content -Raw -Encoding UTF8 -LiteralPath $statePath | ConvertFrom-Json }
+    catch { return $false }
+    $pidValue = [int]$state.pid
+    if ($pidValue -le 0 -or [string]$state.owner -ne 'codex-auto-retry' -or [string]::IsNullOrWhiteSpace([string]$state.version) -or
+        [string]$state.endpoint -notmatch '^ws://127\.0\.0\.1:\d+$' -or [string]::IsNullOrWhiteSpace([string]$state.executable)) { return $false }
+    $process = Get-CimInstance Win32_Process -Filter "ProcessId = $pidValue" -ErrorAction SilentlyContinue
+    if ($null -eq $process) {
+        # A dead PID cannot be confused with another process. Remove its
+        # ownership record even when Codex is open, so a later startup cannot
+        # mistake stale state for a live shared backend.
+        Remove-Item -LiteralPath $statePath -Force -ErrorAction SilentlyContinue
+        return $true
+    }
+    $codexDesktop = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -eq 'ChatGPT.exe' -and (-not $_.CommandLine -or $_.CommandLine -notmatch '(?:^|\s)--type=')
+    })
+    if ($codexDesktop.Count -gt 0) { return $false }
+    if ($null -eq $process -or -not $process.CommandLine -or
+        $process.CommandLine.IndexOf('app-server', [System.StringComparison]::OrdinalIgnoreCase) -lt 0 -or
+        $process.CommandLine.IndexOf([string]$state.endpoint, [System.StringComparison]::OrdinalIgnoreCase) -lt 0 -or
+        -not [string]::Equals([string]$process.ExecutablePath, [string]$state.executable, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $false
+    }
+    Stop-Process -Id $pidValue -Force -ErrorAction Stop
+    Remove-Item -LiteralPath $statePath -Force -ErrorAction SilentlyContinue
+    return $true
+}
