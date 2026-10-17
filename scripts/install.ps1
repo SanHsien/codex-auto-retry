@@ -1,6 +1,7 @@
 ﻿[CmdletBinding()]
 param(
-    [switch]$EnableSharedAppServer
+    [switch]$EnableSharedAppServer,
+    [switch]$CreateDesktopShortcut
 )
 
 $ErrorActionPreference = 'Stop'
@@ -22,6 +23,7 @@ $environmentName = 'CODEX_APP_SERVER_WS_URL'
 . (Join-Path $PSScriptRoot 'path-safety.ps1')
 . (Join-Path $PSScriptRoot 'startup-approval.ps1')
 . (Join-Path $PSScriptRoot 'shared-server-status.ps1')
+. (Join-Path $PSScriptRoot 'shell-integration.ps1')
 [void](Assert-CodexAutoRetryHostPath -Path $installDir)
 
 function Get-RunValue {
@@ -437,6 +439,7 @@ try {
     Copy-Item -LiteralPath $candidateWatchdog -Destination $watchdogTarget -Force
     Copy-Item -LiteralPath $candidateMcp -Destination $mcpTarget -Force
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'source\ui\settings.ps1') -Destination $settingsTarget -Force
+    Copy-CodexAutoRetrySupportFiles -ScriptsRoot $PSScriptRoot -InstallDir $installDir
     Set-SupervisedStartupEntry
 	$journal.phase = 'startup_registered'
 	Write-CodexAutoRetryJsonAtomic -Path $installJournalPath -Value $journal
@@ -447,6 +450,7 @@ try {
     Remove-Item -LiteralPath $statusPath -Force -ErrorAction SilentlyContinue
     $startedProcess = Start-Process -FilePath $watchdogTarget -ArgumentList @('supervise') -WorkingDirectory $installDir -WindowStyle Hidden -PassThru
     $status = Wait-Heartbeat -ProcessId $startedProcess.Id -RequireSharedReady:$EnableSharedAppServer -ProcessIsSupervisor
+    $shellIntegration = Register-CodexAutoRetryShellIntegration -InstallDir $installDir -Version ([string]$status.version) -CreateDesktopShortcut:$CreateDesktopShortcut
 
     $installationSucceeded = $true
 	$journal.phase = 'committed'
@@ -466,6 +470,8 @@ try {
         DesktopLaunchMode = 'process_scoped'
         SafeLauncher = Join-Path $PSScriptRoot 'launch-codex.ps1'
         CodexRestartRequired = [string]$status.controller_state -eq 'codex_restart_required'
+        StartMenuShortcutsCreated = [bool]$shellIntegration.StartMenuCreated
+        DesktopShortcutCreated = [bool]$shellIntegration.DesktopCreated
     }
 }
 catch {

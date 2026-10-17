@@ -2,7 +2,7 @@ package main
 
 import "time"
 
-const appVersion = "1.1.1"
+const appVersion = "1.2.0"
 
 var buildSourceHash = "development"
 

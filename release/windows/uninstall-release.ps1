@@ -142,9 +142,22 @@ try {
     $env:LOCALAPPDATA = $localAppDataPath
 
     Write-Step '正在停止背景服務並移除開機啟動… / Stopping the background watchdog and removing startup...'
+    $shellHelper = Join-Path $pluginTarget 'scripts\shell-integration.ps1'
+    if (-not (Test-Path -LiteralPath $shellHelper -PathType Leaf)) {
+        $shellHelper = Join-Path $PSScriptRoot 'payload\codex-auto-retry\scripts\shell-integration.ps1'
+    }
+    if (-not (Test-Path -LiteralPath $shellHelper -PathType Leaf)) {
+        $shellHelper = Join-Path $runtimePath 'shell-integration.ps1'
+    }
+    if (Test-Path -LiteralPath $shellHelper -PathType Leaf) {
+        . $shellHelper
+    }
     $runtimeUninstaller = Join-Path $pluginTarget 'scripts\uninstall.ps1'
     if (-not (Test-Path -LiteralPath $runtimeUninstaller -PathType Leaf)) {
         $runtimeUninstaller = Join-Path $PSScriptRoot 'payload\codex-auto-retry\scripts\uninstall.ps1'
+    }
+    if (-not (Test-Path -LiteralPath $runtimeUninstaller -PathType Leaf)) {
+        $runtimeUninstaller = Join-Path $runtimePath 'uninstall.ps1'
     }
     if (Test-Path -LiteralPath $runtimeUninstaller -PathType Leaf) {
         $arguments = @('-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $runtimeUninstaller)
@@ -163,6 +176,9 @@ try {
             }
             Remove-Item -LiteralPath $runtimePath -Recurse -Force
         }
+    }
+    if (Get-Command Unregister-CodexAutoRetryShellIntegration -ErrorAction SilentlyContinue) {
+        Unregister-CodexAutoRetryShellIntegration -InstallDir $runtimePath -UserProfileRoot $profileRootPath
     }
 
     Remove-ReleaseStartupApproval -RunName 'CodexAutoRetry'

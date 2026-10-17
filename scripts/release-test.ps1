@@ -69,6 +69,8 @@ try {
         'deploy.ps1',
         'uninstall-release.ps1',
         'startup-manager.ps1',
+        'installer-gui.ps1',
+        'app-icon.ico',
         $startupManagerVbs,
         $safeCodexLauncher,
         $startupManagerLauncher,
@@ -83,7 +85,9 @@ try {
         'payload\codex-auto-retry\.codex-plugin\plugin.json',
         'payload\codex-auto-retry\.mcp.json',
         'payload\codex-auto-retry\scripts\source\ui\settings.ps1',
+        'payload\codex-auto-retry\scripts\source\ui\app-icon.ico',
         'payload\codex-auto-retry\scripts\environment.ps1',
+        'payload\codex-auto-retry\scripts\shell-integration.ps1',
         'payload\codex-auto-retry\scripts\launch-codex.ps1',
         'payload\codex-auto-retry\scripts\launch-codex-smoke-test.ps1',
         'payload\codex-auto-retry\scripts\install-routing-smoke-test.ps1',
@@ -152,7 +156,7 @@ try {
         throw 'MCP executable must use the Windows GUI subsystem.'
     }
 
-    foreach ($script in @('common.ps1', 'native-command.ps1', 'upgrade-runtime.ps1', 'close-codex.ps1', 'deploy.ps1', 'uninstall-release.ps1', 'startup-manager.ps1')) {
+    foreach ($script in @('common.ps1', 'native-command.ps1', 'upgrade-runtime.ps1', 'close-codex.ps1', 'deploy.ps1', 'uninstall-release.ps1', 'startup-manager.ps1', 'installer-gui.ps1')) {
         $tokens = $null
         $errors = $null
         [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $root $script), [ref]$tokens, [ref]$errors)
@@ -162,6 +166,7 @@ try {
     }
     foreach ($relative in @(
         'payload\codex-auto-retry\scripts\environment.ps1',
+        'payload\codex-auto-retry\scripts\shell-integration.ps1',
         'payload\codex-auto-retry\scripts\install.ps1',
         'payload\codex-auto-retry\scripts\startup-approval.ps1',
         'payload\codex-auto-retry\scripts\shared-server-status.ps1',
@@ -356,6 +361,9 @@ try {
 
         $managerOutput = (& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $root 'payload\codex-auto-retry\scripts\startup-manager-smoke-test.ps1') 2>&1 | Out-String)
         if ($LASTEXITCODE -ne 0) { throw "Startup manager test failed:`n$managerOutput" }
+
+        $installerGuiOutput = (& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $root 'installer-gui.ps1') -SmokeTest 2>&1 | Out-String)
+        if ($LASTEXITCODE -ne 0) { throw "Installer GUI smoke test failed:`n$installerGuiOutput" }
 
         $installOutput = (& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $root 'deploy.ps1') -DryRun -SkipCodexCheck 2>&1 | Out-String)
         $installExitCode = $LASTEXITCODE

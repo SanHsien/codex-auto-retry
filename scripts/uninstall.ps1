@@ -15,6 +15,8 @@ $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 . (Join-Path $PSScriptRoot 'environment.ps1')
 . (Join-Path $PSScriptRoot 'path-safety.ps1')
 . (Join-Path $PSScriptRoot 'startup-approval.ps1')
+$shellIntegrationScript = Join-Path $PSScriptRoot 'shell-integration.ps1'
+if (Test-Path -LiteralPath $shellIntegrationScript -PathType Leaf) { . $shellIntegrationScript }
 
 if (Test-Path -LiteralPath $installDir -PathType Container) {
     [void](Assert-CodexAutoRetryHostPath -Path $installDir)
@@ -153,6 +155,9 @@ if ((-not [string]::IsNullOrWhiteSpace($runValue) -or $oldApproval.Present) -and
     (-not $startupRemoved -or -not $startupApprovalRemoved)) {
     throw '開機啟動項目沒有清除完整：登錄檔最後狀態沒有完全移除。 / Startup entry cleanup was incomplete: final registry state was not fully removed.'
 }
+if (Get-Command Unregister-CodexAutoRetryShellIntegration -ErrorAction SilentlyContinue) {
+    Unregister-CodexAutoRetryShellIntegration -InstallDir $installDir
+}
 if (Test-Path -LiteralPath $installDir) {
     if ($KeepData) {
         foreach ($runtimeFile in @(
@@ -162,7 +167,18 @@ if (Test-Path -LiteralPath $installDir) {
             $supervisorStop,
             (Join-Path $installDir 'daemon.lock'),
             (Join-Path $installDir 'status.json'),
-            (Join-Path $installDir 'settings.ps1')
+            (Join-Path $installDir 'settings.ps1'),
+            (Join-Path $installDir 'app-icon.ico'),
+            (Join-Path $installDir 'startup-manager.ps1'),
+            (Join-Path $installDir 'safe-disable.ps1'),
+            (Join-Path $installDir 'uninstall.ps1'),
+            (Join-Path $installDir 'uninstall-release.ps1'),
+            (Join-Path $installDir 'common.ps1'),
+            (Join-Path $installDir 'environment.ps1'),
+            (Join-Path $installDir 'path-safety.ps1'),
+            (Join-Path $installDir 'startup-approval.ps1'),
+            (Join-Path $installDir 'shared-server-status.ps1'),
+            (Join-Path $installDir 'shell-integration.ps1')
         )) {
             Remove-Item -LiteralPath $runtimeFile -Force -ErrorAction SilentlyContinue
         }

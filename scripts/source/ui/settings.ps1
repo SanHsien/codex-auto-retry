@@ -167,6 +167,9 @@ $script:i18n = @{
     'layout_overlap_err'      = @{ zh = '設定版面發生遮擋：'; en = 'Layout overlap detected: ' }
     'layout_bounds_err'       = @{ zh = '設定輸入框超出可見區域。'; en = 'Control bounds exceed visible area.' }
     'config_read_err'         = @{ zh = '無法讀取自動重試設定。'; en = 'Cannot read auto-retry settings.' }
+    'data_dir_prefix'         = @{ zh = '設定與日誌位置：'; en = 'Config & Log Path: ' }
+    'btn_open_folder'         = @{ zh = '開啟設定資料夾'; en = 'Open Folder' }
+    'btn_open_log'            = @{ zh = '檢視執行日誌'; en = 'View Log' }
 }
 
 function T($Key) {
@@ -354,9 +357,18 @@ $form.StartPosition = 'CenterScreen'
 $form.FormBorderStyle = 'FixedDialog'
 $form.MaximizeBox = $false
 $form.MinimizeBox = $false
-$form.ClientSize = [System.Drawing.Size]::new(620, 840)
+$form.ClientSize = [System.Drawing.Size]::new(620, 880)
 $form.Font = [System.Drawing.Font]::new('Microsoft YaHei UI', 9)
-$form.Icon = [System.Drawing.SystemIcons]::Application
+$loadedIcon = $null
+foreach ($iconCandidate in @((Join-Path $DataDir 'app-icon.ico'), (Join-Path $PSScriptRoot 'app-icon.ico'))) {
+    if ($iconCandidate -and (Test-Path -LiteralPath $iconCandidate -PathType Leaf)) {
+        try { $loadedIcon = [System.Drawing.Icon]::new($iconCandidate); break } catch { }
+    }
+}
+if (-not $loadedIcon -and $Executable -and (Test-Path -LiteralPath $Executable -PathType Leaf)) {
+    try { $loadedIcon = [System.Drawing.Icon]::ExtractAssociatedIcon($Executable) } catch { }
+}
+$form.Icon = if ($loadedIcon) { $loadedIcon } else { [System.Drawing.SystemIcons]::Application }
 if ($SmokeTest) {
     $form.Opacity = 0
     $form.ShowInTaskbar = $false
@@ -385,19 +397,34 @@ $form.Controls.Add($langButton)
 $statusGroup = [System.Windows.Forms.GroupBox]::new()
 $statusGroup.Text = T 'status_group'
 $statusGroup.Location = [System.Drawing.Point]::new(20, 58)
-$statusGroup.Size = [System.Drawing.Size]::new(580, 105)
+$statusGroup.Size = [System.Drawing.Size]::new(580, 145)
 $form.Controls.Add($statusGroup)
 $serviceValue = New-Label (T 'status_loading') 18 25 180 24
 $serviceValue.Font = [System.Drawing.Font]::new('Microsoft YaHei UI', 10, [System.Drawing.FontStyle]::Bold)
 $queueValue = New-Label ([string]::Format((T 'queue_summary'), '--', '--', '--')) 204 25 195 24
 $nextValue = New-Label (T 'next_none') 404 25 165 24
-$scanValue = New-Label '' 18 62 535 22
+$scanValue = New-Label '' 18 60 535 22
 $scanValue.ForeColor = [System.Drawing.Color]::DimGray
-$statusGroup.Controls.AddRange(@($serviceValue, $queueValue, $nextValue, $scanValue))
+$pathValue = New-Label ((T 'data_dir_prefix') + $DataDir) 18 96 322 22
+$pathValue.ForeColor = [System.Drawing.Color]::DimGray
+$pathValue.AutoEllipsis = $true
+$openFolderButton = [System.Windows.Forms.Button]::new()
+$openFolderButton.Text = T 'btn_open_folder'
+$openFolderButton.Location = [System.Drawing.Point]::new(346, 91)
+$openFolderButton.Size = [System.Drawing.Size]::new(112, 27)
+$openFolderButton.FlatStyle = 'Standard'
+$openFolderButton.Cursor = [System.Windows.Forms.Cursors]::Hand
+$openLogButton = [System.Windows.Forms.Button]::new()
+$openLogButton.Text = T 'btn_open_log'
+$openLogButton.Location = [System.Drawing.Point]::new(464, 91)
+$openLogButton.Size = [System.Drawing.Size]::new(100, 27)
+$openLogButton.FlatStyle = 'Standard'
+$openLogButton.Cursor = [System.Windows.Forms.Cursors]::Hand
+$statusGroup.Controls.AddRange(@($serviceValue, $queueValue, $nextValue, $scanValue, $pathValue, $openFolderButton, $openLogButton))
 
 $queueGroup = [System.Windows.Forms.GroupBox]::new()
 $queueGroup.Text = T 'queue_group'
-$queueGroup.Location = [System.Drawing.Point]::new(20, 175)
+$queueGroup.Location = [System.Drawing.Point]::new(20, 215)
 $queueGroup.Size = [System.Drawing.Size]::new(580, 190)
 $form.Controls.Add($queueGroup)
 $taskList = [System.Windows.Forms.ListView]::new()
@@ -440,7 +467,7 @@ $queueGroup.Controls.AddRange(@($refreshButton, $rescanButton, $retryNowButton, 
 
 $settingsGroup = [System.Windows.Forms.GroupBox]::new()
 $settingsGroup.Text = T 'settings_group'
-$settingsGroup.Location = [System.Drawing.Point]::new(20, 378)
+$settingsGroup.Location = [System.Drawing.Point]::new(20, 418)
 $settingsGroup.Size = [System.Drawing.Size]::new(580, 390)
 $form.Controls.Add($settingsGroup)
 
@@ -607,19 +634,19 @@ function Update-DelayPreview {
 
 Update-DelayPreview
 
-$noticeLabel = New-Label '' 22 782 375 28
+$noticeLabel = New-Label '' 22 822 375 28
 $noticeLabel.ForeColor = [System.Drawing.Color]::SeaGreen
 $form.Controls.Add($noticeLabel)
 $saveButton = [System.Windows.Forms.Button]::new()
 $saveButton.Text = T 'btn_save'
-$saveButton.Location = [System.Drawing.Point]::new(405, 782)
+$saveButton.Location = [System.Drawing.Point]::new(405, 822)
 $saveButton.Size = [System.Drawing.Size]::new(100, 30)
 $saveButton.BackColor = [System.Drawing.Color]::FromArgb(35, 39, 37)
 $saveButton.ForeColor = [System.Drawing.Color]::White
 $saveButton.FlatStyle = 'Flat'
 $closeButton = [System.Windows.Forms.Button]::new()
 $closeButton.Text = T 'btn_close'
-$closeButton.Location = [System.Drawing.Point]::new(515, 782)
+$closeButton.Location = [System.Drawing.Point]::new(515, 822)
 $closeButton.Size = [System.Drawing.Size]::new(85, 30)
 $form.Controls.AddRange(@($saveButton, $closeButton))
 $form.CancelButton = $closeButton
@@ -1002,6 +1029,9 @@ function Apply-Language {
     $form.Text = T 'form_title'
     $langButton.Text = T 'lang_button'
     $statusGroup.Text = T 'status_group'
+    $pathValue.Text = (T 'data_dir_prefix') + $DataDir
+    $openFolderButton.Text = T 'btn_open_folder'
+    $openLogButton.Text = T 'btn_open_log'
     $queueGroup.Text = T 'queue_group'
     foreach ($column in 0..5) { $taskList.Columns[$column].Width = $taskColumnWidths[$column] }
     $taskList.Columns[0].Text = T 'col_task'
@@ -1041,6 +1071,25 @@ function Apply-Language {
     Update-DelayPreview
     Update-RuntimeView
 }
+
+$openFolderButton.add_Click({
+    try {
+        New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
+        Start-Process -FilePath 'explorer.exe' -ArgumentList @($DataDir) | Out-Null
+    } catch { }
+})
+
+$openLogButton.add_Click({
+    try {
+        $logDir = Join-Path $DataDir 'logs'
+        New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+        $logFile = Join-Path $logDir 'daemon.log'
+        if (-not (Test-Path -LiteralPath $logFile -PathType Leaf)) {
+            [System.IO.File]::WriteAllText($logFile, '', [System.Text.UTF8Encoding]::new($false))
+        }
+        Start-Process -FilePath 'notepad.exe' -ArgumentList @($logFile) | Out-Null
+    } catch { }
+})
 
 $langButton.add_Click({
     $script:currentLanguage = if ($script:currentLanguage -eq 'zh') { 'en' } else { 'zh' }

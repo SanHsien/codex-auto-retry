@@ -89,11 +89,11 @@
 
 守護行程以單一輕量背景行程執行，於 Windows 通知區域顯示圖示：
 
-* **懸停提示（Tooltip）**：即時顯示運作狀態（running、paused、waiting、active、stopped）與下次重試倒數。
+* **懸停提示（Tooltip）與五態彩色圖示**：依狀態（`running` 青綠、`active` 亮藍、`waiting` 琥珀橘、`paused` 灰藍、`stopped` 珊瑚紅）切換專屬抗鋸齒圖示，並即時顯示下次重試倒數。
 * **Explorer 重啟自癒**：Windows 檔案總管重啟時自動重新註冊托盤圖示並恢復狀態。
 * **雙擊**：開啟圖形化設定視窗。
-* **右鍵選單**：快速暫停／繼續派發、開啟設定或結束守護行程。
-* **設定視窗**：支援設定復原上限、延遲曲線、備援提示文字、通知偏好與繁中／英文介面切換。任務佇列顯示 Codex 任務標題，可「重新整理」與「重新偵測中斷任務」；取消的重試會以「已取消」保留 24 小時，可再按「重新開始」接回。
+* **右鍵選單**：快速暫停／繼續派發、開啟設定、開啟啟動管理員、開啟設定與日誌資料夾、檢視執行日誌（`daemon.log`）或結束守護行程。
+* **設定視窗**：支援設定復原上限、延遲曲線、備援提示文字、通知偏好與繁中／英文介面切換，並直接顯示資料夾路徑與「開啟設定資料夾」、「檢視執行日誌」按鈕。任務佇列顯示 Codex 任務標題，可「重新整理」與「重新偵測中斷任務」；取消的重試會以「已取消」保留 24 小時，可再按「重新開始」接回。
 
 ### Codex 內嵌管理面板（MCP）
 
@@ -115,28 +115,32 @@
 
 ### 介面語言（繁體中文／英文）
 
-設定視窗、啟動管理員、內嵌管理面板與系統匣共用同一個語言設定（`%LOCALAPPDATA%\CodexAutoRetry\ui-language.json`，預設繁體中文），在任一處切換，其他介面下次顯示時跟著改。安裝程式、執行檔選單、命令列進度與錯誤訊息一律中英並列，安裝當下還沒有語言設定時兩種語言都看得懂。
+設定視窗、啟動管理員、內嵌管理面板、安裝控制中心與系統匣共用同一個語言設定（`%LOCALAPPDATA%\CodexAutoRetry\ui-language.json`，預設繁體中文），在任一處切換，其他介面下次顯示時跟著改。安裝程式、命令列進度與錯誤訊息一律中英並列，安裝當下還沒有語言設定時兩種語言都看得懂。
 
 ---
 
 ## 快速上手（終端使用者）
 
 1. 從本 fork 的 [GitHub Releases](https://github.com/SanHsien/codex-auto-retry/releases/latest) 下載繁體中文版，二擇一：
-   * **單一執行檔** `Codex-Auto-Retry-<版本>-windows-x64.exe`：不必解壓縮，雙擊後出現選單，可選安裝或更新、開啟啟動管理員、緊急停用、解除安裝、取出整包檔案。安裝前請先完全關閉 Codex App。
+   * **單一執行檔** `Codex-Auto-Retry-<版本>-windows-x64.exe`：不必解壓縮，雙擊後開啟圖形化「安裝與控制中心」視窗，可一鍵安裝或更新（並可勾選「建立桌面捷徑」）、開啟啟動管理員、開啟參數設定、開啟設定與日誌資料夾、檢視執行日誌、緊急停用、解除安裝或取出整包檔案。安裝前請先完全關閉 Codex App。
    * **壓縮檔** `Codex-Auto-Retry-<版本>-windows-x64.zip`：解壓縮後，在資料夾內雙擊 `安裝.cmd`。
-2. 兩者內容相同；執行檔只是把壓縮檔解到暫存資料夾，再執行同一支 `deploy.ps1`。尚未購買程式碼簽章，Windows SmartScreen 可能提示「未知的發行者」，請對照 Release 頁的 SHA-256。
-3. 安裝程式自動校驗 SHA-256、設定目前使用者開機啟動，並將守護行程部署於 `%LOCALAPPDATA%\CodexAutoRetry`，同時完成 Codex 外掛註冊。
+2. 兩者內容相同；尚未購買程式碼簽章，Windows SmartScreen 可能提示「未知的發行者」，請對照 Release 頁的 SHA-256。
+3. 安裝程式自動校驗 SHA-256、設定目前使用者開機啟動、將守護行程部署於 `%LOCALAPPDATA%\CodexAutoRetry`、建立 Windows「開始功能表 > Codex Auto Retry」捷徑群組與「已安裝的應用程式」登錄項目，同時完成 Codex 外掛註冊。
 4. **不需系統管理員權限**，亦不需安裝 Go 或 Node.js。
 
 > 原始碼內的 `release\windows\` 只是安裝範本，沒有 `release-manifest.json` 與 `payload\`，直接執行會出現 `release-manifest.json is missing`。要從原始碼安裝，先執行 `pwsh -NoProfile -File scripts\build-release.ps1`（需要 Go 與 Node.js），它會在 `%USERPROFILE%\releases\codex-auto-retry\` 產生壓縮檔與單檔安裝程式。
 
-### 管理與維護腳本
+### 設定檔、日誌位置與管理捷徑
 
-位於壓縮檔根目錄（原始碼範本在 `release\windows\`）。使用單一執行檔時，請保留下載的 `.exe`，之後雙擊它從選單選擇即可；要用指令或捷徑也可以直接帶參數：`-install`、`-startup-manager`、`-safe-disable`、`-uninstall`（加 `-remove-data` 連設定與日誌一併清除）、`-extract <資料夾>`。壓縮檔裡的入口檔如下：
+* **資料與狀態主目錄**：`%LOCALAPPDATA%\CodexAutoRetry`（即 `C:\Users\<使用者名稱>\AppData\Local\CodexAutoRetry`）
+* **重試設定檔**：`%LOCALAPPDATA%\CodexAutoRetry\config.json`
+* **執行日誌檔**：`%LOCALAPPDATA%\CodexAutoRetry\logs\daemon.log`
+* **開始功能表捷徑**：`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Codex Auto Retry`（含啟動管理員、參數設定、開啟設定與日誌資料夾、安全停用、解除安裝）
+* **命令列參數**：單一執行檔亦支援 `-install`（可加 `-create-desktop-shortcut`）、`-startup-manager`、`-safe-disable`、`-uninstall`（加 `-remove-data` 連設定與日誌一併清除）、`-extract <資料夾>`、`-cli`（傳統文字選單）。壓縮檔裡的入口檔如下：
 
-* `啟動管理員.cmd`：開啟啟動管理員視窗，顯示啟動指令、監護狀態、心跳與 Windows `StartupApproved` 狀態。
+* `啟動管理員.cmd`：開啟啟動管理員視窗，顯示啟動指令、監護狀態、心跳、設定／日誌路徑與 Windows `StartupApproved` 狀態。
 * `安全停用.cmd`：一鍵緊急停止腳本，停用共用後端、清理外掛登錄值並恢復 Codex 官方直接執行模式。
-* `解除安裝.cmd`：乾淨解除安裝守護行程與外掛，預設保留使用者設定與日誌。執行 `.\uninstall-release.ps1 -RemoveData` 可執行完全清除。
+* `解除安裝.cmd`：乾淨解除安裝守護行程、捷徑與外掛，預設保留使用者設定與日誌。執行 `.\uninstall-release.ps1 -RemoveData` 可執行完全清除。
 
 ---
 

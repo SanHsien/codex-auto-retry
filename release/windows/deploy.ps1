@@ -9,6 +9,7 @@ param(
     [switch]$SkipPluginRegistration,
     [switch]$SkipRuntimeInstall,
     [switch]$EnableSharedAppServer,
+    [switch]$CreateDesktopShortcut,
     [switch]$WaitForCodexExit
 )
 
@@ -238,11 +239,12 @@ function Set-InstalledMcpLauncher {
 }
 
 function Install-Runtime {
-    param([string]$PluginPath, [bool]$EnableSharedAppServer)
+    param([string]$PluginPath, [bool]$EnableSharedAppServer, [bool]$CreateDesktopShortcut)
 
     $script = Join-Path $PluginPath 'scripts\install.ps1'
     $arguments = @('-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $script)
     if ($EnableSharedAppServer) { $arguments += '-EnableSharedAppServer' }
+    if ($CreateDesktopShortcut) { $arguments += '-CreateDesktopShortcut' }
     $result = Invoke-CodexCli -Path (Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe') -Arguments $arguments -TimeoutMilliseconds 180000
     if ($result.ExitCode -ne 0) {
         throw "背景服務安裝失敗（exit=$($result.ExitCode)，category=$(Get-ReleaseCommandFailure $result)）。 / The watchdog installer failed (exit=$($result.ExitCode), category=$(Get-ReleaseCommandFailure $result))."
@@ -712,7 +714,14 @@ try {
 
     if (-not $SkipRuntimeInstall) {
         Write-Step '正在安裝並啟動背景服務… / Installing and starting the background watchdog...'
-        [void](Install-Runtime -PluginPath $pluginTarget -EnableSharedAppServer:$EnableSharedAppServer)
+        [void](Install-Runtime -PluginPath $pluginTarget -EnableSharedAppServer:$EnableSharedAppServer -CreateDesktopShortcut:$CreateDesktopShortcut)
+        $shellHelper = Join-Path $pluginTarget 'scripts\shell-integration.ps1'
+        if (Test-Path -LiteralPath $shellHelper -PathType Leaf) {
+            . $shellHelper
+            Copy-CodexAutoRetrySupportFiles -ScriptsRoot (Join-Path $pluginTarget 'scripts') -InstallDir $runtimePath -ReleaseRoot $packageRootPath
+            $baseVer = ([string]$manifest.pluginVersion -split '\+', 2)[0]
+            [void](Register-CodexAutoRetryShellIntegration -InstallDir $runtimePath -UserProfileRoot $profileRootPath -Version $baseVer -CreateDesktopShortcut:$CreateDesktopShortcut)
+        }
 		$journal.phase = 'runtime_installed'
 		Write-JsonAtomic -Path $upgradeJournalPath -Value $journal
     }

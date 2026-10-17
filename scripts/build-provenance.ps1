@@ -3,7 +3,7 @@ function Get-CodexBuildSourceHash {
     $source = Join-Path $Root 'scripts\source'
     $files = @(Get-ChildItem -LiteralPath $source -File -Recurse | Where-Object {
         $_.FullName -notmatch '[\\/]node_modules[\\/]' -and (
-            $_.Extension -eq '.go' -or $_.Name -in @('go.mod','go.sum','panel.html','settings.ps1'))
+            $_.Extension -in @('.go','.syso') -or $_.Name -in @('go.mod','go.sum','panel.html','settings.ps1','app-icon.ico'))
     } | Sort-Object FullName)
     if ($files.Count -eq 0) { throw 'Build sources are missing.' }
     $lines = foreach ($file in $files) {

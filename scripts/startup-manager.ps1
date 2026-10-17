@@ -1,6 +1,6 @@
 ﻿[CmdletBinding()]
 param(
-    [ValidateSet('gui', 'status', 'enable', 'disable', 'start', 'stop', 'launch-codex', 'safe-disable', 'uninstall')]
+    [ValidateSet('gui', 'status', 'enable', 'disable', 'start', 'stop', 'open-settings', 'open-folder', 'open-log', 'launch-codex', 'safe-disable', 'uninstall')]
     [string]$Action = 'gui',
     [switch]$RemoveData,
     [switch]$NoPrompt,
@@ -276,6 +276,8 @@ function Get-ManagerState {
         PluginInstalled = $null -ne $manifest -and [string]$manifest.name -eq 'codex-auto-retry'
         PluginVersion = if ($manifest) { [string]$manifest.version } else { $null }
         InstallDir = $installDir
+        ConfigPath = $configPath
+        LogPath = Join-Path $installDir 'logs\daemon.log'
         ServiceRunning = $serviceRunning
         ProcessCount = $processes.Count
         ProcessIds = @($processes | ForEach-Object { [int]$_.ProcessId })
@@ -362,6 +364,9 @@ function Invoke-ManagerSafeDisable {
     if (-not (Test-Path -LiteralPath $safeDisable -PathType Leaf) -and -not [string]::IsNullOrWhiteSpace($ReleaseRoot)) {
         $safeDisable = Join-Path $ReleaseRoot 'payload\codex-auto-retry\scripts\safe-disable.ps1'
     }
+    if (-not (Test-Path -LiteralPath $safeDisable -PathType Leaf)) {
+        $safeDisable = Join-Path $installDir 'safe-disable.ps1'
+    }
     $null = Invoke-ManagedScript -Path $safeDisable -Arguments @('-DataDir', $installDir)
     return Get-ManagerState
 }
@@ -370,6 +375,12 @@ function Invoke-ManagerUninstall {
     $uninstaller = ''
     if (-not [string]::IsNullOrWhiteSpace($ReleaseRoot)) {
         $uninstaller = Join-Path $ReleaseRoot 'uninstall-release.ps1'
+    }
+    if (-not (Test-Path -LiteralPath $uninstaller -PathType Leaf)) {
+        $installedUninstaller = Join-Path $installDir 'uninstall-release.ps1'
+        if (Test-Path -LiteralPath $installedUninstaller -PathType Leaf) {
+            $uninstaller = $installedUninstaller
+        }
     }
     if (-not (Test-Path -LiteralPath $uninstaller -PathType Leaf)) {
         throw '要完整解除安裝，請從解壓縮的發佈檔資料夾（或執行檔選單）開啟啟動管理員，才能安全移除 Codex 外掛註冊。 / For a complete uninstall, run this manager from the extracted release folder so it can remove the Codex plugin registration safely.'
@@ -394,8 +405,38 @@ function Invoke-ManagerAction {
         'disable' { $null = Remove-ManagedStartup; return Get-ManagerState }
         'start' { return Start-ManagedService }
         'stop' { return Stop-ManagedService }
+        'open-settings' {
+            $settingsScript = Join-Path $installDir 'settings.ps1'
+            if (-not (Test-Path -LiteralPath $settingsScript -PathType Leaf)) {
+                $settingsScript = Join-Path $PSScriptRoot 'source\ui\settings.ps1'
+            }
+            if (-not (Test-Path -LiteralPath $settingsScript -PathType Leaf)) {
+                throw "找不到參數設定視窗指令碼：$settingsScript / Settings script not found: $settingsScript"
+            }
+            Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA', '-File', $settingsScript, '-DataDir', $installDir, '-Executable', $watchdog) -WindowStyle Hidden | Out-Null
+            return Get-ManagerState
+        }
+        'open-folder' {
+            New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+            Start-Process -FilePath 'explorer.exe' -ArgumentList @($installDir) | Out-Null
+            return Get-ManagerState
+        }
+        'open-log' {
+            $logDir = Join-Path $installDir 'logs'
+            New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+            $logFile = Join-Path $logDir 'daemon.log'
+            if (-not (Test-Path -LiteralPath $logFile -PathType Leaf)) {
+                [IO.File]::WriteAllText($logFile, '', [Text.UTF8Encoding]::new($false))
+            }
+            Start-Process -FilePath 'notepad.exe' -ArgumentList @($logFile) | Out-Null
+            return Get-ManagerState
+        }
         'launch-codex' {
-            $null = Invoke-ManagedScript -Path (Join-Path $PSScriptRoot 'launch-codex.ps1') -Arguments @('-DataDir', $installDir)
+            $launcher = Join-Path $PSScriptRoot 'launch-codex.ps1'
+            if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) {
+                $launcher = Join-Path $pluginTarget 'scripts\launch-codex.ps1'
+            }
+            $null = Invoke-ManagedScript -Path $launcher -Arguments @('-DataDir', $installDir)
             return Get-ManagerState
         }
         'safe-disable' { return Invoke-ManagerSafeDisable }
@@ -416,6 +457,9 @@ $managerText = @{
     subtitle          = @{ zh = '檢視開機啟動、背景服務與共用後端狀態。所有操作只影響本外掛。'; en = 'Inspect startup, service, and shared-backend state. Actions are limited to this plugin.' }
     language          = @{ zh = 'English'; en = '中文' }
     refresh           = @{ zh = '重新整理狀態'; en = 'Refresh status' }
+    'open-settings'   = @{ zh = '開啟參數設定'; en = 'Open settings' }
+    'open-folder'     = @{ zh = '開啟設定資料夾'; en = 'Open config folder' }
+    'open-log'        = @{ zh = '檢視執行日誌'; en = 'View daemon log' }
     'launch-codex'    = @{ zh = '安全啟動 Codex'; en = 'Launch Codex safely' }
     enable            = @{ zh = '啟用開機啟動'; en = 'Enable startup' }
     disable           = @{ zh = '停用開機啟動'; en = 'Disable startup' }
@@ -434,6 +478,7 @@ $managerText = @{
 }
 $managerStateLabels = @{
     PluginInstalled = '外掛已安裝'; PluginVersion = '外掛版本'; InstallDir = '安裝資料夾'
+    ConfigPath = '設定檔路徑'; LogPath = '執行日誌路徑'
     ServiceRunning = '服務執行中'; ProcessCount = '行程數'; ProcessIds = '行程 ID'
     HeartbeatFresh = '心跳正常'; RuntimeVersion = '執行版本'; LastScanAt = '最近掃描'
     StartupMode = '開機啟動模式'; StartupEntry = '開機啟動指令'; StartupOwned = '啟動項目屬於本外掛'
@@ -515,8 +560,18 @@ function Show-Manager {
     $form = New-Object System.Windows.Forms.Form
     $form.Text = $text.title[$ui.Lang]
     $form.StartPosition = 'CenterScreen'
-    $form.Size = New-Object System.Drawing.Size(720, 600)
-    $form.MinimumSize = New-Object System.Drawing.Size(620, 540)
+    $form.Size = New-Object System.Drawing.Size(720, 640)
+    $form.MinimumSize = New-Object System.Drawing.Size(620, 580)
+    $loadedIcon = $null
+    foreach ($iconCandidate in @((Join-Path $installDir 'app-icon.ico'), (Join-Path $PSScriptRoot 'app-icon.ico'), (Join-Path $PSScriptRoot 'source\ui\app-icon.ico'))) {
+        if ($iconCandidate -and (Test-Path -LiteralPath $iconCandidate -PathType Leaf)) {
+            try { $loadedIcon = [System.Drawing.Icon]::new($iconCandidate); break } catch { }
+        }
+    }
+    if (-not $loadedIcon -and (Test-Path -LiteralPath $watchdog -PathType Leaf)) {
+        try { $loadedIcon = [System.Drawing.Icon]::ExtractAssociatedIcon($watchdog) } catch { }
+    }
+    if ($loadedIcon) { $form.Icon = $loadedIcon }
 
     $title = New-Object System.Windows.Forms.Label
     $title.Text = $text.title[$ui.Lang]
@@ -559,7 +614,7 @@ function Show-Manager {
     $buttons.WrapContents = $true
     $buttons.Anchor = 'Bottom,Left,Right'
     $buttons.Location = New-Object System.Drawing.Point(18, 420)
-    $buttons.Size = New-Object System.Drawing.Size(668, 124)
+    $buttons.Size = New-Object System.Drawing.Size(668, 160)
     $buttons.Padding = New-Object System.Windows.Forms.Padding(0)
     $form.Controls.Add($buttons)
 
@@ -571,6 +626,9 @@ function Show-Manager {
     $buttons.Controls.Add($refresh)
 
     $definitions = @(
+        @('open-settings', $false),
+        @('open-folder', $false),
+        @('open-log', $false),
         @('launch-codex', $false),
         @('enable', $false),
         @('disable', $false),

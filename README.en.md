@@ -139,10 +139,10 @@ The watchdog runs as a single lightweight background process with a notification
 <!-- Screenshot placeholder: Tray controller -->
 <!-- ![Windows Tray Controller](assets/tray.png) -->
 
-- **Hover Tooltip**: Displays the current status (running, paused, waiting, active, stopped) and live countdown for the nearest pending retry.
+- **Hover Tooltip & 5-State Color Icons**: Displays a distinct anti-aliased ARGB tray icon for each state (`running` emerald, `active` blue, `waiting` amber, `paused` slate, `stopped` coral red) and a live countdown for the nearest pending retry.
 - **Explorer Restart Recovery**: If Windows Explorer restarts, the watchdog automatically re-registers the tray icon and restores current state.
 - **Double-Click**: Opens the graphical settings window.
-- **Right-Click Context Menu**: Allows quick pausing/resuming of dispatch, opening settings, or exiting the watchdog.
+- **Right-Click Context Menu**: Allows quick pausing/resuming of dispatch, opening settings, opening the startup manager, opening the config & log folder (`%LOCALAPPDATA%\CodexAutoRetry`), viewing `daemon.log`, or exiting the watchdog.
 
 The settings window allows configuring:
 - Recovery limits (`Recoveries This Outage` and `Consecutive No Progress`);
@@ -150,6 +150,7 @@ The settings window allows configuring:
 - Fallback retry text (up to 500 characters);
 - Watchdog notification preferences;
 - One-click Traditional Chinese/English toggle, shared with the startup manager and the panel;
+- Direct buttons to open the config & log folder (`%LOCALAPPDATA%\CodexAutoRetry`) and view `daemon.log`;
 - A queue that shows Codex task titles, with Refresh and Find Interrupted buttons; a cancelled retry stays as Cancelled for 24 hours and can be restarted.
 
 <p align="center">
@@ -175,7 +176,7 @@ Built with vanilla TypeScript and embedded into the Go MCP binary via Go `embed`
 
 ### Interface Language (Traditional Chinese / English)
 
-The settings window, startup manager, embedded panel, and tray share one language preference (`%LOCALAPPDATA%\CodexAutoRetry\ui-language.json`, Traditional Chinese by default); switching it in one place applies to the others the next time they render. The installer, the executable's menu, console progress, and error messages always show Chinese and English side by side, so they are readable before any preference exists.
+The settings window, startup manager, embedded panel, installer GUI, and tray share one language preference (`%LOCALAPPDATA%\CodexAutoRetry\ui-language.json`, Traditional Chinese by default); switching it in one place applies to the others the next time they render. The installer, console progress, and error messages always show Chinese and English side by side, so they are readable before any preference exists.
 
 ---
 
@@ -193,8 +194,8 @@ The settings window, startup manager, embedded panel, and tray share one languag
 ### End-User Installation
 
 1. Download the single executable (`...-windows-x64.exe`) or download and extract the self-contained Windows x64 release ZIP.
-2. Fully close Codex App, then double-click the executable (a menu offers install/update, startup manager, safe-disable, uninstall and extract) or `安裝.cmd`. Both run the same `deploy.ps1`; the executable only unpacks the ZIP into a temporary folder first. The build is not code-signed, so Windows SmartScreen may warn about an unknown publisher; compare the SHA-256 on the release page.
-3. The installer verifies file hashes via SHA-256, registers current-user startup, deploys the local watchdog under `%LOCALAPPDATA%\CodexAutoRetry`, and registers the Codex plugin.
+2. Fully close Codex App, then double-click the executable (which opens a graphical Installer & Control Center window offering install/update with optional Desktop shortcut, startup manager, settings, config/log folder access, safe-disable, uninstall, and extract) or `安裝.cmd`. Both run the same `deploy.ps1`; the executable unpacks the ZIP into a temporary folder first. The build is not code-signed, so Windows SmartScreen may warn about an unknown publisher; compare the SHA-256 on the release page.
+3. The installer verifies file hashes via SHA-256, registers current-user startup, deploys the local watchdog under `%LOCALAPPDATA%\CodexAutoRetry`, creates Start Menu shortcuts under `Codex Auto Retry`, registers a per-user entry in Windows "Installed Apps", and registers the Codex plugin.
 4. Neither administrator rights nor Go/Node.js dependencies are required.
 
 > `release\windows\` in the source tree is only the installer template; it has no `release-manifest.json` or `payload\`, so running it directly fails with `release-manifest.json is missing`. To install from source, run `pwsh -NoProfile -File scripts\build-release.ps1` (requires Go and Node.js), which writes the ZIP and the single-file installer to `%USERPROFILE%\releases\codex-auto-retry\`.
@@ -203,13 +204,18 @@ The one-click installer shows a Traditional Chinese Retry/Cancel prompt while Co
 
 Plugin-list support is checked before replacement; final verification requires the exact installed version. CLI warnings do not turn successful commands into failures. If verification fails, rollback restores plugin and runtime files together and leaves retries stopped. Incomplete rollback retains its backup and journal. Error diagnostics expose only exit codes and safe categories, not credentials or raw output.
 
-### Administrative & Break-Glass Tools
+### Config/Log Paths & Administrative Tools
 
-These launchers are in the ZIP root. With the single executable, keep the downloaded `.exe` and double-click it to pick an action from its menu. Flags skip the menu for terminals and shortcuts: `-install`, `-startup-manager`, `-safe-disable`, `-uninstall` (add `-remove-data` for a full cleanup), and `-extract <folder>`.
+- **Data & Runtime Directory**: `%LOCALAPPDATA%\CodexAutoRetry`
+- **Config File**: `%LOCALAPPDATA%\CodexAutoRetry\config.json`
+- **Daemon Log**: `%LOCALAPPDATA%\CodexAutoRetry\logs\daemon.log`
+- **Start Menu Shortcuts**: `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Codex Auto Retry`
 
-- `啟動管理員.cmd`: Launches a windowed startup manager (without leaving a command console) showing exact startup commands, supervisor status, heartbeat, and Windows `StartupApproved` status.
+With the single executable, flags skip the GUI window for terminals and scripts: `-install` (add `-create-desktop-shortcut` for a Desktop shortcut), `-startup-manager`, `-safe-disable`, `-uninstall` (add `-remove-data` for a full cleanup), `-extract <folder>`, and `-cli` (classic text menu).
+
+- `啟動管理員.cmd`: Launches a windowed startup manager (without leaving a command console) showing exact startup commands, supervisor status, heartbeat, config/log paths, and Windows `StartupApproved` status.
 - `安全停用.cmd`: One-click emergency script that immediately disables shared mode, clears plugin-owned registry values, and restores Codex to official direct execution.
-- `解除安裝.cmd`: Cleanly uninstalls the watchdog and plugin while preserving user settings and logs by default. Run `.\uninstall-release.ps1 -RemoveData` to perform a full cleanup.
+- `解除安裝.cmd`: Cleanly uninstalls the watchdog, shortcuts, and plugin while preserving user settings and logs by default. Run `.\uninstall-release.ps1 -RemoveData` to perform a full cleanup.
 
 <p align="center">
   <img src="assets/startup_manager.png" alt="Codex Auto Retry Startup Manager" width="560" />

@@ -10,6 +10,14 @@ English | [繁體中文](CHANGELOG.md)
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-17
+
+### Added
+- **Graphical Installer & Control Center (`release/windows/installer-gui.ps1`)**: Double-clicking `Codex-Auto-Retry-<version>-windows-x64.exe` now opens a modern WinForms window instead of the `1~6` console menu, offering one-click install/update, optional Desktop shortcut and shared-backend checkboxes, live log output, and direct buttons for the Startup Manager, Retry Settings, config/log folder, `daemon.log`, Safe Disable, Uninstall (keep settings or remove all data), and package extraction. Added `-cli` (classic text menu) and `-create-desktop-shortcut` CLI flags.
+- **Windows Start Menu & "Installed Apps" Integration (`scripts/shell-integration.ps1`)**: Installing now copies self-contained management scripts and icons into `%LOCALAPPDATA%\CodexAutoRetry`, creates a "Codex Auto Retry" Start Menu shortcut group (Startup Manager, Settings, Open Config & Log Folder, Safe Disable, Uninstall) plus an optional Desktop shortcut, and registers a per-user `HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\CodexAutoRetry` entry, cleaning them all up on uninstall.
+- **Config & Log Path Visibility**: The Settings window (`scripts/source/ui/settings.ps1`), Startup Manager (`scripts/startup-manager.ps1`), Installer GUI, and System Tray right-click menu (`scripts/source/tray_windows.go`) now display the data directory (`%LOCALAPPDATA%\CodexAutoRetry`), `config.json`, and `logs\daemon.log` paths directly, with one-click buttons/menu items to open the folder, view `daemon.log`, and open the Startup Manager.
+- **Custom App Icon & 5-State ARGB System Tray Icons (`tools/generate_icons.py`, `scripts/source/tray_icons_windows.go`)**: Embedded a multi-resolution (16/24/32/48/256 px) `.ico` via PE COFF `.syso` resources into all Windows `.exe` binaries and WinForms windows, and replaced generic system tray icons with anti-aliased 32-bit ARGB icons reflecting each daemon state (`running` emerald, `active` blue, `waiting` amber, `paused` slate, `stopped` coral red).
+
 ## [1.1.1] - 2026-10-08
 
 ### Fixed

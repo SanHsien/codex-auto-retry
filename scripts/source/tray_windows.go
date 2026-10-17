@@ -48,10 +48,13 @@ const (
 	tpmRightButton = 0x0002
 	tpmReturnCmd   = 0x0100
 
-	menuOpenSettings = 1001
-	menuTogglePause  = 1002
-	menuExit         = 1003
-	trayTimerID      = 1
+	menuOpenSettings       = 1001
+	menuTogglePause        = 1002
+	menuExit               = 1003
+	menuOpenStartupManager = 1004
+	menuOpenDataDir        = 1005
+	menuOpenLogFile        = 1006
+	trayTimerID            = 1
 )
 
 type trayPoint struct{ X, Y int32 }
@@ -156,7 +159,7 @@ func runTray(ctx context.Context, cancel context.CancelFunc, dataDir string, log
 	}
 	className, _ := windows.UTF16PtrFromString(fmt.Sprintf("CodexAutoRetryTray-%d", os.Getpid()))
 	instance, _, _ := procGetModuleHandle.Call(0)
-	icon, _, _ := procLoadIcon.Call(0, 32512)
+	icon := loadTrayIcon("running", 32512)
 	wc := windowClass{Size: uint32(unsafe.Sizeof(windowClass{})), WndProc: trayWindowProc, Instance: instance, Icon: icon, IconSmall: icon, ClassName: className}
 	if result, _, err := procRegisterClassEx.Call(uintptr(unsafe.Pointer(&wc))); result == 0 {
 		return fmt.Errorf("register tray window: %w", err)
@@ -170,11 +173,11 @@ func runTray(ctx context.Context, cancel context.CancelFunc, dataDir string, log
 		taskbarCreated: taskbarCreated,
 		service:        newManagementService(dataDir),
 		icons: map[string]uintptr{
-			"running": loadSharedIcon(32516),
-			"waiting": loadSharedIcon(32515),
-			"paused":  loadSharedIcon(32515),
-			"active":  loadSharedIcon(32516),
-			"stopped": loadSharedIcon(32513),
+			"running": loadTrayIcon("running", 32516),
+			"waiting": loadTrayIcon("waiting", 32515),
+			"paused":  loadTrayIcon("paused", 32515),
+			"active":  loadTrayIcon("active", 32516),
+			"stopped": loadTrayIcon("stopped", 32513),
 		},
 	}
 	trayApps.Store(hwnd, app)
@@ -443,6 +446,13 @@ func (a *trayApp) setVisual(iconState, tip string) {
 	procShellNotifyIcon.Call(nimModify, uintptr(unsafe.Pointer(&data)))
 }
 
+func loadTrayIcon(visual string, fallbackID uintptr) uintptr {
+	if custom := loadCustomTrayIcon(visual); custom != 0 {
+		return custom
+	}
+	return loadSharedIcon(fallbackID)
+}
+
 func loadSharedIcon(resourceID uintptr) uintptr {
 	icon, _, _ := procLoadIcon.Call(0, resourceID)
 	return icon
@@ -469,8 +479,13 @@ func (a *trayApp) showMenu() {
 		status = strings.TrimPrefix(status, "Codex Auto Retry - ")
 	}
 	appendTrayMenu(menu, mfGrayed, 0, status)
+	appendTrayMenu(menu, mfGrayed, 0, L("資料夾：", "Folder: ")+a.dataDir)
 	appendTrayMenu(menu, mfSeparator, 0, "")
 	appendTrayMenu(menu, mfString, menuOpenSettings, L("開啟設定…", "Open settings…"))
+	appendTrayMenu(menu, mfString, menuOpenStartupManager, L("開啟啟動管理員…", "Open startup manager…"))
+	appendTrayMenu(menu, mfString, menuOpenDataDir, L("開啟設定與日誌資料夾", "Open config & log folder"))
+	appendTrayMenu(menu, mfString, menuOpenLogFile, L("檢視執行日誌 (daemon.log)", "View daemon log (daemon.log)"))
+	appendTrayMenu(menu, mfSeparator, 0, "")
 	pauseText := L("暫停自動重試", "Pause automatic retry")
 	if snapshot.Paused {
 		pauseText = L("恢復自動重試", "Resume automatic retry")
@@ -500,6 +515,12 @@ func (a *trayApp) handleCommand(command uint16) {
 	switch command {
 	case menuOpenSettings:
 		a.openSettings()
+	case menuOpenStartupManager:
+		a.openStartupManager()
+	case menuOpenDataDir:
+		a.openDataDir()
+	case menuOpenLogFile:
+		a.openLogFile()
 	case menuTogglePause:
 		snapshot, err := a.service.snapshot(time.Now().UTC())
 		if err == nil {
@@ -509,6 +530,68 @@ func (a *trayApp) handleCommand(command uint16) {
 	case menuExit:
 		a.cancel()
 		procPostMessage.Call(a.hwnd, wmClose, 0, 0)
+	}
+}
+
+func (a *trayApp) openDataDir() {
+	_ = os.MkdirAll(a.dataDir, 0o700)
+	cmd := exec.Command("explorer.exe", a.dataDir)
+	if err := cmd.Start(); err != nil {
+		a.logger.Printf("open data dir failed category=open_data_dir")
+	}
+}
+
+func (a *trayApp) openLogFile() {
+	logDir := filepath.Join(a.dataDir, "logs")
+	_ = os.MkdirAll(logDir, 0o700)
+	logPath := filepath.Join(logDir, "daemon.log")
+	if _, err := os.Stat(logPath); os.IsNotExist(err) {
+		if f, createErr := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600); createErr == nil {
+			_ = f.Close()
+		}
+	}
+	cmd := exec.Command("notepad.exe", logPath)
+	if err := cmd.Start(); err != nil {
+		a.logger.Printf("open log file failed category=open_log_file")
+	}
+}
+
+func (a *trayApp) openStartupManager() {
+	candidates := []string{
+		filepath.Join(a.dataDir, "startup-manager.ps1"),
+	}
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		candidates = append(candidates,
+			filepath.Join(exeDir, "startup-manager.ps1"),
+			filepath.Join(exeDir, "..", "startup-manager.ps1"),
+		)
+	}
+	var scriptPath string
+	for _, c := range candidates {
+		if info, err := os.Stat(c); err == nil && !info.IsDir() {
+			scriptPath = c
+			break
+		}
+	}
+	if scriptPath == "" {
+		a.openSettings()
+		return
+	}
+	config, err := loadOrCreateConfig(filepath.Join(a.dataDir, "config.json"))
+	if err != nil {
+		a.logger.Printf("startup manager open failed category=startup_manager_config")
+		return
+	}
+	powerShell, err := resolvePowerShellExecutable(config.PowerShellExecutable)
+	if err != nil {
+		a.logger.Printf("startup manager open failed category=startup_manager_shell")
+		return
+	}
+	cmd := exec.Command(powerShell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-STA", "-File", scriptPath, "-DataDir", a.dataDir)
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NO_WINDOW}
+	if err := cmd.Start(); err != nil {
+		a.logger.Printf("startup manager open failed category=startup_manager_start")
 	}
 }
 

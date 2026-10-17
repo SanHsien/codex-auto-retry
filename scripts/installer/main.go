@@ -38,12 +38,15 @@ const (
 	actUninstall
 	actUninstallRemoveData
 	actExtract
+	actGui
 )
 
 type options struct {
-	action    action
-	extractTo string
-	noPause   bool
+	action                action
+	extractTo             string
+	noPause               bool
+	cli                   bool
+	createDesktopShortcut bool
 }
 
 type menuItem struct {
@@ -78,14 +81,17 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	input := bufio.NewReader(stdin)
 	if opts.action == actNone {
-		perform := func(selected action, extractTo string) int {
-			return perform(self, selected, extractTo, stdout, stderr)
+		if !opts.cli {
+			return performWithOptions(self, actGui, "", opts, stdout, stderr)
+		}
+		performFn := func(selected action, extractTo string) int {
+			return performWithOptions(self, selected, extractTo, opts, stdout, stderr)
 		}
 		status := func() string { return describeStatus(self) }
-		return runMenu(input, stdout, status, defaultExtractFolder(self), perform)
+		return runMenu(input, stdout, status, defaultExtractFolder(self), performFn)
 	}
-	code := perform(self, opts.action, opts.extractTo, stdout, stderr)
-	if !opts.noPause && opts.action != actExtract && opts.action != actManager {
+	code := performWithOptions(self, opts.action, opts.extractTo, opts, stdout, stderr)
+	if !opts.noPause && opts.action != actExtract && opts.action != actManager && opts.action != actGui {
 		fmt.Fprintln(stdout)
 		fmt.Fprint(stdout, "按 Enter 關閉視窗 / Press Enter to close…")
 		_, _ = input.ReadString('\n')
@@ -99,11 +105,13 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags := flag.NewFlagSet("Codex-Auto-Retry", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.BoolVar(&install, "install", false, "install or update without showing the menu")
+	flags.BoolVar(&opts.createDesktopShortcut, "create-desktop-shortcut", false, "with -install, also create a Desktop shortcut")
 	flags.BoolVar(&uninstall, "uninstall", false, "uninstall the watchdog and plugin, keeping settings and logs")
 	flags.BoolVar(&removeData, "remove-data", false, "with -uninstall, also delete settings, state and logs")
 	flags.BoolVar(&safeDisable, "safe-disable", false, "disable the shared backend and return Codex to the official direct mode")
 	flags.BoolVar(&manager, "startup-manager", false, "open the startup manager window (status, startup, service, uninstall)")
 	flags.StringVar(&opts.extractTo, "extract", "", "only extract the release package into `folder`")
+	flags.BoolVar(&opts.cli, "cli", false, "use the interactive console menu instead of the graphical installer")
 	flags.BoolVar(&opts.noPause, "no-pause", false, "do not wait for Enter before exiting")
 	if err := flags.Parse(args); err != nil {
 		return opts, err
@@ -120,6 +128,10 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	})
 	if removeData && !uninstall {
 		fmt.Fprintln(stderr, "-remove-data requires -uninstall")
+		return opts, errors.New("invalid flags")
+	}
+	if opts.createDesktopShortcut && !install {
+		fmt.Fprintln(stderr, "-create-desktop-shortcut requires -install")
 		return opts, errors.New("invalid flags")
 	}
 	if extract && (strings.TrimSpace(opts.extractTo) == "" || strings.HasPrefix(opts.extractTo, "-")) {
@@ -139,6 +151,10 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	}
 	if selected > 1 {
 		fmt.Fprintln(stderr, "choose only one of -install, -uninstall, -safe-disable, -startup-manager and -extract")
+		return opts, errors.New("invalid flags")
+	}
+	if opts.cli && selected > 0 {
+		fmt.Fprintln(stderr, "-cli cannot be combined with an action flag")
 		return opts, errors.New("invalid flags")
 	}
 	if opts.action == actUninstall && removeData {
@@ -211,6 +227,10 @@ func lookupMenu(key string) (action, bool) {
 }
 
 func perform(self string, selected action, extractTo string, stdout, stderr io.Writer) int {
+	return performWithOptions(self, selected, extractTo, options{action: selected, extractTo: extractTo}, stdout, stderr)
+}
+
+func performWithOptions(self string, selected action, extractTo string, opts options, stdout, stderr io.Writer) int {
 	if selected == actExtract {
 		root, err := extractPackage(self, extractTo)
 		if err != nil {
@@ -236,7 +256,18 @@ func perform(self string, selected action, extractTo string, stdout, stderr io.W
 	}
 
 	script, scriptArgs := "deploy.ps1", []string{"-WaitForCodexExit"}
+	if opts.createDesktopShortcut {
+		scriptArgs = append(scriptArgs, "-CreateDesktopShortcut")
+	}
 	switch selected {
+	case actGui:
+		guiScript := filepath.Join(root, "installer-gui.ps1")
+		if _, statErr := os.Stat(guiScript); statErr == nil {
+			script, scriptArgs = "installer-gui.ps1", []string{"-PackageRoot", root}
+		} else {
+			script, scriptArgs = "startup-manager.ps1", []string{"-Action", "gui"}
+		}
+		fmt.Fprintln(stdout, "正在開啟圖形化安裝與控制中心… / Opening graphical setup & control center…")
 	case actUninstall:
 		script, scriptArgs = "uninstall-release.ps1", nil
 	case actUninstallRemoveData:
@@ -250,10 +281,13 @@ func perform(self string, selected action, extractTo string, stdout, stderr io.W
 		fmt.Fprintln(stdout, "已開啟啟動管理員，關閉它之後這裡會繼續。 / The startup manager is open; this window continues when you close it.")
 	}
 
-	code, err := runPowerShell(filepath.Join(root, script), scriptArgs, selected == actManager, stdout, stderr)
+	code, err := runPowerShell(filepath.Join(root, script), scriptArgs, selected == actManager || selected == actGui, stdout, stderr)
 	if err != nil {
 		fmt.Fprintln(stderr, "無法啟動 Windows PowerShell / Cannot start Windows PowerShell:", err)
 		return exitInternal
+	}
+	if selected == actGui {
+		return code
 	}
 	fmt.Fprintln(stdout)
 	switch {

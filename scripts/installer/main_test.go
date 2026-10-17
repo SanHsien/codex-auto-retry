@@ -101,25 +101,32 @@ func TestParseOptionsRejectsInvalidCombinations(t *testing.T) {
 		{"-extract", "out", "-safe-disable"},
 		{"-startup-manager", "-uninstall"},
 		{"-startup-manager", "-extract", "out"},
+		{"-create-desktop-shortcut"},
+		{"-uninstall", "-create-desktop-shortcut"},
+		{"-cli", "-install"},
 	} {
 		if _, err := parseOptions(args, io.Discard); err == nil {
 			t.Fatalf("accepted %s", strings.Join(args, " "))
 		}
 	}
 	for _, valid := range []struct {
-		args   []string
-		action action
+		args                  []string
+		action                action
+		cli                   bool
+		createDesktopShortcut bool
 	}{
-		{nil, actNone},
-		{[]string{"-install"}, actInstall},
-		{[]string{"-uninstall"}, actUninstall},
-		{[]string{"-uninstall", "-remove-data"}, actUninstallRemoveData},
-		{[]string{"-safe-disable"}, actSafeDisable},
-		{[]string{"-startup-manager"}, actManager},
-		{[]string{"-extract", "out"}, actExtract},
+		{nil, actNone, false, false},
+		{[]string{"-cli"}, actNone, true, false},
+		{[]string{"-install"}, actInstall, false, false},
+		{[]string{"-install", "-create-desktop-shortcut"}, actInstall, false, true},
+		{[]string{"-uninstall"}, actUninstall, false, false},
+		{[]string{"-uninstall", "-remove-data"}, actUninstallRemoveData, false, false},
+		{[]string{"-safe-disable"}, actSafeDisable, false, false},
+		{[]string{"-startup-manager"}, actManager, false, false},
+		{[]string{"-extract", "out"}, actExtract, false, false},
 	} {
 		opts, err := parseOptions(append(valid.args, "-no-pause"), io.Discard)
-		if err != nil || opts.action != valid.action || !opts.noPause {
+		if err != nil || opts.action != valid.action || !opts.noPause || opts.cli != valid.cli || opts.createDesktopShortcut != valid.createDesktopShortcut {
 			t.Fatalf("%v: got %+v, %v", valid.args, opts, err)
 		}
 	}

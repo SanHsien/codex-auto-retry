@@ -10,6 +10,14 @@
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-17
+
+### Added
+- **圖形化安裝與控制中心（`release/windows/installer-gui.ps1`）**：直接雙擊 `Codex-Auto-Retry-<版本>-windows-x64.exe` 時改為開啟現代化 WinForms 視窗（取代原本的 `1~6` 黑色命令列選單），支援一鍵安裝／更新、可勾選「建立桌面捷徑」與「啟用外掛共用後端」、即時顯示安裝輸出、開啟啟動管理員、開啟參數設定、開啟設定與日誌資料夾、檢視 `daemon.log`、緊急安全停用、解除安裝（保留設定或完整清除）與解壓縮安裝包。新增 `-cli`（改用傳統文字選單）與 `-create-desktop-shortcut` 命令列參數。
+- **Windows 開始功能表與「已安裝的應用程式」整合（`scripts/shell-integration.ps1`）**：安裝時自動將獨立管理腳本與圖示部署至 `%LOCALAPPDATA%\CodexAutoRetry`，建立「開始功能表 > Codex Auto Retry」捷徑群組（啟動管理員、參數設定、開啟設定與日誌資料夾、安全停用、解除安裝）與選用的桌面捷徑，並登錄至目前使用者的 `HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\CodexAutoRetry`，解除安裝時自動完整清理。
+- **設定檔與日誌路徑透明化**：在設定視窗（`scripts/source/ui/settings.ps1`）、啟動管理員（`scripts/startup-manager.ps1`）、安裝控制中心與系統匣右鍵選單（`scripts/source/tray_windows.go`）直接顯示資料目錄（`%LOCALAPPDATA%\CodexAutoRetry`）、設定檔（`config.json`）與執行日誌（`logs\daemon.log`），並新增「開啟設定資料夾」、「檢視執行日誌」與「開啟啟動管理員」快速按鈕／選單項目。
+- **全新應用程式圖示與五態彩色系統匣圖示（`tools/generate_icons.py`、`scripts/source/tray_icons_windows.go`）**：以純標準庫產生多解析度（16/24/32/48/256 px）`.ico` 與 PE COFF `.syso` 資源，內嵌至所有 Windows `.exe` 執行檔與視窗標題列；系統匣改用 32-bit ARGB 抗鋸齒動態圖示，依 `running`（青綠）、`active`（亮藍）、`waiting`（琥珀橘）、`paused`（灰藍）、`stopped`（珊瑚紅）五種狀態即時變換。
+
 ## [1.1.1] - 2026-10-08
 
 ### Fixed

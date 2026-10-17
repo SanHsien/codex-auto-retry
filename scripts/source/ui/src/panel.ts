@@ -867,7 +867,7 @@ window.setInterval(() => {
 if (new URLSearchParams(window.location.search).has("preview")) {
   render(previewSnapshot());
 } else {
-  app = new App({ name: "Codex Auto Retry", version: "1.1.1" });
+  app = new App({ name: "Codex Auto Retry", version: "1.2.0" });
   app.onerror = (error) => showNotice(error instanceof Error ? error.message : L("連線失敗", "Connection failed"), true);
   app.onhostcontextchanged = handleHostContext;
   app.ontoolresult = (result) => {
@@ -888,7 +888,7 @@ function previewSnapshot(): ManagementSnapshot {
   const previewLanguage = new URLSearchParams(window.location.search).get("lang") === "en" ? "en" : "zh";
   return {
     ui_language: previewLanguage,
-    version: "1.1.1",
+    version: "1.2.0",
     running: true,
     heartbeat_stale: false,
     paused: false,
