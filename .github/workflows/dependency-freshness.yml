@@ -44,9 +44,8 @@ jobs:
 
       - name: Check declared dependency ranges
         id: deps
-        # Without a token the Actions half of the report resolves against the anonymous
-        # api.github.com limit, which hosted runners share; past it every Action row
-        # reads "latest unknown" and the check goes quiet without failing.
+        # Kept so the checker can authenticate if it ever queries GitHub; today it only
+        # reads requirements-dev.txt and asks PyPI.
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-

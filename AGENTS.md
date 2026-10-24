@@ -15,7 +15,7 @@
 ## 硬性邊界
 
 - 不提交使用者輸入檔案、專有文件、API key、token、私鑰或 `.env`。
-- 不推送到 `upstream`。上游同步先跑 `python tools/check_upstream_updates.py`，逐筆審查後再 merge / cherry-pick；不盲目覆蓋 fork 文件與 Windows gate。
+- 不推送到 `upstream`。上游同步先跑 `python tools/check_upstream_updates.py`，逐筆審查後 cherry-pick 或最小重做（與上游無共同祖先，不 merge）；不盲目覆蓋 fork 文件與 Windows gate。
 - 維護環境（`requirements-dev.txt`）僅安裝 pytest 與 ruff。
 - 不把 fork 包裝成原創產品，不移除原作者 sybxxx (TQY Local Tools) 或官方連結。
 

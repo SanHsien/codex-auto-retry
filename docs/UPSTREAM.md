@@ -24,7 +24,7 @@ CI 沒有 `upstream` remote，所以 baseline 的 `repo` 寫完整 clone URL，�
 
 1. 讀 commit 主旨與變更檔案（open PR 必須讀 diff，禁止只憑標題結案）。
 2. 判斷是否與繁中 README、Windows gate、發佈閘門或測試衝突。
-3. 可直接同步的提交用 merge；只需要部分修正時 cherry-pick 或最小重做。
+3. 本 repo 與上游已無共同祖先（歷史於 2026-10-24 壓縮），一律 cherry-pick 或最小重做，不要 merge。
 4. 跑 `pwsh -NoProfile -File tools\dev_check.ps1`。
 5. 在 `docs/DECISIONS.md` 記錄採用／略過理由。
 6. 驗證完成後才把 baseline 推進到已審查的完整 40 字元 SHA 與更新 PR/Issue 水位。

@@ -13,8 +13,8 @@ updates:
       github-actions:
         patterns: ["*"]
 
-  # Go daemon and MCP server (scripts/source). The installer module has no
-  # third-party requirements, so only its toolchain line is tracked below.
+  # Go daemon and MCP server (scripts/source), then the installer module (no
+  # third-party requirements today, so its entry only matters if one is added).
   - package-ecosystem: "gomod"
     directory: "/scripts/source"
     schedule:
