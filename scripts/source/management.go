@@ -1,0 +1,576 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+)
+
+type ManagedRetry struct {
+	ThreadID              string       `json:"thread_id" jsonschema:"Codex task identifier"`
+	Label                 string       `json:"label" jsonschema:"privacy-safe short task label"`
+	State                 string       `json:"state" jsonschema:"pending, starting, or running"`
+	Class                 FailureClass `json:"class" jsonschema:"provider failure category"`
+	DueAt                 string       `json:"due_at,omitempty" jsonschema:"next retry time in RFC 3339 format"`
+	SecondsRemaining      int64        `json:"seconds_remaining" jsonschema:"whole seconds until the retry is due"`
+	RecoveryAttempt       int          `json:"recovery_attempt" jsonschema:"current attempt in this fault recovery cycle"`
+	MaxRecoveryAttempts   int          `json:"max_recovery_attempts,omitempty" jsonschema:"maximum attempts in this fault recovery cycle"`
+	ConsecutiveRetry      int          `json:"consecutive_retry" jsonschema:"current retry without visible assistant progress"`
+	MaxConsecutiveRetries int          `json:"max_consecutive_retries,omitempty" jsonschema:"maximum retries without visible assistant progress"`
+	Action                RetryAction  `json:"action,omitempty" jsonschema:"current recovery action"`
+	CanRetryNow           bool         `json:"can_retry_now" jsonschema:"whether retry-now is currently available"`
+	CanCancel             bool         `json:"can_cancel" jsonschema:"whether the pending retry can be cancelled"`
+	CanRestart            bool         `json:"can_restart" jsonschema:"whether an exhausted retry can be restarted with a fresh budget"`
+	StopReason            string       `json:"stop_reason,omitempty" jsonschema:"privacy-safe reason why retries stopped"`
+}
+
+// Stopped entries are useful immediately after a limit is reached because
+// they explain why recovery stopped. They are not executable queue items,
+// though, and keeping every historical stop in the queue makes an otherwise
+// single-task session look like many pending jobs. Keep a short visible window
+// for the explicit reason, while retaining the durable state for diagnostics.
+const stoppedRetryDisplayWindow = time.Hour
+
+type ManagementSnapshot struct {
+	Version                             string         `json:"version" jsonschema:"watchdog version"`
+	Running                             bool           `json:"running" jsonschema:"whether a fresh watchdog heartbeat exists"`
+	HeartbeatStale                      bool           `json:"heartbeat_stale" jsonschema:"whether the last heartbeat is too old"`
+	Paused                              bool           `json:"paused" jsonschema:"whether new retry dispatches are paused"`
+	RetryPrompt                         string         `json:"retry_prompt" jsonschema:"fallback message used only when silent continuation is unsupported"`
+	MaxConsecutiveRetries               int            `json:"max_consecutive_retries" jsonschema:"maximum retries without visible assistant progress"`
+	MaxRecoveryAttempts                 int            `json:"max_recovery_attempts" jsonschema:"maximum attempts in one fault recovery cycle"`
+	AuthMaxAttempts                     int            `json:"auth_max_attempts" jsonschema:"maximum retries for limited authentication failures"`
+	InitialDelaySeconds                 int            `json:"initial_delay_seconds" jsonschema:"delay before the first automatic retry"`
+	MaxDelaySeconds                     int            `json:"max_delay_seconds" jsonschema:"maximum cap for increasing retry delays"`
+	DelayIncrementSeconds               int            `json:"delay_increment_seconds" jsonschema:"seconds added after each linear retry"`
+	DelayStrategy                       string         `json:"delay_strategy" jsonschema:"fixed, exponential, or linear retry delay"`
+	ShowNotifications                   bool           `json:"show_notifications" jsonschema:"whether Windows notifications are enabled"`
+	MemoryLimitMB                       int            `json:"memory_limit_mb" jsonschema:"private memory limit for the watchdog process, from 128 to 65536 MB"`
+	MemoryUsageMB                       int64          `json:"memory_usage_mb" jsonschema:"current watchdog private memory in MB"`
+	MemoryGuardTriggered                bool           `json:"memory_guard_triggered" jsonschema:"whether the memory guard stopped the service"`
+	SharedAppServerMemoryUsageMB        int64          `json:"shared_app_server_memory_usage_mb" jsonschema:"current shared Codex app-server private memory in MB"`
+	SharedAppServerMemoryLimitMB        int            `json:"shared_app_server_memory_limit_mb" jsonschema:"monitor-only private memory limit for the shared Codex app-server"`
+	SharedAppServerMemoryGuardTriggered bool           `json:"shared_app_server_memory_guard_triggered" jsonschema:"whether shared mode was disabled after its app-server exceeded the monitor limit"`
+	RetrySafetyWarning                  string         `json:"retry_safety_warning,omitempty" jsonschema:"warning when retry limits are unusually aggressive"`
+	SharedAppServerPort                 int            `json:"shared_app_server_port" jsonschema:"loopback port used by the optional shared Codex app-server"`
+	SharedAppServerEnabled              bool           `json:"shared_app_server_enabled" jsonschema:"whether the optional shared Codex app-server recovery mode is enabled"`
+	SharedAppServerRequested            bool           `json:"shared_app_server_requested" jsonschema:"whether the user wants shared recovery mode, including when temporarily unavailable"`
+	DesktopTransport                    string         `json:"desktop_transport" jsonschema:"official_stdio, shared_websocket, stopped, or unknown"`
+	RecoveryMode                        string         `json:"recovery_mode" jsonschema:"shared_websocket, safe_launcher_required, or none"`
+	AutomaticRecoverySupported          bool           `json:"automatic_recovery_supported" jsonschema:"whether the current Desktop transport accepts automatic recovery"`
+	RecoveryCapabilityReason            string         `json:"recovery_capability_reason" jsonschema:"privacy-safe capability reason"`
+	StartupApproved                     string         `json:"startup_approved" jsonschema:"Windows sign-in approval state for the CodexAutoRetry startup entry"`
+	Now                                 string         `json:"now" jsonschema:"snapshot time in RFC 3339 format"`
+	LastScanAt                          string         `json:"last_scan_at,omitempty" jsonschema:"last session scan time in RFC 3339 format"`
+	PendingRetries                      int            `json:"pending_retries" jsonschema:"number of retries waiting to dispatch"`
+	ActiveRetries                       int            `json:"active_retries" jsonschema:"number of retries starting or running"`
+	StoppedRetries                      int            `json:"stopped_retries" jsonschema:"number of currently visible retry chains that have stopped"`
+	WatchedRoots                        int            `json:"watched_roots" jsonschema:"number of watched Codex session roots"`
+	LastError                           string         `json:"last_error,omitempty" jsonschema:"privacy-safe watchdog error summary"`
+	ControllerState                     string         `json:"controller_state,omitempty" jsonschema:"background Codex controller state"`
+	Notice                              string         `json:"notice,omitempty" jsonschema:"result of the most recent management action"`
+	UILanguage                          string         `json:"ui_language" jsonschema:"interface language chosen by the user: zh or en"`
+	Retries                             []ManagedRetry `json:"retries" jsonschema:"current retry queue"`
+}
+
+type managementService struct {
+	dataDir     string
+	configPath  string
+	controlPath string
+	commandDir  string
+	statePath   string
+	statusPath  string
+	mu          sync.Mutex
+}
+
+func newManagementService(dataDir string) *managementService {
+	return &managementService{
+		dataDir:     dataDir,
+		configPath:  filepath.Join(dataDir, "config.json"),
+		controlPath: filepath.Join(dataDir, "control.json"),
+		commandDir:  filepath.Join(dataDir, "commands"),
+		statePath:   filepath.Join(dataDir, "state.json"),
+		statusPath:  filepath.Join(dataDir, "status.json"),
+	}
+}
+
+func (m *managementService) snapshot(now time.Time) (ManagementSnapshot, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.snapshotLocked(now.UTC())
+}
+
+func (m *managementService) snapshotLocked(now time.Time) (ManagementSnapshot, error) {
+	config, err := loadOrCreateConfig(m.configPath)
+	if err != nil {
+		return ManagementSnapshot{}, err
+	}
+	control, err := loadOrCreateControlState(m.controlPath)
+	if err != nil {
+		return ManagementSnapshot{}, err
+	}
+	state, err := loadState(m.statePath)
+	if err != nil {
+		return ManagementSnapshot{}, err
+	}
+	status, statusFound, err := loadStatusSnapshot(m.statusPath)
+	if err != nil {
+		return ManagementSnapshot{}, err
+	}
+
+	staleAfter := time.Duration(config.PollIntervalSeconds*4) * time.Second
+	if staleAfter < 15*time.Second {
+		staleAfter = 15 * time.Second
+	}
+	processRunning := statusFound && processOwnsRuntime(status.PID, m.dataDir)
+	heartbeatStale := !statusFound || !processRunning || status.LastScanAt.IsZero() || now.Sub(status.LastScanAt) > staleAfter
+	running := statusFound && status.Running && !heartbeatStale
+	retries := managedRetries(state, now, uiLanguage(m.dataDir))
+	visibleRetries := retries[:0]
+	pending, active, stopped := 0, 0, 0
+	for _, retry := range retries {
+		if !running && retry.State != "stopped" {
+			continue
+		}
+		visibleRetries = append(visibleRetries, retry)
+		if retry.State == "pending" {
+			pending++
+		} else if retry.State == "stopped" {
+			stopped++
+		} else {
+			active++
+		}
+	}
+	retries = visibleRetries
+
+	snapshot := ManagementSnapshot{
+		Version:                      appVersion,
+		Running:                      running,
+		HeartbeatStale:               heartbeatStale,
+		Paused:                       control.Paused,
+		RetryPrompt:                  config.RetryPrompt,
+		MaxConsecutiveRetries:        config.MaxConsecutiveRetries,
+		MaxRecoveryAttempts:          config.MaxRecoveryAttempts,
+		AuthMaxAttempts:              config.AuthMaxAttempts,
+		InitialDelaySeconds:          config.InitialDelaySeconds,
+		MaxDelaySeconds:              config.MaxDelaySeconds,
+		DelayIncrementSeconds:        config.DelayIncrementSeconds,
+		DelayStrategy:                config.DelayStrategy,
+		ShowNotifications:            config.ShowNotifications,
+		MemoryLimitMB:                config.MemoryLimitMB,
+		SharedAppServerMemoryLimitMB: config.SharedAppServerMemoryLimitMB,
+		RetrySafetyWarning:           config.retrySafetyWarning(uiLanguage(m.dataDir)),
+		UILanguage:                   uiLanguage(m.dataDir),
+		SharedAppServerPort:          config.SharedAppServerPort,
+		SharedAppServerEnabled:       config.SharedAppServerEnabled,
+		SharedAppServerRequested:     config.SharedAppServerRequested,
+		DesktopTransport:             "unknown",
+		RecoveryMode:                 "none",
+		StartupApproved:              readStartupApprovalStatus(),
+		Now:                          now.Format(time.RFC3339Nano),
+		PendingRetries:               pending,
+		ActiveRetries:                active,
+		StoppedRetries:               stopped,
+		Retries:                      retries,
+	}
+	if statusFound {
+		if running {
+			snapshot.Version = status.Version
+		}
+		snapshot.WatchedRoots = status.WatchedRoots
+		snapshot.LastError = status.LastError
+		snapshot.ControllerState = status.ControllerState
+		capability := capabilityForControllerState(status.ControllerState, status.SharedAppServerEnabled)
+		snapshot.DesktopTransport = status.DesktopTransport
+		if snapshot.DesktopTransport == "" {
+			snapshot.DesktopTransport = capability.Transport
+		}
+		snapshot.RecoveryMode = status.RecoveryMode
+		if snapshot.RecoveryMode == "" {
+			snapshot.RecoveryMode = capability.RecoveryMode
+		}
+		snapshot.AutomaticRecoverySupported = status.AutomaticRecoverySupported
+		snapshot.RecoveryCapabilityReason = status.RecoveryCapabilityReason
+		if snapshot.RecoveryCapabilityReason == "" {
+			snapshot.RecoveryCapabilityReason = capability.Reason
+		}
+		snapshot.MemoryUsageMB = status.MemoryUsageMB
+		if status.MemoryLimitMB > 0 {
+			snapshot.MemoryLimitMB = status.MemoryLimitMB
+		}
+		snapshot.MemoryGuardTriggered = status.MemoryGuardTriggered
+		snapshot.SharedAppServerMemoryUsageMB = status.SharedAppServerMemoryUsageMB
+		if status.SharedAppServerMemoryLimitMB > 0 {
+			snapshot.SharedAppServerMemoryLimitMB = status.SharedAppServerMemoryLimitMB
+		}
+		snapshot.SharedAppServerMemoryGuardTriggered = status.SharedAppServerMemoryGuardTriggered
+		if status.RetrySafetyWarning != "" {
+			snapshot.RetrySafetyWarning = status.RetrySafetyWarning
+		}
+		if !status.LastScanAt.IsZero() {
+			snapshot.LastScanAt = status.LastScanAt.Format(time.RFC3339Nano)
+		}
+	}
+	return snapshot, nil
+}
+
+func (m *managementService) setSharedAppServerEnabled(enabled bool, now time.Time) (ManagementSnapshot, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	config, err := loadOrCreateConfig(m.configPath)
+	if err != nil {
+		return ManagementSnapshot{}, err
+	}
+	if config.SharedAppServerEnabled == enabled && config.SharedAppServerRequested == enabled {
+		snapshot, snapshotErr := m.snapshotLocked(now.UTC())
+		if snapshotErr == nil {
+			snapshot.Notice = text(snapshot.UILanguage, "共用後端模式未改變", "Shared backend mode unchanged")
+		}
+		return snapshot, snapshotErr
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if enabled {
+		config, err = updateConfigFile(m.configPath, func(current *Config) error {
+			current.SharedAppServerRequested = true
+			return nil
+		})
+		if err != nil {
+			return ManagementSnapshot{}, fmt.Errorf("save shared app-server preference: %w", err)
+		}
+		preparedConfig, err := enableSharedAppServer(ctx, m.dataDir, config)
+		if err != nil {
+			return ManagementSnapshot{}, err
+		}
+		config = preparedConfig
+		persistedConfig, err := updateConfigFile(m.configPath, func(current *Config) error {
+			if !current.SharedAppServerRequested {
+				return fmt.Errorf("shared app-server enable cancelled by user")
+			}
+			current.SharedAppServerEnabled = true
+			current.SharedAppServerPort = config.SharedAppServerPort
+			return nil
+		})
+		if err != nil {
+			_ = disableSharedAppServer(context.Background(), m.dataDir, config)
+			return ManagementSnapshot{}, fmt.Errorf("save shared app-server setting: %w", err)
+		}
+		config = persistedConfig
+		for _, marker := range []string{"shared-availability.json", "shared-fail-open.json"} {
+			if err := os.Remove(filepath.Join(m.dataDir, marker)); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return ManagementSnapshot{}, fmt.Errorf("clear shared recovery marker: %w", err)
+			}
+		}
+	} else {
+		// Persist the fail-open setting before tearing down the endpoint. If the
+		// cleanup is interrupted, the next watchdog tick still cannot take over
+		// Codex's backend.
+		persistedConfig, err := updateConfigFile(m.configPath, func(current *Config) error {
+			current.SharedAppServerRequested = false
+			current.SharedAppServerEnabled = false
+			return nil
+		})
+		if err != nil {
+			return ManagementSnapshot{}, fmt.Errorf("save shared app-server setting: %w", err)
+		}
+		config = persistedConfig
+		if err := disableSharedAppServer(ctx, m.dataDir, config); err != nil {
+			return ManagementSnapshot{}, err
+		}
+	}
+	snapshot, err := m.snapshotLocked(now.UTC())
+	if err == nil {
+		if enabled {
+			snapshot.Notice = text(snapshot.UILanguage, "共用後端已啟用；完全結束 Codex 後，透過安全啟動 Codex 入口接入", "Shared backend enabled; fully exit Codex, then relaunch it with the safe launcher")
+		} else {
+			snapshot.Notice = text(snapshot.UILanguage, "共用後端模式已關閉，Codex 將使用官方後端", "Shared backend disabled; Codex uses the official backend")
+		}
+	}
+	return snapshot, err
+}
+
+type RetrySettings struct {
+	RetryPrompt           string `json:"retry_prompt"`
+	MaxConsecutiveRetries int    `json:"max_consecutive_retries"`
+	MaxRecoveryAttempts   int    `json:"max_recovery_attempts"`
+	AuthMaxAttempts       *int   `json:"auth_max_attempts,omitempty"`
+	InitialDelaySeconds   int    `json:"initial_delay_seconds"`
+	MaxDelaySeconds       int    `json:"max_delay_seconds"`
+	DelayIncrementSeconds int    `json:"delay_increment_seconds"`
+	DelayStrategy         string `json:"delay_strategy"`
+	ShowNotifications     bool   `json:"show_notifications"`
+	MemoryLimitMB         int    `json:"memory_limit_mb,omitempty"`
+}
+
+func (m *managementService) setRetrySettings(settings RetrySettings, now time.Time) (ManagementSnapshot, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, err := updateConfigFile(m.configPath, func(config *Config) error {
+		applyRetrySettings(config, settings)
+		return nil
+	}); err != nil {
+		return ManagementSnapshot{}, fmt.Errorf("save retry settings: %w", err)
+	}
+	snapshot, err := m.snapshotLocked(now.UTC())
+	if err == nil {
+		snapshot.Notice = text(snapshot.UILanguage, "自動重試設定已儲存", "Automatic retry settings saved")
+	}
+	return snapshot, err
+}
+
+func (m *managementService) setLocalSettings(settings RetrySettings, paused bool, now time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	config, err := loadOrCreateConfig(m.configPath)
+	if err != nil {
+		return err
+	}
+	originalConfig := config
+	if _, err := updateConfigFile(m.configPath, func(config *Config) error {
+		applyRetrySettings(config, settings)
+		return nil
+	}); err != nil {
+		return fmt.Errorf("save local retry settings: %w", err)
+	}
+	if _, err := saveControlState(m.controlPath, paused, now); err != nil {
+		if _, rollbackErr := updateConfigFile(m.configPath, func(config *Config) error {
+			*config = originalConfig
+			return nil
+		}); rollbackErr != nil {
+			return fmt.Errorf("save local pause state: %v; restore retry settings: %w", err, rollbackErr)
+		}
+		return fmt.Errorf("save local pause state: %w", err)
+	}
+	return nil
+}
+
+func applyRetrySettings(config *Config, settings RetrySettings) {
+	config.RetryPrompt = settings.RetryPrompt
+	config.MaxConsecutiveRetries = settings.MaxConsecutiveRetries
+	config.MaxRecoveryAttempts = settings.MaxRecoveryAttempts
+	if settings.AuthMaxAttempts != nil {
+		config.AuthMaxAttempts = *settings.AuthMaxAttempts
+	}
+	config.InitialDelaySeconds = settings.InitialDelaySeconds
+	config.MaxDelaySeconds = settings.MaxDelaySeconds
+	if settings.DelayIncrementSeconds != 0 || settings.DelayStrategy == delayStrategyLinear {
+		config.DelayIncrementSeconds = settings.DelayIncrementSeconds
+	}
+	config.DelayStrategy = settings.DelayStrategy
+	config.ShowNotifications = settings.ShowNotifications
+	if settings.MemoryLimitMB > 0 {
+		config.MemoryLimitMB = settings.MemoryLimitMB
+	}
+}
+
+func (m *managementService) setRetryPrompt(prompt string, now time.Time) (ManagementSnapshot, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, err := updateConfigFile(m.configPath, func(config *Config) error {
+		config.RetryPrompt = prompt
+		return nil
+	}); err != nil {
+		return ManagementSnapshot{}, fmt.Errorf("save retry prompt: %w", err)
+	}
+	snapshot, err := m.snapshotLocked(now.UTC())
+	if err == nil {
+		snapshot.Notice = text(snapshot.UILanguage, "普通對話的重試文字已儲存", "Fallback retry prompt saved")
+	}
+	return snapshot, err
+}
+
+func (m *managementService) setUILanguage(language string, now time.Time) (ManagementSnapshot, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err := setUILanguage(m.dataDir, language); err != nil {
+		return ManagementSnapshot{}, fmt.Errorf("save interface language: %w", err)
+	}
+	snapshot, err := m.snapshotLocked(now.UTC())
+	if err == nil {
+		snapshot.Notice = text(snapshot.UILanguage, "介面語言已改為繁體中文", "Interface language set to English")
+	}
+	return snapshot, err
+}
+
+func (m *managementService) setPaused(paused bool, now time.Time) (ManagementSnapshot, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, err := saveControlState(m.controlPath, paused, now); err != nil {
+		return ManagementSnapshot{}, fmt.Errorf("save pause state: %w", err)
+	}
+	snapshot, err := m.snapshotLocked(now.UTC())
+	if err == nil {
+		if paused {
+			snapshot.Notice = text(snapshot.UILanguage, "自動重試已暫停", "Automatic retry paused")
+		} else {
+			snapshot.Notice = text(snapshot.UILanguage, "自動重試已恢復", "Automatic retry resumed")
+		}
+	}
+	return snapshot, err
+}
+
+func (m *managementService) retryNow(threadID string, now time.Time) (ManagementSnapshot, error) {
+	return m.queueThreadCommand(commandRetryNow, threadID, now)
+}
+
+func (m *managementService) cancelRetry(threadID string, now time.Time) (ManagementSnapshot, error) {
+	return m.queueThreadCommand(commandCancelRetry, threadID, now)
+}
+
+func (m *managementService) restartRetry(threadID string, now time.Time) (ManagementSnapshot, error) {
+	return m.queueThreadCommand(commandRestartRetry, threadID, now)
+}
+
+func (m *managementService) rescanInterrupted(now time.Time) (ManagementSnapshot, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, err := queueControlCommand(m.commandDir, commandRescanInterrupted, "", now); err != nil {
+		return ManagementSnapshot{}, err
+	}
+	snapshot, err := m.snapshotLocked(now.UTC())
+	if err == nil {
+		snapshot.Notice = text(snapshot.UILanguage, "已要求重新偵測中斷的任務，結果會在下一次掃描後出現在佇列", "Rescan requested; interrupted tasks appear in the queue after the next scan")
+	}
+	return snapshot, err
+}
+
+func (m *managementService) queueThreadCommand(action ControlCommandAction, threadID string, now time.Time) (ManagementSnapshot, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	threadID = strings.ToLower(strings.TrimSpace(threadID))
+	state, err := loadState(m.statePath)
+	if err != nil {
+		return ManagementSnapshot{}, err
+	}
+	thread, found := state.Threads[threadID]
+	if !found || (action == commandRestartRetry && thread.Stopped == nil) ||
+		(action != commandRestartRetry && thread.Pending == nil) {
+		return ManagementSnapshot{}, errors.New(text(uiLanguage(m.dataDir), "該任務目前沒有可執行的重試操作", "This task has no retry action available right now"))
+	}
+	if _, err := queueControlCommand(m.commandDir, action, threadID, now); err != nil {
+		return ManagementSnapshot{}, err
+	}
+	snapshot, err := m.snapshotLocked(now.UTC())
+	if err == nil {
+		if action == commandRetryNow {
+			snapshot.Notice = text(snapshot.UILanguage, "已請求立即重試", "Retry requested")
+		} else if action == commandRestartRetry {
+			snapshot.Notice = text(snapshot.UILanguage, "已重新開始計數並請求重試", "Counters reset and retry requested")
+		} else {
+			snapshot.Notice = text(snapshot.UILanguage, "已請求取消這次重試", "Cancellation requested")
+		}
+	}
+	return snapshot, err
+}
+
+func loadStatusSnapshot(path string) (StatusSnapshot, bool, error) {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return StatusSnapshot{}, false, nil
+	}
+	if err != nil {
+		return StatusSnapshot{}, false, err
+	}
+	var status StatusSnapshot
+	if err := json.Unmarshal(data, &status); err != nil {
+		return StatusSnapshot{}, false, fmt.Errorf("parse status: %w", err)
+	}
+	return status, true, nil
+}
+
+func managedRetries(state RuntimeState, now time.Time, language string) []ManagedRetry {
+	retries := make([]ManagedRetry, 0)
+	for threadID, thread := range state.Threads {
+		if thread.Pending != nil {
+			remaining := int64(0)
+			if duration := thread.Pending.DueAt.Sub(now); duration > 0 {
+				remaining = int64((duration + time.Second - 1) / time.Second)
+			}
+			retries = append(retries, ManagedRetry{
+				ThreadID:              threadID,
+				Label:                 text(language, "任務 ", "Task ") + shortThreadID(threadID),
+				State:                 "pending",
+				Class:                 thread.Pending.Class,
+				DueAt:                 thread.Pending.DueAt.Format(time.RFC3339Nano),
+				SecondsRemaining:      remaining,
+				RecoveryAttempt:       thread.Pending.Attempt,
+				MaxRecoveryAttempts:   thread.Pending.MaxAttempts,
+				ConsecutiveRetry:      thread.Pending.ConsecutiveRetry,
+				MaxConsecutiveRetries: thread.Pending.MaxConsecutive,
+				CanRetryNow:           true,
+				CanCancel:             true,
+			})
+		}
+		if thread.Awaiting != nil {
+			stateName := "starting"
+			if thread.Awaiting.RetryTurnID != "" {
+				stateName = "running"
+			}
+			retries = append(retries, ManagedRetry{
+				ThreadID:              threadID,
+				Label:                 text(language, "任務 ", "Task ") + shortThreadID(threadID),
+				State:                 stateName,
+				Class:                 thread.Awaiting.Class,
+				RecoveryAttempt:       thread.Awaiting.Attempt,
+				MaxRecoveryAttempts:   thread.Awaiting.MaxAttempts,
+				ConsecutiveRetry:      thread.Awaiting.ConsecutiveRetry,
+				MaxConsecutiveRetries: thread.Awaiting.MaxConsecutive,
+				Action:                thread.Awaiting.Action,
+			})
+		}
+		if thread.Stopped != nil && stoppedRetryIsVisible(thread.Stopped, now) {
+			retries = append(retries, ManagedRetry{
+				ThreadID:              threadID,
+				Label:                 text(language, "任務 ", "Task ") + shortThreadID(threadID),
+				State:                 "stopped",
+				Class:                 thread.Stopped.Class,
+				RecoveryAttempt:       thread.Stopped.Attempts,
+				MaxRecoveryAttempts:   thread.Stopped.MaxAttempts,
+				ConsecutiveRetry:      thread.Stopped.ConsecutiveRetries,
+				MaxConsecutiveRetries: thread.Stopped.MaxConsecutive,
+				CanRestart:            true,
+				StopReason:            thread.Stopped.Reason,
+			})
+		}
+	}
+	sort.SliceStable(retries, func(i, j int) bool {
+		if retries[i].State != retries[j].State {
+			if retries[i].State == "pending" {
+				return false
+			}
+			if retries[j].State == "pending" {
+				return true
+			}
+		}
+		if retries[i].DueAt != retries[j].DueAt {
+			return retries[i].DueAt < retries[j].DueAt
+		}
+		return retries[i].ThreadID < retries[j].ThreadID
+	})
+	return retries
+}
+
+func stoppedRetryIsVisible(stopped *StoppedRetry, now time.Time) bool {
+	if stopped == nil || stopped.StoppedAt.IsZero() {
+		return stopped != nil
+	}
+	if stopped.Historical {
+		return false
+	}
+	window := stoppedDisplayWindow(stopped)
+	if !stopped.FailedAt.IsZero() && !stopped.FailedAt.After(now) && now.Sub(stopped.FailedAt) > window {
+		return false
+	}
+	if stopped.StoppedAt.After(now) {
+		return true
+	}
+	return now.Sub(stopped.StoppedAt) <= window
+}

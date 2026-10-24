@@ -1,0 +1,224 @@
+# Codex Auto Retry
+
+[![CI](https://github.com/SanHsien/codex-auto-retry/actions/workflows/ci.yml/badge.svg)](https://github.com/SanHsien/codex-auto-retry/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/SanHsien/codex-auto-retry?label=release)](https://github.com/SanHsien/codex-auto-retry/releases/latest)
+[![Upstream release](https://img.shields.io/github/v/release/sybxxx/codex-auto-retry?label=upstream%20release)](https://github.com/sybxxx/codex-auto-retry/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue.svg)](#)
+
+[English](README.en.md) | 繁體中文
+
+> 本專案為 [`sybxxx/codex-auto-retry`](https://github.com/sybxxx/codex-auto-retry) 的繁體中文維護 fork，遵循 MIT 授權條款。
+> 維護差異記錄於 [`FORK.md`](FORK.md) 與 [`docs/DECISIONS.md`](docs/DECISIONS.md)；上游審查清冊位於 [`docs/UPSTREAM.md`](docs/UPSTREAM.md)。
+
+**Codex Auto Retry** 是一款專為 Windows 平台 Codex 打造的開源可靠性守護與原地自動接續工具。它在背景靜默監控 Codex 任務生命週期，當遭遇網路中斷、服務限流（Rate Limit / 5 小時額度重設）、請求逾時、伺服器 5xx 異常或空回覆時，**在原聊天中安全、自動地原地接續執行**，完整保留任務工作區、模型設定與推理參數。
+
+本工具作為 Windows 本地背景輕量守護行程（Watchdog）運作，不需在每個 Codex 會話中手動輸入提示詞。同時提供圖形化安裝與控制中心、Windows 系統匣常駐托盤控制器（五態彩色動態圖示），以及 Codex 原生內嵌管理面板（基於 MCP 協定），介面開閉皆不影響背景自動復原。
+
+---
+
+## 目錄
+
+- [為什麼需要 Codex Auto Retry？](#為什麼需要-codex-auto-retry)
+- [核心接續機制](#核心接續機制)
+- [使用者介面](#使用者介面)
+  - [圖形化安裝與控制中心](#圖形化安裝與控制中心)
+  - [Windows 系統匣托盤控制器](#windows-系統匣托盤控制器)
+  - [Codex 內嵌管理面板（MCP）](#codex-內嵌管理面板mcp)
+- [快速上手（終端使用者）](#快速上手終端使用者)
+- [設定檔、日誌與安裝路徑一覽](#設定檔日誌與安裝路徑一覽)
+- [隱私與安全保證](#隱私與安全保證)
+- [故障安全設計（Fail-Open）](#故障安全設計fail-open)
+- [本機開發與驗收](#本機開發與驗收)
+- [維護者與授權條款](#維護者與授權條款)
+
+---
+
+## 為什麼需要 Codex Auto Retry？
+
+長時間運行的 Codex 任務常在工具已執行或模型已產生部分輸出後，遭遇中斷（例如 5 小時用量重設、網路瞬斷或伺服器超載）。
+
+傳統手動重試往往會開新會話，遺失中間狀態或重放已執行的副作用。Codex Auto Retry 確保：
+
+1. **原地續跑**：延續同一個任務，不開替換對話，不重放已完成的工具操作。
+2. **Turn 關聯檢驗**：精確比對 `task_started` 與 `task_complete` 的 Turn ID，防止無關成功回合誤標記為復原。
+3. **退避曲線**：支援固定（Fixed）、線性遞增（Linear）與指數倍增（Exponential）等待延遲，可自訂上限。
+4. **行程守護**：Codex 關閉時自動停止重試倒數，不浪費請求額度。
+
+```text
++--------------------------------------------------------------+
+| Windows 11 Desktop (Codex App)                               |
+|                                                              |
+|   Codex 任務遭遇 Rate Limit、連線中斷或 5xx 伺服器異常          |
+|            |                                                 |
+|            v (\\.\pipe\codex-ipc 原生命名管道)                |
+|   +----------------------------------------------------+     |
+|   | codex-auto-retry Watchdog (常駐系統匣背景行程)       |     |
+|   | - 零內容紀錄：只看生命週期狀態與旗標                  |     |
+|   | - 支援退避策略與 Turn ID 精確對齊                    |     |
+|   | - 內建 MCP 管理面板（在 Codex 內打字即可開啟）        |     |
+|   +----------------------------------------------------+     |
+|            |                                                 |
+|            v (額度恢復或服務可用)                              |
+|   自動接續原聊天續跑（不開新工作階段、不重放已完成動作）          |
++--------------------------------------------------------------+
+```
+
+---
+
+## 核心接續機制
+
+### 可重試與不可重試邊界
+
+* **可自動重試的故障**：
+  * 網路連線中斷、連線重設與逾時
+  * HTTP 5xx 伺服器錯誤
+  * Rate Limit 與暫時性容量耗盡（如 5 小時額度重設）
+  * 串流傳輸中斷
+  * 空回覆（Empty Response：HTTP 200 但無輸出）
+  * 暫時性驗證服務不可用（在設定上限內）
+* **不可重試（Fail-Closed 即刻停止）**：
+  * 使用者主動取消或中止
+  * 客戶端無效請求與 HTTP 400 / 404
+  * 缺少模型宣告
+  * 上下文長度／Token 限制超出
+  * 安全政策、權限與審批拒絕
+
+---
+
+## 使用者介面
+
+### 圖形化安裝與控制中心
+
+雙擊單一執行檔 `Codex-Auto-Retry-<版本>-windows-x64.exe`（或開始功能表／桌面捷徑中的「安裝與控制中心」）會開啟深色主題圖形化視窗：
+
+* **狀態與路徑總覽**：即時顯示目前已安裝版本、背景守護行程執行狀態（PID）、外掛目錄、設定檔（`config.json`）與執行日誌（`logs\daemon.log`）完整路徑。
+* **一鍵安裝／修復**：支援勾選「建立桌面捷徑」，自動驗證 SHA-256、部署背景服務、註冊 Codex 外掛、建立開始功能表捷徑並登錄 Windows「已安裝的應用程式」。
+* **日常管理工具箱**：一鍵開啟「參數設定視窗」、「開機啟動管理員」、「開啟設定與日誌資料夾」、「檢視執行日誌 (`daemon.log`)」、「取出安裝包檔案」、「安全停用共用後端」與「解除安裝」。
+
+### Windows 系統匣托盤控制器
+
+守護行程以單一輕量背景行程執行，於 Windows 右下角通知區域顯示 32×32 ARGB 抗鋸齒動態圖示：
+
+| 系統匣狀態 | 圖示配色與樣式 | 說明 |
+| :--- | :--- | :--- |
+| **`running`（正常待命）** | 翠綠盾牌＋白色雙向循環箭頭 | 背景服務正常監控中，目前無排隊重試任務 |
+| **`active`（正在重試）** | 青藍高亮盾牌＋白色雙向循環箭頭 | 正在向 Codex 派發復原接續請求 |
+| **`waiting`（等待重試／需注意）** | 琥珀黃盾牌＋白色雙向循環箭頭 | 有任務正在倒數等待重試，或需重啟 Codex 以套用路由 |
+| **`paused`（已暫停）** | 橘色盾牌＋雙豎線暫停符號 | 使用者已手動暫停自動重試派發 |
+| **`stopped`（已停止）** | 深灰紅框盾牌＋X 符號 | 背景守護行程未執行或已停止 |
+
+* **Explorer 重啟自癒**：Windows 檔案總管重啟時自動重新註冊托盤圖示並恢復狀態。
+* **雙擊圖示**：開啟圖形化設定視窗。
+* **右鍵選單**：顯示目前狀態與 `資料夾：<設定目錄>`，可快速暫停／繼續派發、開啟設定視窗、開啟啟動管理員、**開啟設定與日誌資料夾**、**檢視執行日誌 (`daemon.log`)** 或結束守護行程。
+* **設定視窗**：支援設定復原上限、延遲曲線、備援提示文字、通知偏好與繁中／英文介面切換，並直接列出設定檔／日誌路徑與「開啟設定與日誌資料夾」、「檢視執行日誌 (`daemon.log`)」按鈕。任務佇列顯示 Codex 任務標題，可「重新整理」與「重新偵測中斷任務」；取消的重試會以「已取消」保留 24 小時，可再按「重新開始」接回。
+
+### Codex 內嵌管理面板（MCP）
+
+可在 Codex 對話中直接呼叫：
+
+> `開啟 Codex Auto Retry 管理面板` 或 `Open Codex Auto Retry Management Panel`
+
+採用純 TypeScript 撰寫並透過 Go `embed` 內嵌於 MCP 二進位檔中，零外部網路請求且不需 Node.js 執行期環境。提供：
+
+* 守護行程健康度、監控會話目錄與最後掃描時間。
+* 作用中與等待中佇列，附即時倒數計時器。
+* 即時手動重試（`Retry Now`）與取消控制項。
+* 全域暫停／繼續切換。
+* 右上角一鍵切換繁中／英文。
+
+<p align="center">
+  <img src="assets/panel.png" alt="Codex 內嵌管理面板" width="620" />
+</p>
+
+### 介面語言（繁體中文／英文）
+
+設定視窗、啟動管理員、內嵌管理面板、安裝控制中心與系統匣共用同一個語言設定（`%LOCALAPPDATA%\CodexAutoRetry\ui-language.json`，預設繁體中文），在任一處切換，其他介面下次顯示時跟著改。安裝程式、命令列進度與錯誤訊息一律中英並列，安裝當下還沒有語言設定時兩種語言都看得懂。
+
+---
+
+## 快速上手（終端使用者）
+
+1. 從本 fork 的 [GitHub Releases](https://github.com/SanHsien/codex-auto-retry/releases/latest) 下載繁體中文版，二擇一：
+   * **單一執行檔** `Codex-Auto-Retry-<版本>-windows-x64.exe`：不必解壓縮，雙擊後開啟圖形化「安裝與控制中心」視窗，勾選是否建立桌面捷徑後點選「安裝／修復」即可完成。安裝前請先完全關閉 Codex App。
+   * **壓縮檔** `Codex-Auto-Retry-<版本>-windows-x64.zip`：解壓縮後，在資料夾內雙擊 `安裝.cmd`。
+2. 兩者內容相同；尚未購買程式碼簽章，Windows SmartScreen 可能提示「未知的發行者」，請對照 Release 頁的 SHA-256。
+3. 安裝程式自動校驗 SHA-256、設定目前使用者開機啟動、將守護行程部署於 `%LOCALAPPDATA%\CodexAutoRetry`、建立 Windows「開始功能表 > Codex Auto Retry」捷徑群組與「已安裝的應用程式」登錄項目，同時完成 Codex 外掛註冊。
+4. **不需系統管理員權限**，亦不需安裝 Go 或 Node.js。
+
+> 原始碼內的 `release\windows\` 只是安裝範本，沒有 `release-manifest.json` 與 `payload\`，直接執行會出現 `release-manifest.json is missing`。要從原始碼安裝，先執行 `pwsh -NoProfile -File scripts\build-release.ps1`（需要 Go 與 Node.js），它會在 `%USERPROFILE%\releases\codex-auto-retry\` 產生壓縮檔與單檔安裝程式。
+
+---
+
+## 設定檔、日誌與安裝路徑一覽
+
+所有執行期設定、狀態與日誌皆集中存放於目前使用者的 `%LOCALAPPDATA%\CodexAutoRetry`（即 `C:\Users\<使用者名稱>\AppData\Local\CodexAutoRetry`），您可隨時從**系統匣右鍵選單**、**設定視窗**、**開機啟動管理員**或**開始功能表**一鍵開啟：
+
+| 項目 | 預設路徑 / 位置 | 用途說明 |
+| :--- | :--- | :--- |
+| **主資料與執行目錄** | `%LOCALAPPDATA%\CodexAutoRetry` | 常駐執行檔、設定檔、狀態檔與日誌所在目錄 |
+| **重試設定檔** | `%LOCALAPPDATA%\CodexAutoRetry\config.json` | 輪詢間隔、初始／最大延遲秒數、退避策略、重試上限設定 |
+| **背景服務日誌** | `%LOCALAPPDATA%\CodexAutoRetry\logs\daemon.log` | 守護行程啟動、排程重試、取消與錯誤紀錄（5 MB 自動輪替） |
+| **即時執行心跳** | `%LOCALAPPDATA%\CodexAutoRetry\status.json` | 紀錄目前執行中版本、PID、最後掃描時間與 IPC 狀態 |
+| **任務佇列狀態** | `%LOCALAPPDATA%\CodexAutoRetry\state.json` | 各 Codex 任務的重試計數、倒數時間與歷史游標 |
+| **介面語言偏好** | `%LOCALAPPDATA%\CodexAutoRetry\ui-language.json` | 儲存繁體中文（`zh-TW`）或英文（`en`）介面偏好 |
+| **Codex 外掛目錄** | `%USERPROFILE%\plugins\codex-auto-retry` | 註冊至 Codex 的本地外掛與 `.mcp.json` 啟動設定 |
+| **開始功能表捷徑** | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Codex Auto Retry` | 包含設定視窗、開機啟動管理員、開啟設定與日誌資料夾、安裝與控制中心 |
+| **桌面捷徑（選用）** | `桌面\Codex Auto Retry.lnk` | 安裝時勾選「建立桌面捷徑」或加 `-create-desktop-shortcut` 建立 |
+| **開機自動啟動** | `HKCU:\Software\Microsoft\Windows\CurrentVersion\Run` (`CodexAutoRetry`) | 使用者登入 Windows 時以 `supervise` 監護模式背景啟動 |
+| **已安裝的應用程式** | `HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\CodexAutoRetry` | Windows「設定 > 應用程式 > 已安裝的應用程式」支援修改与解除安裝 |
+
+### 命令列參數與壓縮檔腳本
+
+* **單一執行檔命令列參數**：
+  * `Codex-Auto-Retry-<版本>-windows-x64.exe -install [-create-desktop-shortcut]`：直接執行安裝／升級（可選建立桌面捷徑）
+  * `Codex-Auto-Retry-<版本>-windows-x64.exe -startup-manager`：開啟開機啟動管理員視窗
+  * `Codex-Auto-Retry-<版本>-windows-x64.exe -safe-disable`：緊急停用共用後端並還原官方直接連線
+  * `Codex-Auto-Retry-<版本>-windows-x64.exe -uninstall [-remove-data]`：解除安裝（加 `-remove-data` 連同 `config.json` 與日誌一併刪除）
+  * `Codex-Auto-Retry-<版本>-windows-x64.exe -extract <目標資料夾>`：僅解壓縮發佈包內容
+  * `Codex-Auto-Retry-<版本>-windows-x64.exe -cli`：使用傳統終端機文字選單（`1~6`）
+* **壓縮檔內的快速批次檔**：
+  * `啟動管理員.cmd`：開啟啟動管理員視窗，顯示啟動指令、監護狀態、心跳、設定／日誌路徑與 Windows `StartupApproved` 狀態。
+  * `安全停用.cmd`：一鍵緊急停止腳本，停用共用後端、清理外掛登錄值並恢復 Codex 官方直接執行模式。
+  * `解除安裝.cmd`：乾淨解除安裝守護行程、捷徑與外掛，預設保留使用者設定與日誌。執行 `.\uninstall-release.ps1 -RemoveData` 可執行完全清除。
+
+---
+
+## 隱私與安全保證
+
+* **零對話內容紀錄（Zero Content Logging）**：掃描器僅處理生命週期事件與布林進度旗標。使用者提問、助手回覆、工具呼叫、參數、憑證與回應內文絕不解碼、記錄或儲存。
+* **嚴格讀取白名單**：僅在復原派發前解碼必要設定（工作目錄、模型、provider、reasoning_effort、審批策略等），其餘欄位全數捨棄。
+* **不可逆覆寫保護**：狀態檔案採用原子寫入（Atomic Write），平滑重試檔案衝突。
+* **資源硬性上限**：日誌定期滾動（5 MB，最多保留 3 份），單次自動復原鏈設有 30 分鐘硬性中斷保護。
+
+---
+
+## 故障安全設計（Fail-Open）
+
+* **官方 IPC 優先**：支援 Windows Desktop 官方命名管道 `\\.\pipe\codex-ipc`，不啟動本機伺服器、不修改全域網路路由。
+* **安全降級**：若守護行程當機或遭遇異常狀態，保證 Fail-Open，Codex 仍能以官方後端正常啟動，絕不卡死應用程式。
+
+---
+
+## 本機開發與驗收
+
+本 fork 採 **Windows 11 原生** 開發環境：
+
+```powershell
+# 執行 Windows 原生一鍵門禁檢查
+pwsh -NoProfile -File tools\dev_check.ps1
+
+# 執行產品冒煙測試
+pwsh -NoProfile -File scripts\smoke-test.ps1
+```
+
+---
+
+## 多 Agent 流水線
+
+本 repo 是 [agent-relay](https://github.com/SanHsien/agent-relay) 多 Agent 派工與驗收流水線的一環（角色：限流斷線原地續跑）。與 agent-relay 的整合規劃中（Phase 2）。協定規格與所有相關 repo 的總目錄見 agent-relay。
+
+## 維護者與授權條款
+
+* 原作者：`sybxxx` (TQY Local Tools)，遵循 [MIT License](LICENSE)。
+* 本維護 Fork：由 `SanHsien` 維護，詳細差異與取捨見 [`FORK.md`](FORK.md)。

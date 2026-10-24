@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows validation
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: scripts/source/go.mod
+          cache-dependency-path: scripts/source/go.sum
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: scripts/source/ui/package-lock.json
+
+      - name: Pin npm version
+        shell: pwsh
+        run: npm install --global npm@10.9.2
+
+      - name: Build and validate binaries and panel
+        shell: pwsh
+        run: .\scripts\build.ps1
+
+      - name: Run race tests
+        working-directory: scripts/source
+        run: go test -race ./... -count=1
+
+      - name: Run focused protocol smoke tests
+        shell: pwsh
+        run: |
+          .\scripts\mcp-smoke-test.ps1
+          .\scripts\path-safety-smoke-test.ps1
+          .\scripts\startup-approval-smoke-test.ps1
+          .\scripts\supervisor-smoke-test.ps1
+
+      - name: Validate installer on Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          .\scripts\installer-cli-smoke-test.ps1
+          .\scripts\installer-close-smoke-test.ps1
+          .\scripts\upgrade-rollback-smoke-test.ps1
+
+      - name: Build and verify release archive
+        shell: pwsh
+        run: |
+          $manifest = Get-Content .\.codex-plugin\plugin.json -Raw -Encoding UTF8 | ConvertFrom-Json
+          $version = ([string]$manifest.version -split '\+', 2)[0]
+          $output = Join-Path $env:RUNNER_TEMP 'codex-auto-retry-release'
+          & .\scripts\build-release.ps1 -SkipBuild -OutputDirectory $output
+          if (-not $?) { throw 'Release packaging failed.' }
+          $archive = Join-Path $output ("Codex-Auto-Retry-$version-windows-x64.zip")
+          & .\scripts\release-test.ps1 -ArchivePath $archive
+          if (-not $?) { throw 'Release integrity validation failed.' }
