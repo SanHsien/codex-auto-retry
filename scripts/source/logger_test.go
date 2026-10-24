@@ -37,3 +37,26 @@ func TestLoggerRotatesWithinBoundedBackupCount(t *testing.T) {
 func itoa(value int) string {
 	return strconv.Itoa(value)
 }
+
+func TestLoggerKeepsEachRecordOnOneLine(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "daemon.log")
+	logger, err := newSafeLogger(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logger.Printf("thread %s done", "abc\r\n2026/01/01 forged entry")
+	if err := logger.Close(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimRight(string(data), "\r\n"), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("expected one log line, got %d: %q", len(lines), data)
+	}
+	if !strings.Contains(lines[0], `abc\r\n2026/01/01 forged entry`) {
+		t.Fatalf("control characters were not escaped: %q", lines[0])
+	}
+}

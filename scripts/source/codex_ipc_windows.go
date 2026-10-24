@@ -281,6 +281,10 @@ func (c *codexIPCClient) requestTo(ctx context.Context, method string, version i
 	}
 }
 
+// maxCodexIPCFrameBytes bounds both directions of a frame so the length prefix and
+// the allocation derived from it can never overflow.
+const maxCodexIPCFrameBytes = 256 * 1024 * 1024
+
 type codexIPCRequestError struct {
 	Method  string
 	Message string
@@ -297,6 +301,9 @@ func (c *codexIPCClient) writeFrame(ctx context.Context, value any) error {
 	if err != nil {
 		return err
 	}
+	if len(data) == 0 || len(data) > maxCodexIPCFrameBytes {
+		return errors.New("invalid Codex IPC frame length")
+	}
 	frame := make([]byte, 4+len(data))
 	binary.LittleEndian.PutUint32(frame, uint32(len(data)))
 	copy(frame[4:], data)
@@ -309,7 +316,7 @@ func (c *codexIPCClient) readFrame(ctx context.Context, destination any) error {
 		return err
 	}
 	length := binary.LittleEndian.Uint32(header)
-	if length == 0 || length > 256*1024*1024 {
+	if length == 0 || length > maxCodexIPCFrameBytes {
 		return errors.New("invalid Codex IPC frame length")
 	}
 	payload := make([]byte, length)

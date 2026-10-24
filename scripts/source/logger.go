@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -64,7 +65,12 @@ func (l *safeLogger) Close() error {
 func (l *safeLogger) Printf(format string, args ...any) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.logger.Printf(format, args...)
+	// Keep each record on one line: values interpolated into the message can come
+	// from outside the process, and a raw CR/LF would let them forge log entries.
+	message := fmt.Sprintf(format, args...)
+	message = strings.ReplaceAll(message, "\r", "\\r")
+	message = strings.ReplaceAll(message, "\n", "\\n")
+	l.logger.Print(message)
 }
 
 func shortThreadID(id string) string {
