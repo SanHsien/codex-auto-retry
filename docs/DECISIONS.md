@@ -2,8 +2,7 @@
 
 ## 2026-10-25：修 CodeQL 首輪兩個警示
 
-**決定**：`logger.go` 的 `Printf` 把訊息中的 CR／LF 轉成可見的 ``／`
-`，一筆紀錄永遠只占一行（`go/log-injection`）；`codex_ipc_windows.go` 的 `writeFrame` 比照 `readFrame` 以同一常數 `maxCodexIPCFrameBytes`（256 MiB）限制長度，再配置緩衝區（`go/allocation-size-overflow`）。
+**決定**：`logger.go` 的 `Printf` 把訊息中的 CR／LF 轉成可見的 `\r`／`\n`，一筆紀錄永遠只占一行（`go/log-injection`）；`codex_ipc_windows.go` 的 `writeFrame` 比照 `readFrame` 以同一常數 `maxCodexIPCFrameBytes`（256 MiB）限制長度，再配置緩衝區（`go/allocation-size-overflow`）。
 
 **理由**：兩處都是對上游程式的最小硬化，不改行為（正常訊息不含換行、IPC 框架遠小於上限）。已補 `TestLoggerKeepsEachRecordOnOneLine`。
 
