@@ -1,0 +1,74 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Taipei"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "github-actions"]
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # Go daemon and MCP server (scripts/source). The installer module has no
+  # third-party requirements, so only its toolchain line is tracked below.
+  - package-ecosystem: "gomod"
+    directory: "/scripts/source"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Taipei"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "go"]
+    groups:
+      go-modules:
+        patterns: ["*"]
+
+  - package-ecosystem: "gomod"
+    directory: "/scripts/installer"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Taipei"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "go"]
+    groups:
+      go-modules:
+        patterns: ["*"]
+
+  # Embedded management panel. package.json pins exact versions and the bundle is
+  # embedded into the shipped binary, so every bump is read and built by hand
+  # (scripts/build.ps1) before merging -- no auto-merge.
+  - package-ecosystem: "npm"
+    directory: "/scripts/source/ui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Taipei"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "npm"]
+    groups:
+      npm-dev:
+        dependency-type: "development"
+      npm-production:
+        dependency-type: "production"
+
+  # requirements-dev.txt (pytest, ruff) drives the maintenance gate in tools/.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Taipei"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "python"]
+    groups:
+      python-dev-tools:
+        patterns: ["*"]

@@ -45,7 +45,7 @@
 1. `git fetch upstream main`
 2. `python tools/check_upstream_updates.py --strict`
 3. 逐筆判斷是否與繁中 README、Windows gate、發佈閘門或測試衝突。
-4. 可同步的提交用 merge；只需要部分修正時 cherry-pick 或最小重做。
+4. 本 repo 與上游已無共同祖先（歷史於 2026-10-24 壓縮），一律 cherry-pick 或最小重做，不要 merge。
 5. 上游帶進新的中文字串時跑 `python tools\convert_zh_hant.py`，再跑 `pwsh -NoProfile -File scripts\build.ps1` 重建
 6. 跑 `pwsh -NoProfile -File tools\dev_check.ps1`
 7. 採用／略過寫進 `docs/DECISIONS.md`，驗證後才推進 `tools/upstream_baseline.json`

@@ -1,7 +1,7 @@
 # Fork 維護說明
 
 本 repo fork 自 [`sybxxx/codex-auto-retry`](https://github.com/sybxxx/codex-auto-retry)，
-沿用 MIT License 與完整 Git 歷史。
+沿用 MIT License。2026-10-24 起本 repo 歷史已壓縮為單一根提交（見 `docs/DECISIONS.md`），與上游無共同祖先。
 
 ## 為什麼維護 fork
 

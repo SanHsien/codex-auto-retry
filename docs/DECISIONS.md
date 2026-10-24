@@ -1,5 +1,17 @@
 # 維護決策
 
+## 2026-10-25：補齊維護自動化，並分流上游 issue #1
+
+**決定**：
+- 新增 `.github/dependabot.yml`（github-actions、兩個 Go module、面板 npm、pip）、`codeql.yml`（Go 與 JavaScript/TypeScript，Go 在 Windows runner 建置）、`dependency-freshness.yml`（每月）與 `upstream-check.yml`（每週）。
+- CI 的 Windows job 加跑 `tools\dev_check.ps1`，讓維護工具測試與連結檢查與本機 gate 同一組。
+- 上游 issue #1（Wails 桌面客戶端的 ADR 規格）：**略過**。發文者在同一 issue 留言說明發錯 repo、屬於其自己 fork 的路線圖，且已關閉；內容是他人的產品規劃，不是缺陷回報。`reviewed_issue_through` 升為 1。
+- 重寫歷史：2026-10-24 的 `Initial commit` 把本 repo 歷史壓成單一根提交，與上游不再有共同祖先。`reviewed_through` 水位比對的是 upstream remote 的 SHA，不受影響；但上游變更只能 cherry-pick 或最小重做，不能直接 merge。
+
+**理由**：稽核缺口 `dependabot`、`codeql`、`freshness`、`upstream_check` 都是缺檔；上游檢查器若不推進 issue 水位，嚴格模式會對已分流的項目永遠紅燈。
+
+**觸發條件**：上游 `main` 有新 commit、PR 或 issue 時，由週檢查通知後逐筆審查。
+
 ## 2026-10-02：建立 Windows-first 維護型 fork
 
 **決定**：fork `sybxxx/codex-auto-retry`，保留 MIT License 與完整歷史。本線預設分支用 `main`。本線聚焦繁中文件、Windows 開發 gate、Windows 原生驗收，以及逐筆審查的上游追蹤。
