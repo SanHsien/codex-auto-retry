@@ -10,13 +10,13 @@
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "1.7.5",
-    "@modelcontextprotocol/sdk": "1.29.0",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "lucide": "1.27.0",
-    "zod": "4.1.13"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "typescript": "5.9.3",
-    "vite": "8.1.5",
+    "vite": "8.3.5",
     "vite-plugin-singlefile": "2.3.3"
   }
 }
