@@ -22,14 +22,19 @@ func canReopenTransportRetry(thread ThreadState, now time.Time) bool {
 	if thread.GoalStatus != "" && thread.GoalStatus != "active" {
 		return false
 	}
-	start := thread.RecoveryStartedAt
+	start := recoveryWindowStart(thread)
 	if start.IsZero() {
 		start = s.FailedAt
 	}
 	if start.IsZero() || now.Before(start) || now.Sub(start) > maxAutomaticRecoveryDuration {
 		return false
 	}
-	if s.FailedAt.IsZero() || now.Before(s.FailedAt) || now.Sub(s.FailedAt) > maxAutomaticRecoveryDuration {
+	// A quota-limited task waits for its reset, so its window starts there.
+	failureWindowStart := s.FailedAt
+	if thread.QuotaResetAt.After(failureWindowStart) {
+		failureWindowStart = thread.QuotaResetAt
+	}
+	if s.FailedAt.IsZero() || now.Before(s.FailedAt) || now.Sub(failureWindowStart) > maxAutomaticRecoveryDuration {
 		return false
 	}
 	if s.Reason == "shared_app_server_disabled" {

@@ -261,7 +261,7 @@ worker restarts.
   owned server is restarted through the same ownership checks; an occupied or
   unowned port remains fail-open.
 - Official IPC readiness is re-probed at most once per ten seconds even with
-  shared mode disabled; each probe has a fifteen-second deadline. Config reload
+  shared mode disabled; each probe has a 45-second deadline (the desktop transport check itself allows 20 seconds and runs twice in shared mode). Config reload
   and successful dispatch/lifecycle checks preserve `official_ipc_ready`.
 - `transport_recovery.go` checks whether a stopped chain can rejoin the queue.
   Pre-dispatch `shared_app_server_disabled` stops set `transport_blocked=true` only
@@ -337,7 +337,12 @@ permissions, ordinary HTTP 400/404 errors, and user cancellation are never
 retried. Controller transport failures are tracked
 separately and consume neither provider retry counter. They are bounded by
 `controller_failure_limit`, including read failures while checking an
-acknowledged retry turn. `codex_not_running` is terminal for the affected
+acknowledged retry turn. `rate_limit` (usage limit) retries are the exception:
+they wait for the announced reset ("try again at"), start the 30-minute window
+there, and back off instead of stopping when the controller is temporarily
+unavailable (limit 4x for ambiguous errors after a possible send; unbounded for
+errors that prove nothing was sent; closed Codex, restart-required and
+configuration conflicts still stop). `codex_not_running` is terminal for the affected
 chain at both the pending-dispatch and acknowledged-turn stages: the watchdog
 clears the retry state, records the explicit stop reason, and waits for a manual
 restart command after Codex is open again. This prevents a closed desktop from

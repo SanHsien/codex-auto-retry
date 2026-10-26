@@ -423,3 +423,72 @@ func TestClassifierDoesNotTreatDiskQuotaAsUsageLimit(t *testing.T) {
 		t.Fatalf("unrelated quota error classified as rate_limit: %+v", decision)
 	}
 }
+
+func TestTransportReopenUsesQuotaRecoveryWindow(t *testing.T) {
+	now := time.Now().UTC()
+	thread := transportStoppedThread(now)
+	// The failure happened hours ago; only the quota reset a minute ago starts
+	// the 30 minute window.
+	thread.RecoveryStartedAt = now.Add(-3 * time.Hour)
+	thread.Stopped.FailedAt = now.Add(-3 * time.Hour)
+	thread.LastStartedAt = now.Add(-3*time.Hour - time.Second)
+	thread.QuotaResetAt = now.Add(-time.Minute)
+	if !canReopenTransportRetry(thread, now) {
+		t.Fatal("a quota retry stopped by a transport glitch right after its reset must be reopenable")
+	}
+	thread.QuotaResetAt = now.Add(-maxAutomaticRecoveryDuration - time.Minute)
+	if canReopenTransportRetry(thread, now) {
+		t.Fatal("the reopen window must still end 30 minutes after the reset")
+	}
+}
+
+func TestTickHeartbeatIncludesProbeTime(t *testing.T) {
+	cfg := isolatedConfig(t.TempDir())
+	runner := &slowProbeRunner{fakeResumeRunner: successfulRunner(), delay: 150 * time.Millisecond}
+	d := newTestDaemon(t, cfg, runner)
+	now := time.Now().UTC()
+	if err := d.tick(context.Background(), now); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.lastScan.Sub(now); got < runner.delay {
+		t.Fatalf("heartbeat was stamped at the tick start, before %v of probing: advanced %v", runner.delay, got)
+	}
+}
+
+type slowProbeRunner struct {
+	*fakeResumeRunner
+	delay time.Duration
+}
+
+func (r *slowProbeRunner) ControllerState(context.Context) string {
+	time.Sleep(r.delay)
+	return "official_ipc_ready"
+}
+
+func TestQuotaResetDoesNotLeakIntoALaterChain(t *testing.T) {
+	threadID := "01a0b950-b558-78a2-ba57-6265343ca372"
+	now := time.Now().UTC().Truncate(time.Second)
+	d := newTestDaemon(t, isolatedConfig(t.TempDir()), successfulRunner())
+	d.handleEventLocked(scannedEvent{ThreadID: threadID, Event: RelevantEvent{
+		Kind: "task_complete", TurnID: "t1", Timestamp: now,
+		ErrorText: usageLimitText(now.Add(100 * time.Hour)), FinalKnown: true,
+	}}, now)
+	if daemonThreadSnapshot(d, threadID).QuotaResetAt.IsZero() {
+		t.Fatal("setup: reset not recorded")
+	}
+	// A successful turn ends the chain.
+	d.mu.Lock()
+	d.resetRetryStateLocked(threadID, d.state.Threads[threadID])
+	d.mu.Unlock()
+	if !daemonThreadSnapshot(d, threadID).QuotaResetAt.IsZero() {
+		t.Fatal("a finished chain kept its quota reset")
+	}
+	// A new unrelated failure must start from a clean window.
+	later := now.Add(time.Hour)
+	d.handleEventLocked(scannedEvent{ThreadID: threadID, Event: RelevantEvent{
+		Kind: "task_complete", TurnID: "t2", Timestamp: later, ErrorText: "stream disconnected", FinalKnown: true,
+	}}, later)
+	if thread := daemonThreadSnapshot(d, threadID); !thread.QuotaResetAt.IsZero() {
+		t.Fatalf("new chain inherited an old reset: %+v", thread.QuotaResetAt)
+	}
+}

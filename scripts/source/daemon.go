@@ -121,6 +121,7 @@ func (d *daemon) tick(ctx context.Context, now time.Time) error {
 		return errStopRequested
 	}
 
+	tickStarted := time.Now()
 	d.processSharedRecovery(ctx, now)
 	controllerReady := d.controllerRestartReady(ctx, now)
 	d.mu.Lock()
@@ -170,7 +171,9 @@ func (d *daemon) tick(ctx context.Context, now time.Time) error {
 	d.reconcileAwaitingLifecycle(ctx, now)
 	d.mu.Lock()
 	jobs := d.dispatchDueLocked(now)
-	d.lastScan = now
+	// Probes can take most of a minute on a busy machine; stamp the heartbeat
+	// when the scan finishes so status.json is not already stale when written.
+	d.lastScan = now.Add(time.Since(tickStarted))
 	d.state.prune(now)
 	stateErr := d.persistStateLocked()
 	statusErr := d.writeStatusLocked(true, len(roots))

@@ -394,6 +394,7 @@ func (d *daemon) handleTaskCompleteLocked(item scannedEvent, key string, now tim
 func (d *daemon) scheduleFailureLocked(item scannedEvent, key string, now time.Time, thread ThreadState, recoveryAttempt, consecutiveRetry int, originTurnStartedAt time.Time, parentNotified bool) {
 	if thread.RecoveryAttempts == 0 && thread.ConsecutiveRetries == 0 {
 		thread.RecoveryStartedAt = now
+		thread.QuotaResetAt = time.Time{}
 	}
 	if thread.RecoveryStartedAt.IsZero() {
 		thread.RecoveryStartedAt = now
@@ -592,5 +593,6 @@ func (d *daemon) resetRetryStateLocked(threadID string, thread ThreadState) {
 	thread.CurrentTurnProgress = false
 	thread.Stopped = nil
 	thread.GoalStop = nil
+	thread.QuotaResetAt = time.Time{}
 	d.state.Threads[threadID] = thread
 }

@@ -64,6 +64,8 @@ function rejectDynamicFunctionBundle(): Plugin {
   const dynamicFunctionPatterns = [
     /\bnew\s+Function\s*\(/,
     /\b(?:const|let|var)\s+[$\w]+\s*=\s*Function\s*;/,
+    // Minified aliasing such as `u=Function,` or `u=Function;`.
+    /[$\w]\s*=\s*Function\s*[,;]/,
   ];
 
   return {
