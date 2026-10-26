@@ -59,7 +59,7 @@ func classifyFailure(errorText string, cfg Config) RetryDecision {
 	}
 
 	if containsAny(text,
-		"rate limit", "too many requests", "quota temporarily", "capacity", "overloaded", "try again later",
+		"rate limit", "too many requests", "quota temporarily", "usage limit", "usage_limit", "quota exceeded", "capacity", "overloaded", "try again later",
 	) {
 		return RetryDecision{Retry: true, Class: classRateLimit, Reason: "provider capacity or rate limit"}
 	}

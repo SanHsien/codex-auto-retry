@@ -480,10 +480,7 @@ func (d *daemon) reconcileAwaitingLifecycle(ctx context.Context, now time.Time) 
 		if awaiting == nil || awaiting.RetryTurnID == "" {
 			continue
 		}
-		startedAt := awaiting.StartedAt
-		if startedAt.IsZero() {
-			startedAt = awaiting.DispatchStartedAt
-		}
+		startedAt := awaitingStartedAt(awaiting)
 		if startedAt.IsZero() || now.Sub(startedAt) < time.Duration(d.config.StartAckTimeoutSeconds)*time.Second {
 			continue
 		}
@@ -501,7 +498,7 @@ func (d *daemon) reconcileAwaitingLifecycle(ctx context.Context, now time.Time) 
 	d.mu.Unlock()
 
 	for _, candidate := range candidates {
-		probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		probeCtx, cancel := context.WithTimeout(ctx, lifecycleProbeTimeout)
 		status, err := reader.RetryThreadStatus(probeCtx, candidate.threadID, candidate.codexHome)
 		cancel()
 
@@ -516,6 +513,19 @@ func (d *daemon) reconcileAwaitingLifecycle(ctx context.Context, now time.Time) 
 			reason := controllerFailureReason(DispatchResult{}, err)
 			d.controllerState = reason
 			nextFailures := awaiting.DispatchFailures + 1
+			if awaiting.Class == classRateLimit && quotaControllerWaitable(reason) &&
+				now.Sub(awaitingStartedAt(awaiting)) <= maxAutomaticRecoveryDuration {
+				// The retry turn was accepted, so a failed probe says nothing
+				// about the turn. Back off and keep waiting rather than
+				// abandoning a quota-limited task after a few slow probes.
+				awaiting.DispatchFailures = nextFailures
+				awaiting.LastLifecycleCheckAt = now.Add(lifecycleProbeBackoff(nextFailures) - awaitingLifecycleProbeInterval)
+				thread.Awaiting = awaiting
+				d.state.Threads[candidate.threadID] = thread
+				d.logger.Printf("retry lifecycle probe deferred thread=%s reason=%s controller_failures=%d wait=quota_reset", shortThreadID(candidate.threadID), reason, nextFailures)
+				d.mu.Unlock()
+				continue
+			}
 			if controllerFailureNeedsAction(reason) || nextFailures >= d.config.ControllerFailureLimit {
 				d.stopAwaitingForControllerLocked(candidate.threadID, thread, now, reason)
 				d.mu.Unlock()
@@ -552,6 +562,13 @@ func (d *daemon) reconcileAwaitingLifecycle(ctx context.Context, now time.Time) 
 		d.advanceInactiveAwaitingLocked(candidate.threadID, thread, now, status)
 		d.mu.Unlock()
 	}
+}
+
+func awaitingStartedAt(awaiting *AwaitingRetry) time.Time {
+	if awaiting.StartedAt.IsZero() {
+		return awaiting.DispatchStartedAt
+	}
+	return awaiting.StartedAt
 }
 
 func retryThreadIsActive(status string) bool {
@@ -637,7 +654,10 @@ func (d *daemon) rescheduleAwaitingWithPolicyLocked(threadID string, thread Thre
 	if countFailure {
 		dispatchFailures++
 	}
-	if controllerFailureNeedsAction(reason) || (countFailure && dispatchFailures >= d.config.ControllerFailureLimit) {
+	// A quota-limited task keeps backing off while the controller is away; the
+	// recovery window checked at dispatch time is its only deadline.
+	quotaWait := awaiting.Class == classRateLimit && quotaControllerWaitable(reason)
+	if !quotaWait && (controllerFailureNeedsAction(reason) || (countFailure && dispatchFailures >= d.config.ControllerFailureLimit)) {
 		d.stopAwaitingForControllerLocked(threadID, thread, now, reason)
 		return
 	}
@@ -823,7 +843,7 @@ func (d *daemon) dispatchDueLocked(now time.Time) []RetryJob {
 		if _, active := d.active[threadID]; active {
 			continue
 		}
-		if !thread.RecoveryStartedAt.IsZero() && now.Sub(thread.RecoveryStartedAt) > maxAutomaticRecoveryDuration {
+		if !thread.RecoveryStartedAt.IsZero() && now.Sub(recoveryWindowStart(thread)) > maxAutomaticRecoveryDuration {
 			d.stopPendingForControllerLocked(threadID, thread, now, "recovery_time_limit")
 			continue
 		}

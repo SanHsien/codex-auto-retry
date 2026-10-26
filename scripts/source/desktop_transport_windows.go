@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 )
 
 type desktopTransportState string
@@ -90,7 +89,7 @@ func (c powerShellDesktopTransportChecker) State(ctx context.Context) (desktopTr
 	if err != nil {
 		return "", err
 	}
-	commandCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	commandCtx, cancel := context.WithTimeout(ctx, desktopTransportCheckTimeout)
 	defer cancel()
 	command := exec.CommandContext(commandCtx, powerShell,
 		"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", "-")
@@ -100,7 +99,7 @@ func (c powerShellDesktopTransportChecker) State(ctx context.Context) (desktopTr
 	command.Stderr = io.Discard
 	command.SysProcAttr = &syscall.SysProcAttr{CreationFlags: createNoWindow}
 	if err := command.Run(); err != nil {
-		return "", err
+		return "", wrapControllerCommandError(commandCtx, err)
 	}
 	switch desktopTransportState(strings.TrimSpace(stdout.String())) {
 	case desktopStopped:

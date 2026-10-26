@@ -1,5 +1,29 @@
 # 維護決策
 
+## 2026-10-26：額度用完時等到重置再試，控制端暫時連不上不放棄
+
+**事件**：Codex 額度用完（`rate_limit`），重試程式 00:53（UTC）對 `01a0b950` 送出續跑並被接受；之後 01:03～01:05 的生命週期探測連續 `controller_unavailable`，到 `controller_failure_limit`（3）就 `retry stopped`，同時三個子代理 thread 因 `codex_thread_owner_unavailable` 停掉。額度恢復後沒有人再叫醒 Codex。
+
+**根因**：`controller_unavailable` 是「沒有歸類的錯誤」的預設名稱。實際來源是判斷桌面版傳輸方式的 PowerShell 檢查（`desktop_transport_windows.go`）在機器忙碌時超過 8 秒被砍；生命週期探測自己的預算只有 5 秒，比它包住的檢查還短。`shared_app_server_enabled=false` 是官方 IPC 模式的正常狀態，與此無關。
+
+**決定**：
+- 傳輸檢查逾時放寬為 20 秒（`desktopTransportCheckTimeout`），生命週期探測預算為其加 5 秒；指令因自己的期限被砍時回報 `controller_timeout`，不再混成 `controller_unavailable`。
+- 錯誤文字含「try again at …」時（`quota_wait.go`），下一次重試排在重置時間加 30 秒，30 分鐘自動恢復視窗從重置時間起算（`ThreadState.QuotaResetAt`）。解析不到時間（例如只有 429）維持原本的短間隔。
+- `usage limit`、`usage_limit`、`quota exceeded` 歸為 `rate_limit`，原本落到 `unknown` 只能試 3 次。
+- `rate_limit` 類別遇到控制端暫時失敗（含 `codex_thread_owner_unavailable`、`codex_not_running`、`codex_restart_required`）一律退避重試，不受 `controller_failure_limit` 限制，唯一期限是 30 分鐘恢復視窗；生命週期探測失敗改為退避（最長 5 分鐘）而非停止，超過視窗才停。其他類別維持原本「連續 N 次就停」。
+
+**理由**：額度重置往往是數小時後，短間隔重試只會用掉次數；而重試已被接受時，探測失敗不代表任務結束。
+
+**限制／延後**：子代理 owner 不在時只做等待，沒有改走父 thread（官方 IPC 對父 thread 開新回合的行為無法在不碰真 Codex 的情況下驗證）；已停止的舊紀錄需在新版安裝後由使用者手動按「重試」。
+
+**觸發條件**：改動 `scheduleFailureLocked`、`rescheduleAwaitingWithPolicyLocked` 或生命週期探測時需保留 `quota_wait_test.go` 的行為；若 Codex 改變用量錯誤文字格式，更新 `usageLimitResetPattern`。
+
+## 2026-10-26：面板打包移除 Zod 動態 Function
+
+**決定**：`scripts/source/ui/vite.config.ts` 新增建置外掛，在打包時把 `zod/v4/core` 的 `doc.js`、`util.js`、`compile.js` 三處 `new Function` 換成停用版本（Zod 退回解譯式驗證），並在產出含 `new Function(` 時讓建置失敗。目的是消除 CodeQL 警示 `js/bad-code-sanitization`（`panel.html`）。來源比對失敗也會讓建置失敗，升級 Zod 時需重新確認。
+
+**來源**：Codex 在 `codex-auto-retry-remediation-20261026` 的未提交改動，已在新 worktree 重現並確認產出的 `panel.html` 逐位元相同。
+
 ## 2026-10-25：修 CodeQL 首輪兩個警示
 
 **決定**：`logger.go` 的 `Printf` 把訊息中的 CR／LF 轉成可見的 `\r`／`\n`，一筆紀錄永遠只占一行（`go/log-injection`）；`codex_ipc_windows.go` 的 `writeFrame` 比照 `readFrame` 以同一常數 `maxCodexIPCFrameBytes`（256 MiB）限制長度，再配置緩衝區（`go/allocation-size-overflow`）。

@@ -419,8 +419,17 @@ func (d *daemon) scheduleFailureLocked(item scannedEvent, key string, now time.T
 		d.logger.Printf("retry skipped thread=%s category=non_retryable reason=%s", shortThreadID(item.ThreadID), decision.Reason)
 		return
 	}
+	// A usage-limit error says when the quota returns. Wait for that moment
+	// instead of burning attempts, and start the recovery window there.
+	quotaResetAt := time.Time{}
+	if decision.Class == classRateLimit {
+		if reset, found := quotaResetFromError(item.Event.ErrorText, now); found {
+			quotaResetAt = reset
+		}
+	}
+	thread.QuotaResetAt = quotaResetAt
 	recoveryLimit, consecutiveLimit := retryLimitsForDecision(decision, d.config)
-	timeLimitExceeded := now.Sub(thread.RecoveryStartedAt) > maxAutomaticRecoveryDuration
+	timeLimitExceeded := now.Sub(recoveryWindowStart(thread)) > maxAutomaticRecoveryDuration
 	if timeLimitExceeded || recoveryAttempt > recoveryLimit || consecutiveRetry > consecutiveLimit {
 		completedAttempts := completedRetryCount(recoveryAttempt)
 		completedConsecutive := completedRetryCount(consecutiveRetry)
@@ -453,6 +462,11 @@ func (d *daemon) scheduleFailureLocked(item scannedEvent, key string, now time.T
 	}
 
 	delay := retryDelay(consecutiveRetry, d.config)
+	if !quotaResetAt.IsZero() {
+		if wait := quotaResetAt.Add(quotaResetGrace).Sub(now); wait > delay {
+			delay = wait
+		}
+	}
 	thread.RecoveryAttempts = recoveryAttempt
 	thread.ConsecutiveRetries = consecutiveRetry
 	thread.CurrentTurnProgress = false
