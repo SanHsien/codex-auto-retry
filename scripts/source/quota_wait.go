@@ -96,17 +96,18 @@ func quotaResetFromError(text string, eventAt, now time.Time) (time.Time, bool) 
 }
 
 // quotaControllerWaitable reports whether a controller failure is the kind a
-// quota-limited thread should simply wait out. Codex being closed or restarting
-// is temporary; configuration conflicts are not and still stop the retry.
+// quota-limited thread should simply wait out. A closed Codex, a required
+// restart and configuration conflicts need the user and keep stopping the
+// retry, as documented in architecture.md.
 func quotaControllerWaitable(reason string) bool {
-	return !controllerFailureNeedsAction(reason) || reason == "codex_not_running" || reason == "codex_restart_required"
+	return !controllerFailureNeedsAction(reason)
 }
 
 // quotaNotSentReason lists dispatch failures that prove no turn reached Codex,
 // so a quota-limited task can wait them out without risking a duplicate turn.
 func quotaNotSentReason(reason string) bool {
 	switch reason {
-	case "codex_thread_owner_unavailable", "codex_not_running", "codex_restart_required", "codex_background_channel_unavailable":
+	case "codex_thread_owner_unavailable", "codex_background_channel_unavailable":
 		return true
 	default:
 		return false

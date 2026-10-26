@@ -74,7 +74,7 @@ func TestUsageLimitMessagesClassifyAsRateLimit(t *testing.T) {
 func TestUsageLimitRetryWaitsUntilReset(t *testing.T) {
 	threadID := "01a0b950-b558-78a2-ba57-6265343ca360"
 	now := time.Now().UTC().Truncate(time.Second)
-	reset := now.Add(3 * time.Hour)
+	reset := now.Add(3 * time.Hour).Truncate(time.Minute) // the message only has minute precision
 	d := newTestDaemon(t, isolatedConfig(t.TempDir()), successfulRunner())
 	d.handleEventLocked(scannedEvent{ThreadID: threadID, Event: RelevantEvent{
 		Kind: "task_complete", TurnID: "limited-turn", Timestamp: now,
@@ -145,7 +145,7 @@ func TestQuotaRetryOutlastsControllerFailureLimit(t *testing.T) {
 	}{
 		{"controller error", &fakeResumeRunner{err: errors.New("controller unavailable")}},
 		{"thread owner missing", &fakeResumeRunner{result: DispatchResult{Outcome: outcomeRetryLater, Reason: "codex_thread_owner_unavailable"}}},
-		{"codex not running", &fakeResumeRunner{result: DispatchResult{Outcome: outcomeRetryLater, Reason: "codex_not_running"}}},
+		{"channel unavailable", &fakeResumeRunner{result: DispatchResult{Outcome: outcomeRetryLater, Reason: "codex_background_channel_unavailable"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			threadID := "01a1743a-55b4-7f60-aa57-3aee25b0590f"
@@ -342,7 +342,7 @@ func TestBareResetTimeIsRelativeToTheEventNotToProcessingTime(t *testing.T) {
 }
 
 func TestQuotaDispatchGateKeepsRateLimitQueuedWhileControllerRecovers(t *testing.T) {
-	for _, state := range []string{"codex_thread_owner_unavailable", "codex_not_running", "controller_timeout", "codex_restart_required"} {
+	for _, state := range []string{"codex_thread_owner_unavailable", "controller_timeout", "codex_background_channel_unavailable"} {
 		t.Run(state, func(t *testing.T) {
 			threadID := "01a1743a-55b4-7f60-aa57-3aee25b0590f"
 			now := time.Now().UTC()
@@ -372,19 +372,21 @@ func TestQuotaDispatchGateKeepsRateLimitQueuedWhileControllerRecovers(t *testing
 			t.Fatalf("non-quota retry should keep the old gate behavior: %+v", thread)
 		}
 	})
-	t.Run("genuinely disabled backend still stops", func(t *testing.T) {
-		threadID := "01a1743a-55b4-7f60-aa57-3aee25b0590d"
-		now := time.Now().UTC()
-		cfg := isolatedConfig(t.TempDir())
-		cfg.SharedAppServerEnabled = false
-		d := newTestDaemon(t, cfg, successfulRunner())
-		d.controllerState = "shared_app_server_disabled"
-		d.state.Threads[threadID] = ThreadState{Pending: quotaPending(now, classRateLimit, 0)}
-		d.dispatchDueLocked(now)
-		if thread := daemonThreadSnapshot(d, threadID); thread.Stopped == nil {
-			t.Fatalf("a permanently disabled backend must still stop the retry: %+v", thread)
-		}
-	})
+	for _, state := range []string{"shared_app_server_disabled", "codex_not_running", "codex_restart_required"} {
+		t.Run("needs the user: "+state, func(t *testing.T) {
+			threadID := "01a1743a-55b4-7f60-aa57-3aee25b0590d"
+			now := time.Now().UTC()
+			cfg := isolatedConfig(t.TempDir())
+			cfg.SharedAppServerEnabled = false
+			d := newTestDaemon(t, cfg, successfulRunner())
+			d.controllerState = state
+			d.state.Threads[threadID] = ThreadState{Pending: quotaPending(now, classRateLimit, 0)}
+			d.dispatchDueLocked(now)
+			if thread := daemonThreadSnapshot(d, threadID); thread.Stopped == nil {
+				t.Fatalf("a state that needs the user must still stop the retry: %+v", thread)
+			}
+		})
+	}
 }
 
 func TestQuotaRetryDoesNotRepeatAmbiguousDispatch(t *testing.T) {
