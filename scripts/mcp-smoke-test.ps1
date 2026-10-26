@@ -157,7 +157,8 @@ try {
         'rescan_interrupted_tasks',
         'retry_now',
         'cancel_retry',
-        'restart_retry'
+        'restart_retry',
+        'dismiss_retry'
     )
     foreach ($name in $expectedTools) {
         $tool = @($tools.tools | Where-Object name -eq $name)
@@ -226,8 +227,9 @@ try {
     $null = Call-MCPTool $process 8 'retry_now' @{ thread_id = $threadId }
     $null = Call-MCPTool $process 9 'cancel_retry' @{ thread_id = $threadId }
     $null = Call-MCPTool $process 10 'restart_retry' @{ thread_id = $stoppedThreadId }
+    $null = Call-MCPTool $process 11 'dismiss_retry' @{ thread_id = $stoppedThreadId }
     $commands = @(Get-ChildItem -LiteralPath (Join-Path $dataDir 'commands') -Filter '*.json' -File)
-    if ($commands.Count -ne 3) { throw 'Thread controls were not queued atomically.' }
+    if ($commands.Count -ne 4) { throw 'Thread controls were not queued atomically.' }
 
     [pscustomobject]@{
         Status = 'passed'

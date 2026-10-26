@@ -412,6 +412,44 @@ textarea:focus-visible,
   gap: 6px;
 }
 
+.queue-note {
+  grid-column: 1 / -1;
+  margin: -2px 0 0 40px;
+  color: var(--panel-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.queue-raw {
+  grid-column: 1 / -1;
+  margin-left: 40px;
+  color: var(--panel-muted);
+  font-size: 11px;
+}
+
+.queue-raw summary {
+  cursor: pointer;
+  width: fit-content;
+}
+
+.queue-raw dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 2px 12px;
+  margin: 6px 0 0;
+}
+
+.queue-raw dt {
+  font-weight: 620;
+}
+
+.queue-raw dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
 .queue-action.retry-action {
   color: var(--panel-positive);
 }
@@ -722,6 +760,11 @@ textarea:disabled {
     grid-column: 1 / -1;
     justify-content: flex-end;
     margin-top: -4px;
+  }
+
+  .queue-note,
+  .queue-raw {
+    margin-left: 0;
   }
 
   .settings-grid {

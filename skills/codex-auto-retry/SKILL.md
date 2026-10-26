@@ -116,6 +116,8 @@ compatibility fallback text.
   cancelled by the user (`user_cancelled`), or listed by a rescan
   (`interrupted_detected`). It starts a fresh attempt budget and requests an
   immediate retry. Cancelled and rescanned entries stay listed for 24 hours.
+- Use `dismiss_retry` for a stopped task the user wants to give up on; it only
+  drops the queue entry and never touches the Codex task.
 - Use `rescan_interrupted_tasks` when the user asks to find tasks that were
   interrupted earlier. It lists tasks from the last 24 hours whose last turn
   ended with a retryable failure and was never continued; it never retries

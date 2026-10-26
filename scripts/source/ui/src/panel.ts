@@ -11,6 +11,7 @@ import {
   Play,
   RefreshCw,
   RotateCcw,
+  Trash2,
   Save,
   X,
   createIcons,
@@ -43,6 +44,10 @@ type ManagedRetry = {
   can_cancel: boolean;
   can_restart: boolean;
   stop_reason?: string;
+  quota_reset_at?: string;
+  failed_at?: string;
+  stopped_at?: string;
+  can_dismiss?: boolean;
 };
 
 type ManagementSnapshot = {
@@ -93,7 +98,7 @@ type ToolResult = {
   content?: Array<{ type: string; text?: string }>;
 };
 
-const iconSet = { Activity, Clock, Play, RefreshCw, RotateCcw, Save, X };
+const iconSet = { Activity, Clock, Play, RefreshCw, RotateCcw, Save, Trash2, X };
 const elements = {
   shell: required<HTMLElement>("app-shell"),
   serviceLine: required<HTMLElement>("service-line"),
@@ -420,7 +425,7 @@ function createQueueItem(retry: ManagedRetry, paused: boolean): HTMLElement {
     secondary.textContent = paused ? L("恢復後執行", "Runs after resume") : L("後重試", "until retry");
   } else if (retry.state === "stopped") {
     primary.textContent = L("已停止", "Stopped");
-    secondary.textContent = stopReasonLabel(retry);
+    secondary.textContent = stoppedStateLabel(retry);
   } else {
     primary.textContent = retry.state === "running" ? L("執行中", "Running") : L("啟動中", "Starting");
     secondary.textContent = actionLabel(retry.action);
@@ -436,10 +441,70 @@ function createQueueItem(retry: ManagedRetry, paused: boolean): HTMLElement {
     actions.append(actionButton("x", L("取消這次重試", "Cancel this retry"), "cancel-action", () => runThreadAction("cancel_retry", retry.thread_id)));
   }
   if (retry.can_restart) {
-    actions.append(actionButton("rotate-ccw", L("重新開始計數並重試", "Reset counters and retry"), "retry-action", () => runThreadAction("restart_retry", retry.thread_id)));
+    actions.append(actionButton("rotate-ccw", L("立即重試（重新計數）", "Retry now (reset counters)"), "retry-action", () => runThreadAction("restart_retry", retry.thread_id)));
+  }
+  if (retry.can_dismiss) {
+    actions.append(actionButton("trash-2", L("放棄這個任務的自動重試", "Dismiss automatic retry for this task"), "cancel-action", () => runThreadAction("dismiss_retry", retry.thread_id)));
   }
   row.append(main, state, actions);
+  const note = queueNote(retry);
+  if (note) row.append(note);
+  row.append(queueDetails(retry));
   return row;
+}
+
+function formatClock(iso: string): string {
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return "--";
+  const sameDay = date.toDateString() === new Date().toDateString();
+  const time = date.toLocaleTimeString(L("zh-TW", "en-US"), { hour: "2-digit", minute: "2-digit", hour12: false });
+  if (sameDay) return time;
+  return `${date.toLocaleDateString(L("zh-TW", "en-US"), { month: "numeric", day: "numeric" })} ${time}`;
+}
+
+// One plain sentence that answers "why is this here and what happens next".
+function queueNote(retry: ManagedRetry): HTMLElement | null {
+  let text = "";
+  if (retry.quota_reset_at && retry.state !== "stopped") {
+    text = L(`額度用完，預計 ${formatClock(retry.quota_reset_at)} 恢復；恢復後自動重試，不會先消耗次數。`, `Usage limit reached. Expected back at ${formatClock(retry.quota_reset_at)}; the retry runs after that without using up attempts.`);
+  } else if (retry.state === "stopped") {
+    text = stopReasonLabel(retry);
+    if (retry.can_restart) {
+      text += L("。可按「立即重試」重新開始，或按垃圾桶放棄、移出佇列。", ". Press Retry now to start over, or the bin to dismiss it from the queue.");
+    }
+  }
+  if (!text) return null;
+  const note = document.createElement("p");
+  note.className = "queue-note";
+  note.textContent = text;
+  return note;
+}
+
+// The raw, privacy-safe identifiers stay available for bug reports.
+function queueDetails(retry: ManagedRetry): HTMLElement {
+  const details = document.createElement("details");
+  details.className = "queue-raw";
+  const summary = document.createElement("summary");
+  summary.textContent = L("技術細節", "Technical details");
+  const list = document.createElement("dl");
+  const rows: Array<[string, string | undefined]> = [
+    [L("任務 ID", "Task ID"), retry.thread_id],
+    [L("故障類別", "Failure class"), retry.class],
+    [L("停止原因代碼", "Stop reason code"), retry.stop_reason],
+    [L("故障時間", "Failed at"), retry.failed_at ? formatClock(retry.failed_at) : undefined],
+    [L("停止時間", "Stopped at"), retry.stopped_at ? formatClock(retry.stopped_at) : undefined],
+    [L("額度恢復", "Quota resets"), retry.quota_reset_at ? formatClock(retry.quota_reset_at) : undefined],
+  ];
+  for (const [name, value] of rows) {
+    if (!value) continue;
+    const term = document.createElement("dt");
+    term.textContent = name;
+    const description = document.createElement("dd");
+    description.textContent = value;
+    list.append(term, description);
+  }
+  details.append(summary, list);
+  return details;
 }
 
 function actionButton(iconName: string, label: string, className: string, action: () => void): HTMLButtonElement {
@@ -563,6 +628,12 @@ function stopReasonLabel(retry: ManagedRetry): string {
   if (retry.stop_reason === "shared_app_server_migration_deferred") {
     return L("等待 Codex 關閉後完成後端遷移", "Backend migration waits for Codex to close");
   }
+  if (retry.stop_reason === "codex_thread_owner_unavailable") {
+    return L("找不到負責這個任務的 Codex 視窗（子任務常見），多次嘗試都失敗", "No Codex window owns this task (common for sub-agent tasks); every attempt failed");
+  }
+  if (retry.stop_reason === "controller_timeout") {
+    return L("恢復請求逾時，多次嘗試都失敗", "The recovery request timed out on every attempt");
+  }
   if (retry.stop_reason?.startsWith("controller_") || retry.stop_reason?.startsWith("codex_background_") || retry.stop_reason === "app_server_request_failed") {
     return L("後端恢復通道連續失敗，已停止空轉", "The backend recovery channel kept failing; stopped spinning");
   }
@@ -593,6 +664,14 @@ function stoppedStateLabel(retry: ManagedRetry): string {
       return L("共用後端已關閉", "Shared backend off");
     case "codex_not_running":
       return L("Codex 已結束", "Codex exited");
+    case "codex_thread_owner_unavailable":
+      return L("找不到任務擁有者", "Task owner not found");
+    case "controller_timeout":
+      return L("恢復請求逾時", "Recovery request timed out");
+    case "controller_unavailable":
+      return L("控制端連不上", "Controller unreachable");
+    case "recovery_time_limit":
+      return L("超過 30 分鐘上限", "30-minute limit passed");
     case "codex_restart_required":
       return L("等待安全啟動 Codex", "Waiting for a safe Codex launch");
     case "codex_ipc_goal_control_unsupported":
@@ -806,7 +885,7 @@ async function callTool(name: string, args: Record<string, unknown> = {}, quiet 
   }
 }
 
-async function runThreadAction(name: "retry_now" | "cancel_retry" | "restart_retry", threadId: string): Promise<void> {
+async function runThreadAction(name: "retry_now" | "cancel_retry" | "restart_retry" | "dismiss_retry", threadId: string): Promise<void> {
   await callTool(name, { thread_id: threadId });
   window.setTimeout(() => void callTool("get_auto_retry_status"), 1200);
 }
@@ -945,6 +1024,8 @@ function previewSnapshot(): ManagementSnapshot {
         can_retry_now: true,
         can_cancel: true,
         can_restart: false,
+        quota_reset_at: new Date(now + 3 * 3_600_000).toISOString(),
+        failed_at: new Date(now - 90_000).toISOString(),
       },
       {
         thread_id: "019f9d5d-9c82-75b1-b7c0-20a658af0425",
@@ -974,6 +1055,10 @@ function previewSnapshot(): ManagementSnapshot {
         can_retry_now: false,
         can_cancel: false,
         can_restart: true,
+        can_dismiss: true,
+        stop_reason: "codex_thread_owner_unavailable",
+        failed_at: new Date(now - 600_000).toISOString(),
+        stopped_at: new Date(now - 540_000).toISOString(),
       },
     ],
   };

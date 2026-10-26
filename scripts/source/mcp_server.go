@@ -231,6 +231,17 @@ func newManagementMCPServer(service *managementService) *mcp.Server {
 		return nil, snapshot, err
 	})
 
+	mcp.AddTool(server, &mcp.Tool{
+		Meta:        managementToolMeta(),
+		Name:        "dismiss_retry",
+		Title:       "放棄自動重試 / Dismiss retry",
+		Description: "把已停止自動重試的任務從佇列移除，之後不再顯示；不會中止或改動 Codex 任務本身。 / Remove a task whose automatic retry has stopped from the queue; the Codex task itself is not touched.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPointer(false), IdempotentHint: true, OpenWorldHint: boolPointer(false), Title: "放棄自動重試 / Dismiss retry"},
+	}, func(_ context.Context, _ *mcp.CallToolRequest, input threadControlInput) (*mcp.CallToolResult, ManagementSnapshot, error) {
+		snapshot, err := service.dismissRetry(input.ThreadID, time.Now().UTC())
+		return nil, snapshot, err
+	})
+
 	return server
 }
 

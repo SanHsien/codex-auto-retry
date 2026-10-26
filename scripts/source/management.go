@@ -29,6 +29,10 @@ type ManagedRetry struct {
 	CanCancel             bool         `json:"can_cancel" jsonschema:"whether the pending retry can be cancelled"`
 	CanRestart            bool         `json:"can_restart" jsonschema:"whether an exhausted retry can be restarted with a fresh budget"`
 	StopReason            string       `json:"stop_reason,omitempty" jsonschema:"privacy-safe reason why retries stopped"`
+	QuotaResetAt          string       `json:"quota_reset_at,omitempty" jsonschema:"when the usage limit resets, in RFC 3339 format, while the task waits for it"`
+	FailedAt              string       `json:"failed_at,omitempty" jsonschema:"when the failure that started this recovery happened, in RFC 3339 format"`
+	StoppedAt             string       `json:"stopped_at,omitempty" jsonschema:"when automatic retry stopped, in RFC 3339 format"`
+	CanDismiss            bool         `json:"can_dismiss" jsonschema:"whether a stopped task can be dismissed from the queue"`
 }
 
 // Stopped entries are useful immediately after a limit is reached because
@@ -429,6 +433,10 @@ func (m *managementService) restartRetry(threadID string, now time.Time) (Manage
 	return m.queueThreadCommand(commandRestartRetry, threadID, now)
 }
 
+func (m *managementService) dismissRetry(threadID string, now time.Time) (ManagementSnapshot, error) {
+	return m.queueThreadCommand(commandDismissRetry, threadID, now)
+}
+
 func (m *managementService) rescanInterrupted(now time.Time) (ManagementSnapshot, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -451,8 +459,8 @@ func (m *managementService) queueThreadCommand(action ControlCommandAction, thre
 		return ManagementSnapshot{}, err
 	}
 	thread, found := state.Threads[threadID]
-	if !found || (action == commandRestartRetry && thread.Stopped == nil) ||
-		(action != commandRestartRetry && thread.Pending == nil) {
+	needsStopped := action == commandRestartRetry || action == commandDismissRetry
+	if !found || (needsStopped && thread.Stopped == nil) || (!needsStopped && thread.Pending == nil) {
 		return ManagementSnapshot{}, errors.New(text(uiLanguage(m.dataDir), "該任務目前沒有可執行的重試操作", "This task has no retry action available right now"))
 	}
 	if _, err := queueControlCommand(m.commandDir, action, threadID, now); err != nil {
@@ -464,6 +472,8 @@ func (m *managementService) queueThreadCommand(action ControlCommandAction, thre
 			snapshot.Notice = text(snapshot.UILanguage, "已請求立即重試", "Retry requested")
 		} else if action == commandRestartRetry {
 			snapshot.Notice = text(snapshot.UILanguage, "已重新開始計數並請求重試", "Counters reset and retry requested")
+		} else if action == commandDismissRetry {
+			snapshot.Notice = text(snapshot.UILanguage, "已請求放棄這個任務的自動重試", "Dismissal requested; automatic retry for this task is dropped")
 		} else {
 			snapshot.Notice = text(snapshot.UILanguage, "已請求取消這次重試", "Cancellation requested")
 		}
@@ -484,6 +494,22 @@ func loadStatusSnapshot(path string) (StatusSnapshot, bool, error) {
 		return StatusSnapshot{}, false, fmt.Errorf("parse status: %w", err)
 	}
 	return status, true, nil
+}
+
+func timestampOrEmpty(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.Format(time.RFC3339Nano)
+}
+
+// quotaResetOrEmpty only reports a reset that is still ahead; once it has
+// passed, the task is no longer waiting for it.
+func quotaResetOrEmpty(thread ThreadState, now time.Time) string {
+	if thread.QuotaResetAt.After(now) {
+		return thread.QuotaResetAt.Format(time.RFC3339Nano)
+	}
+	return ""
 }
 
 func managedRetries(state RuntimeState, now time.Time, language string) []ManagedRetry {
@@ -507,6 +533,8 @@ func managedRetries(state RuntimeState, now time.Time, language string) []Manage
 				MaxConsecutiveRetries: thread.Pending.MaxConsecutive,
 				CanRetryNow:           true,
 				CanCancel:             true,
+				QuotaResetAt:          quotaResetOrEmpty(thread, now),
+				FailedAt:              timestampOrEmpty(thread.Pending.FailedAt),
 			})
 		}
 		if thread.Awaiting != nil {
@@ -524,6 +552,8 @@ func managedRetries(state RuntimeState, now time.Time, language string) []Manage
 				ConsecutiveRetry:      thread.Awaiting.ConsecutiveRetry,
 				MaxConsecutiveRetries: thread.Awaiting.MaxConsecutive,
 				Action:                thread.Awaiting.Action,
+				QuotaResetAt:          quotaResetOrEmpty(thread, now),
+				FailedAt:              timestampOrEmpty(thread.Awaiting.FailedAt),
 			})
 		}
 		if thread.Stopped != nil && stoppedRetryIsVisible(thread.Stopped, now) {
@@ -537,7 +567,10 @@ func managedRetries(state RuntimeState, now time.Time, language string) []Manage
 				ConsecutiveRetry:      thread.Stopped.ConsecutiveRetries,
 				MaxConsecutiveRetries: thread.Stopped.MaxConsecutive,
 				CanRestart:            true,
+				CanDismiss:            true,
 				StopReason:            thread.Stopped.Reason,
+				FailedAt:              timestampOrEmpty(thread.Stopped.FailedAt),
+				StoppedAt:             timestampOrEmpty(thread.Stopped.StoppedAt),
 			})
 		}
 	}

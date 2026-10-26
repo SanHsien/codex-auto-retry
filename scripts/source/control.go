@@ -27,6 +27,7 @@ const (
 	commandRetryNow     ControlCommandAction = "retry_now"
 	commandCancelRetry  ControlCommandAction = "cancel_retry"
 	commandRestartRetry ControlCommandAction = "restart_retry"
+	commandDismissRetry ControlCommandAction = "dismiss_retry"
 	// commandRescanInterrupted applies to every watched task and carries no thread id.
 	commandRescanInterrupted ControlCommandAction = "rescan_interrupted"
 )
@@ -114,7 +115,7 @@ func (c ControlCommand) validate() error {
 		if c.ThreadID != "" {
 			return errors.New("rescan does not take a thread id")
 		}
-	case commandRetryNow, commandCancelRetry, commandRestartRetry:
+	case commandRetryNow, commandCancelRetry, commandRestartRetry, commandDismissRetry:
 		if c.ThreadID == "" || threadIDFromPath(c.ThreadID+".jsonl") != strings.ToLower(c.ThreadID) {
 			return errors.New("invalid thread id")
 		}

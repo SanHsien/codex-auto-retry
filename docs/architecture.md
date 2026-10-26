@@ -162,6 +162,8 @@ the explicit launcher, existing-process, stale-shell and self-update boundaries.
    strategy, first/fixed delay, maximum delay, and notification preference.
    `restart_retry` converts a stopped entry (exhausted, `user_cancelled`, or
    `interrupted_detected`) into an immediate first attempt with a fresh budget.
+   `dismiss_retry` removes a stopped entry from the queue (only while it is
+   stopped) without touching the Codex task.
    `rescan_interrupted_tasks` queues a `rescan_interrupted` command; the
    watchdog then reads lifecycle events of live sessions changed in the last
    24 hours and lists tasks whose last turn failed retryably and was never

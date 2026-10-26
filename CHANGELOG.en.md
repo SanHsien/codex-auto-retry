@@ -10,6 +10,9 @@ English | [繁體中文](CHANGELOG.md)
 
 ## [Unreleased]
 
+### Added
+- **Panel: see each task's state at a glance**: tasks waiting for quota show when it is expected back, stopped tasks explain the reason and next step in one plain sentence and expand to "Technical details" (task ID, failure class, reason code, failed/stopped/quota-reset times); stopped tasks get a Dismiss (bin) button and an MCP tool `dismiss_retry` that only removes the queue entry and never touches the Codex task; the panel no longer scrolls horizontally at phone width.
+
 ### Fixed
 - **Quota exhaustion no longer ends retrying for good**: when the error says "try again at ...", the retry is scheduled after that reset and the automatic recovery window starts at the reset. For `rate_limit` failures, a temporarily unreachable controller (including a missing owner for a subagent thread) now backs off and retries instead of stopping after 3 failures. `usage limit` messages and plan/billing quota errors are classified as `rate_limit`.
 - **Root cause of `controller_unavailable`**: the PowerShell desktop-transport check was killed after 8 seconds on a busy machine, while the lifecycle probe that contains it only had 5. The check now allows 20 seconds, the probe 45, and a timeout is reported as `controller_timeout`.

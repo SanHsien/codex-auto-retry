@@ -370,6 +370,9 @@ func runLocalControl(dataDir, action, threadID string) error {
 	case string(commandRestartRetry):
 		_, err := service.restartRetry(threadID, now)
 		return err
+	case string(commandDismissRetry):
+		_, err := service.dismissRetry(threadID, now)
+		return err
 	case string(commandRescanInterrupted):
 		_, err := service.rescanInterrupted(now)
 		return err
