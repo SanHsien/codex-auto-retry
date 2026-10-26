@@ -17,7 +17,9 @@ import (
 const desktopTransportCheckTimeout = 20 * time.Second
 
 // lifecycleProbeTimeout must exceed the transport check it contains.
-const lifecycleProbeTimeout = desktopTransportCheckTimeout + 5*time.Second
+// Shared mode checks the transport twice, so allow two checks plus slack. The
+// same budget bounds the readiness probe that gates dispatch.
+const lifecycleProbeTimeout = 2*desktopTransportCheckTimeout + 5*time.Second
 
 const (
 	// quotaResetGrace is added after the announced reset so the retry does not
@@ -79,9 +81,14 @@ func usageLimitResetAt(text string, now time.Time, loc *time.Location) (time.Tim
 }
 
 // quotaResetFromError returns the announced reset when it is a usable future
-// time within the plausible horizon.
-func quotaResetFromError(text string, now time.Time) (time.Time, bool) {
-	reset, ok := usageLimitResetAt(text, now, time.Local)
+// time within the plausible horizon. A bare clock time is read against the
+// moment the error happened, not the moment the daemon processed it.
+func quotaResetFromError(text string, eventAt, now time.Time) (time.Time, bool) {
+	reference := eventAt
+	if reference.IsZero() || reference.After(now) {
+		reference = now
+	}
+	reset, ok := usageLimitResetAt(text, reference, time.Local)
 	if !ok || !reset.After(now) || reset.Sub(now) > quotaResetHorizon {
 		return time.Time{}, false
 	}
@@ -94,6 +101,25 @@ func quotaResetFromError(text string, now time.Time) (time.Time, bool) {
 func quotaControllerWaitable(reason string) bool {
 	return !controllerFailureNeedsAction(reason) || reason == "codex_not_running" || reason == "codex_restart_required"
 }
+
+// quotaNotSentReason lists dispatch failures that prove no turn reached Codex,
+// so a quota-limited task can wait them out without risking a duplicate turn.
+func quotaNotSentReason(reason string) bool {
+	switch reason {
+	case "codex_thread_owner_unavailable", "codex_not_running", "codex_restart_required", "codex_background_channel_unavailable":
+		return true
+	default:
+		return false
+	}
+}
+
+// quotaAmbiguousReason lists failures that may have happened after a turn was
+// sent. They get a larger but finite failure limit.
+func quotaAmbiguousReason(reason string) bool {
+	return reason == "controller_timeout" || reason == "controller_unavailable"
+}
+
+const quotaAmbiguousLimitFactor = 4
 
 // recoveryWindowStart is when the automatic recovery window begins. A thread
 // waiting for its quota to reset must not burn the window while it waits.

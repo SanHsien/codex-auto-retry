@@ -423,11 +423,16 @@ func (d *daemon) scheduleFailureLocked(item scannedEvent, key string, now time.T
 	// instead of burning attempts, and start the recovery window there.
 	quotaResetAt := time.Time{}
 	if decision.Class == classRateLimit {
-		if reset, found := quotaResetFromError(item.Event.ErrorText, now); found {
+		if reset, found := quotaResetFromError(item.Event.ErrorText, item.Event.Timestamp, now); found {
 			quotaResetAt = reset
 		}
 	}
-	thread.QuotaResetAt = quotaResetAt
+	// Keep the latest announced reset while the chain continues: a retry that
+	// fails again without a usable reset must not drag the recovery window
+	// back to the original failure.
+	if quotaResetAt.After(thread.QuotaResetAt) {
+		thread.QuotaResetAt = quotaResetAt
+	}
 	recoveryLimit, consecutiveLimit := retryLimitsForDecision(decision, d.config)
 	timeLimitExceeded := now.Sub(recoveryWindowStart(thread)) > maxAutomaticRecoveryDuration
 	if timeLimitExceeded || recoveryAttempt > recoveryLimit || consecutiveRetry > consecutiveLimit {

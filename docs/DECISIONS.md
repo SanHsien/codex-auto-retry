@@ -9,8 +9,10 @@
 **決定**：
 - 傳輸檢查逾時放寬為 20 秒（`desktopTransportCheckTimeout`），生命週期探測預算為其加 5 秒；指令因自己的期限被砍時回報 `controller_timeout`，不再混成 `controller_unavailable`。
 - 錯誤文字含「try again at …」時（`quota_wait.go`），下一次重試排在重置時間加 30 秒，30 分鐘自動恢復視窗從重置時間起算（`ThreadState.QuotaResetAt`）。解析不到時間（例如只有 429）維持原本的短間隔。
-- `usage limit`、`usage_limit`、`quota exceeded` 歸為 `rate_limit`，原本落到 `unknown` 只能試 3 次。
-- `rate_limit` 類別遇到控制端暫時失敗（含 `codex_thread_owner_unavailable`、`codex_not_running`、`codex_restart_required`）一律退避重試，不受 `controller_failure_limit` 限制，唯一期限是 30 分鐘恢復視窗；生命週期探測失敗改為退避（最長 5 分鐘）而非停止，超過視窗才停。其他類別維持原本「連續 N 次就停」。
+- `usage limit`、`usage_limit` 與帶 plan／billing 字樣的 `quota exceeded` 歸為 `rate_limit`，原本落到 `unknown` 只能試 3 次。
+- `rate_limit` 類別的控制端失敗分三種：確定沒送出的（`codex_thread_owner_unavailable`、`codex_not_running`、`codex_restart_required`、`codex_background_channel_unavailable`）不受 `controller_failure_limit` 限制，一律退避重試；可能已送出的（`controller_timeout`、`controller_unavailable`）上限放大為 4 倍但仍有限，避免重複開回合；其餘（例如 `start_not_acknowledged`）維持原上限。唯一的總期限是 30 分鐘恢復視窗。派送閘門遇到暫時性控制端狀態時，`rate_limit` 任務留在佇列而不是被停止。
+- 生命週期探測失敗改為退避（最長 5 分鐘）而非停止，超過視窗才停；探測與派送前的就緒檢查預算皆為 45 秒（傳輸檢查在共用模式會做兩次）。
+- 「try again at」只有時分時，以錯誤發生時間為基準判斷是哪一天；重試失敗後若沒有新的重置時間，保留較晚的重置時間作為恢復視窗起點。`quota exceeded` 只在同時含 plan／billing／usage 字樣時才歸為 `rate_limit`。
 
 **理由**：額度重置往往是數小時後，短間隔重試只會用掉次數；而重試已被接受時，探測失敗不代表任務結束。
 

@@ -293,3 +293,131 @@ func expiredContext() context.Context {
 	cancel()
 	return ctx
 }
+
+func TestQuotaWindowSurvivesSecondFailureWithoutResetTime(t *testing.T) {
+	threadID := "01a0b950-b558-78a2-ba57-6265343ca370"
+	now := time.Now().UTC().Truncate(time.Second)
+	reset := now.Add(3 * time.Hour)
+	d := newTestDaemon(t, isolatedConfig(t.TempDir()), successfulRunner())
+	d.handleEventLocked(scannedEvent{ThreadID: threadID, Event: RelevantEvent{
+		Kind: "task_complete", TurnID: "t1", Timestamp: now, ErrorText: usageLimitText(reset), FinalKnown: true,
+	}}, now)
+	after := reset.Add(time.Minute)
+	jobs := d.dispatchDueLocked(after)
+	if len(jobs) != 1 {
+		t.Fatalf("first retry did not fire: %+v", daemonThreadSnapshot(d, threadID))
+	}
+	// The retried turn fails again with a plain 429 (no reset time).
+	d.mu.Lock()
+	thread := d.state.Threads[threadID]
+	thread.Awaiting = nil
+	d.state.Threads[threadID] = thread
+	delete(d.active, threadID)
+	d.mu.Unlock()
+	failedAt := after.Add(10 * time.Second)
+	d.handleEventLocked(scannedEvent{ThreadID: threadID, Event: RelevantEvent{
+		Kind: "task_complete", TurnID: "t2", Timestamp: failedAt,
+		ErrorText: "exceeded retry limit, last status: 429 Too Many Requests", FinalKnown: true,
+	}}, failedAt)
+	thread = daemonThreadSnapshot(d, threadID)
+	if thread.Stopped != nil || thread.Pending == nil {
+		t.Fatalf("a second failure right after the reset ended the recovery: %+v", thread)
+	}
+}
+
+func TestBareResetTimeIsRelativeToTheEventNotToProcessingTime(t *testing.T) {
+	threadID := "01a0b950-b558-78a2-ba57-6265343ca371"
+	loc := time.Local
+	eventAt := time.Date(2026, 10, 26, 3, 0, 0, 0, loc)
+	processedAt := time.Date(2026, 10, 26, 6, 0, 0, 0, loc)
+	d := newTestDaemon(t, isolatedConfig(t.TempDir()), successfulRunner())
+	d.handleEventLocked(scannedEvent{ThreadID: threadID, Event: RelevantEvent{
+		Kind: "task_complete", TurnID: "t1", Timestamp: eventAt,
+		ErrorText: "You've hit your usage limit. Try again at 5:39 AM.", FinalKnown: true,
+	}}, processedAt)
+	thread := daemonThreadSnapshot(d, threadID)
+	if thread.Pending == nil || thread.Pending.DueAt.After(processedAt.Add(time.Hour)) {
+		t.Fatalf("a reset that passed while the daemon was down must not wait another day: %+v", thread.Pending)
+	}
+}
+
+func TestQuotaDispatchGateKeepsRateLimitQueuedWhileControllerRecovers(t *testing.T) {
+	for _, state := range []string{"codex_thread_owner_unavailable", "codex_not_running", "controller_timeout", "codex_restart_required"} {
+		t.Run(state, func(t *testing.T) {
+			threadID := "01a1743a-55b4-7f60-aa57-3aee25b0590f"
+			now := time.Now().UTC()
+			cfg := isolatedConfig(t.TempDir())
+			cfg.SharedAppServerEnabled = false
+			d := newTestDaemon(t, cfg, successfulRunner())
+			d.controllerState = state
+			d.state.Threads[threadID] = ThreadState{RecoveryStartedAt: now, Pending: quotaPending(now, classRateLimit, 0)}
+			if jobs := d.dispatchDueLocked(now); len(jobs) != 0 {
+				t.Fatalf("dispatched while the controller was down: %+v", jobs)
+			}
+			if thread := daemonThreadSnapshot(d, threadID); thread.Stopped != nil || thread.Pending == nil {
+				t.Fatalf("transient controller state stopped a quota retry at the gate: %+v", thread)
+			}
+		})
+	}
+	t.Run("other classes still stop", func(t *testing.T) {
+		threadID := "01a1743a-55b4-7f60-aa57-3aee25b0590e"
+		now := time.Now().UTC()
+		cfg := isolatedConfig(t.TempDir())
+		cfg.SharedAppServerEnabled = false
+		d := newTestDaemon(t, cfg, successfulRunner())
+		d.controllerState = "codex_thread_owner_unavailable"
+		d.state.Threads[threadID] = ThreadState{Pending: quotaPending(now, classServer, 0)}
+		d.dispatchDueLocked(now)
+		if thread := daemonThreadSnapshot(d, threadID); thread.Stopped == nil {
+			t.Fatalf("non-quota retry should keep the old gate behavior: %+v", thread)
+		}
+	})
+	t.Run("genuinely disabled backend still stops", func(t *testing.T) {
+		threadID := "01a1743a-55b4-7f60-aa57-3aee25b0590d"
+		now := time.Now().UTC()
+		cfg := isolatedConfig(t.TempDir())
+		cfg.SharedAppServerEnabled = false
+		d := newTestDaemon(t, cfg, successfulRunner())
+		d.controllerState = "shared_app_server_disabled"
+		d.state.Threads[threadID] = ThreadState{Pending: quotaPending(now, classRateLimit, 0)}
+		d.dispatchDueLocked(now)
+		if thread := daemonThreadSnapshot(d, threadID); thread.Stopped == nil {
+			t.Fatalf("a permanently disabled backend must still stop the retry: %+v", thread)
+		}
+	})
+}
+
+func TestQuotaRetryDoesNotRepeatAmbiguousDispatch(t *testing.T) {
+	threadID := "01a1743a-55b4-7f60-aa57-3aee25b0590c"
+	now := time.Now().UTC()
+	cfg := isolatedConfig(t.TempDir())
+	d := newTestDaemon(t, cfg, successfulRunner())
+	d.state.Threads[threadID] = ThreadState{Awaiting: &AwaitingRetry{
+		EventKey: "event", FailedTurnID: "failed", Class: classRateLimit, Attempt: 1, MaxAttempts: 15,
+		ConsecutiveRetry: 1, MaxConsecutive: 5, DispatchFailures: cfg.ControllerFailureLimit - 1,
+		DispatchStartedAt: now.Add(-time.Minute), StartDeadline: now.Add(-time.Second),
+	}}
+	d.expireUnacknowledgedLocked(now)
+	if thread := daemonThreadSnapshot(d, threadID); thread.Stopped == nil || thread.Stopped.Reason != "start_not_acknowledged" {
+		t.Fatalf("an unacknowledged send may already have started a turn; it must keep the failure limit: %+v", thread)
+	}
+}
+
+func TestQuotaAmbiguousControllerErrorsGetALargerButFiniteLimit(t *testing.T) {
+	threadID := "01a1743a-55b4-7f60-aa57-3aee25b0590b"
+	now := time.Now().UTC()
+	cfg := isolatedConfig(t.TempDir())
+	d := newTestDaemon(t, cfg, &fakeResumeRunner{err: errors.New("controller unavailable")})
+	d.state.Threads[threadID] = ThreadState{RecoveryStartedAt: now, Pending: quotaPending(now, classRateLimit, cfg.ControllerFailureLimit*4-1)}
+	runOneDispatch(t, d, now)
+	if thread := daemonThreadSnapshot(d, threadID); thread.Stopped == nil {
+		t.Fatalf("ambiguous controller errors must still be finite: %+v", thread)
+	}
+}
+
+func TestClassifierDoesNotTreatDiskQuotaAsUsageLimit(t *testing.T) {
+	decision := classifyFailure("write failed: Disk quota exceeded", defaultConfig())
+	if decision.Class == classRateLimit {
+		t.Fatalf("unrelated quota error classified as rate_limit: %+v", decision)
+	}
+}

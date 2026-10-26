@@ -59,9 +59,16 @@ func classifyFailure(errorText string, cfg Config) RetryDecision {
 	}
 
 	if containsAny(text,
-		"rate limit", "too many requests", "quota temporarily", "usage limit", "usage_limit", "quota exceeded", "capacity", "overloaded", "try again later",
+		"rate limit", "too many requests", "quota temporarily", "usage limit", "usage_limit", "capacity", "overloaded", "try again later",
 	) {
 		return RetryDecision{Retry: true, Class: classRateLimit, Reason: "provider capacity or rate limit"}
+	}
+
+	// The provider's billing-quota message has no "usage limit" wording; match
+	// it only with its plan/billing context so unrelated "Disk quota exceeded"
+	// style errors stay unknown.
+	if strings.Contains(text, "quota exceeded") && containsAny(text, "plan", "billing", "usage") {
+		return RetryDecision{Retry: true, Class: classRateLimit, Reason: "provider usage quota exceeded"}
 	}
 
 	if containsAny(text,

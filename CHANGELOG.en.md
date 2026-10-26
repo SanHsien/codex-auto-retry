@@ -11,8 +11,8 @@ English | [繁體中文](CHANGELOG.md)
 ## [Unreleased]
 
 ### Fixed
-- **Quota exhaustion no longer ends retrying for good**: when the error says "try again at ...", the retry is scheduled after that reset and the automatic recovery window starts at the reset. For `rate_limit` failures, a temporarily unreachable controller (including a missing owner for a subagent thread, or Codex not running yet) now backs off and retries instead of stopping after 3 failures. `usage limit` and `quota exceeded` messages are classified as `rate_limit`.
-- **Root cause of `controller_unavailable`**: the PowerShell desktop-transport check was killed after 8 seconds on a busy machine, while the lifecycle probe that contains it only had 5. The check now allows 20 seconds, the probe 25, and a timeout is reported as `controller_timeout`.
+- **Quota exhaustion no longer ends retrying for good**: when the error says "try again at ...", the retry is scheduled after that reset and the automatic recovery window starts at the reset. For `rate_limit` failures, a temporarily unreachable controller (including a missing owner for a subagent thread, or Codex not running yet) now backs off and retries instead of stopping after 3 failures. `usage limit` messages and plan/billing quota errors are classified as `rate_limit`.
+- **Root cause of `controller_unavailable`**: the PowerShell desktop-transport check was killed after 8 seconds on a busy machine, while the lifecycle probe that contains it only had 5. The check now allows 20 seconds, the probe 45, and a timeout is reported as `controller_timeout`.
 
 ### Security
 - The panel bundle no longer contains Zod's dynamic `Function` (CodeQL `js/bad-code-sanitization`); the build fails if the output contains `new Function(`.

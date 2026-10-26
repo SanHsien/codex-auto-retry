@@ -11,8 +11,8 @@
 ## [Unreleased]
 
 ### Fixed
-- **額度用完後不再永久放棄重試**：錯誤文字含「try again at …」時，重試排在重置時間之後，自動恢復視窗也從重置時間起算；控制端暫時連不上（含子代理 thread 的擁有者不在、Codex 暫時未執行）時，`rate_limit` 類別改為退避重試而不是連續 3 次就停止。`usage limit`、`quota exceeded` 訊息歸為 `rate_limit`。
-- **`controller_unavailable` 根因**：桌面傳輸檢查的 PowerShell 在機器忙碌時超過 8 秒被中止，而生命週期探測的預算只有 5 秒。檢查逾時放寬為 20 秒、探測預算為 25 秒，逾時改回報 `controller_timeout`。
+- **額度用完後不再永久放棄重試**：錯誤文字含「try again at …」時，重試排在重置時間之後，自動恢復視窗也從重置時間起算；控制端暫時連不上（含子代理 thread 的擁有者不在、Codex 暫時未執行）時，`rate_limit` 類別改為退避重試而不是連續 3 次就停止。`usage limit` 與帶 plan/billing 字樣的額度訊息歸為 `rate_limit`。
+- **`controller_unavailable` 根因**：桌面傳輸檢查的 PowerShell 在機器忙碌時超過 8 秒被中止，而生命週期探測的預算只有 5 秒。檢查逾時放寬為 20 秒、探測預算為 45 秒，逾時改回報 `controller_timeout`。
 
 ### Security
 - 面板打包移除 Zod 的動態 `Function`（CodeQL `js/bad-code-sanitization`），並在建置時檢查產出不含 `new Function(`。

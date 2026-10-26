@@ -335,7 +335,7 @@ func (d *daemon) controllerRestartReady(ctx context.Context, now time.Time) bool
 		d.mu.Unlock()
 		return false
 	}
-	probeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	probeCtx, cancel := context.WithTimeout(ctx, lifecycleProbeTimeout)
 	state := runner.ControllerState(probeCtx)
 	cancel()
 	if !sharedEnabled && state == "ready" {
@@ -656,8 +656,13 @@ func (d *daemon) rescheduleAwaitingWithPolicyLocked(threadID string, thread Thre
 	}
 	// A quota-limited task keeps backing off while the controller is away; the
 	// recovery window checked at dispatch time is its only deadline.
-	quotaWait := awaiting.Class == classRateLimit && quotaControllerWaitable(reason)
-	if !quotaWait && (controllerFailureNeedsAction(reason) || (countFailure && dispatchFailures >= d.config.ControllerFailureLimit)) {
+	quota := awaiting.Class == classRateLimit
+	failureLimit := d.config.ControllerFailureLimit
+	if quota && quotaAmbiguousReason(reason) {
+		failureLimit *= quotaAmbiguousLimitFactor
+	}
+	quotaWait := quota && quotaNotSentReason(reason)
+	if !quotaWait && (controllerFailureNeedsAction(reason) || (countFailure && dispatchFailures >= failureLimit)) {
 		d.stopAwaitingForControllerLocked(threadID, thread, now, reason)
 		return
 	}
@@ -813,6 +818,11 @@ func (d *daemon) dispatchDueLocked(now time.Time) []RetryJob {
 		}
 		for threadID, thread := range d.state.Threads {
 			if thread.Pending == nil || thread.Pending.DueAt.After(now) || thread.Awaiting != nil {
+				continue
+			}
+			if thread.Pending.Class == classRateLimit && quotaControllerWaitable(d.controllerState) {
+				// The controller is only temporarily unavailable. Keep the
+				// quota-limited task queued; the recovery window is its deadline.
 				continue
 			}
 			d.stopPendingForControllerLocked(threadID, thread, now, stopReason)
