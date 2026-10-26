@@ -147,15 +147,17 @@ func (d *daemon) applyControlCommandLocked(command ControlCommand, now time.Time
 		d.state.Threads[command.ThreadID] = thread
 		d.logger.Printf("retry cancelled thread=%s reason=user_control", shortThreadID(command.ThreadID))
 	case commandDismissRetry:
-		if thread.Stopped == nil {
-			d.logger.Printf("control command ignored thread=%s reason=retry_not_stopped", shortThreadID(command.ThreadID))
+		if !stoppedCanBeDismissed(thread) {
+			d.logger.Printf("control command ignored thread=%s reason=retry_not_dismissable", shortThreadID(command.ThreadID))
 			return
 		}
-		if cancel := d.activeCtx[command.ThreadID]; cancel != nil {
-			cancel()
-		}
+		// Remember the failed turn so a later rescan does not list it again.
+		thread.DismissedTurnID = thread.Stopped.FailedTurnID
 		thread.Stopped = nil
-		thread.GoalStop = nil
+		thread.RecoveryAttempts = 0
+		thread.ConsecutiveRetries = 0
+		thread.CurrentTurnProgress = false
+		thread.QuotaResetAt = time.Time{}
 		d.state.Threads[command.ThreadID] = thread
 		d.logger.Printf("retry dismissed thread=%s reason=user_control", shortThreadID(command.ThreadID))
 	case commandRestartRetry:

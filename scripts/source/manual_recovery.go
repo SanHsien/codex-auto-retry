@@ -154,7 +154,7 @@ func (d *daemon) rescanInterruptedLocked(now time.Time) int {
 			continue
 		}
 		failure, startedAt, ok := lastTurnFailure(events, threadID)
-		if !ok || failure.TurnID == thread.LastAbortedTurnID ||
+		if !ok || failure.TurnID == thread.LastAbortedTurnID || (thread.DismissedTurnID != "" && failure.TurnID == thread.DismissedTurnID) ||
 			failure.Timestamp.IsZero() || now.Sub(failure.Timestamp) > rescanWindow {
 			continue
 		}

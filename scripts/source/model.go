@@ -126,6 +126,7 @@ type ThreadState struct {
 	ConsecutiveRetries  int              `json:"consecutive_retries,omitempty"`
 	RecoveryStartedAt   time.Time        `json:"recovery_started_at,omitempty"`
 	QuotaResetAt        time.Time        `json:"quota_reset_at,omitempty"`
+	DismissedTurnID     string           `json:"dismissed_turn_id,omitempty"`
 	LegacyFailures      int              `json:"consecutive_failures,omitempty"`
 	LastFailureAt       time.Time        `json:"last_failure_at,omitempty"`
 	LastAutoRetryAt     time.Time        `json:"last_auto_retry_at,omitempty"`

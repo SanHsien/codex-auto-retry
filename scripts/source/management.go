@@ -460,7 +460,8 @@ func (m *managementService) queueThreadCommand(action ControlCommandAction, thre
 	}
 	thread, found := state.Threads[threadID]
 	needsStopped := action == commandRestartRetry || action == commandDismissRetry
-	if !found || (needsStopped && thread.Stopped == nil) || (!needsStopped && thread.Pending == nil) {
+	if !found || (needsStopped && thread.Stopped == nil) || (!needsStopped && thread.Pending == nil) ||
+		(action == commandDismissRetry && !stoppedCanBeDismissed(thread)) {
 		return ManagementSnapshot{}, errors.New(text(uiLanguage(m.dataDir), "該任務目前沒有可執行的重試操作", "This task has no retry action available right now"))
 	}
 	if _, err := queueControlCommand(m.commandDir, action, threadID, now); err != nil {
@@ -494,6 +495,13 @@ func loadStatusSnapshot(path string) (StatusSnapshot, bool, error) {
 		return StatusSnapshot{}, false, fmt.Errorf("parse status: %w", err)
 	}
 	return status, true, nil
+}
+
+// stoppedCanBeDismissed keeps goal-limit stops: dismissing one would drop the
+// queued goal block and let the empty-response loop start again.
+func stoppedCanBeDismissed(thread ThreadState) bool {
+	return thread.Stopped != nil && thread.GoalStop == nil && !thread.GoalHeld &&
+		!strings.HasPrefix(thread.Stopped.Reason, "goal_")
 }
 
 func timestampOrEmpty(value time.Time) string {
@@ -567,7 +575,7 @@ func managedRetries(state RuntimeState, now time.Time, language string) []Manage
 				ConsecutiveRetry:      thread.Stopped.ConsecutiveRetries,
 				MaxConsecutiveRetries: thread.Stopped.MaxConsecutive,
 				CanRestart:            true,
-				CanDismiss:            true,
+				CanDismiss:            stoppedCanBeDismissed(thread),
 				StopReason:            thread.Stopped.Reason,
 				FailedAt:              timestampOrEmpty(thread.Stopped.FailedAt),
 				StoppedAt:             timestampOrEmpty(thread.Stopped.StoppedAt),
