@@ -77,3 +77,7 @@ pwsh -NoProfile -File scripts\smoke-test.ps1
 - `docs/DEVELOPMENT.md`：本機開發與驗收指令。
 - `docs/DECISIONS.md`：長期取捨。
 - `REVIEW.md`：全庫風險快照。
+
+## 路線圖
+
+- `ROADMAP.md` 是本 repo 後續工作的單一真相源。完成或新增工作時，在同一個 commit 更新它：做完的列刪掉、新工作加進去。不要在其他文件另列待辦。
