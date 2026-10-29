@@ -52,6 +52,29 @@ try {
         ($config | ConvertTo-Json -Depth 8),
         [System.Text.UTF8Encoding]::new($false)
     )
+    # A port collision alone is not a startup failure when official IPC is
+    # available. Seed a dead owned backend so the startup gate must fail open
+    # before controller preparation, regardless of Desktop's transport.
+    $deadPid = 4000000
+    if (Get-Process -Id $deadPid -ErrorAction SilentlyContinue) {
+        throw 'The isolated dead-process fixture PID is unexpectedly running.'
+    }
+    $codexHome = Join-Path $testRoot 'codex-home'
+    $state = [ordered]@{
+        pid = $deadPid
+        endpoint = $endpoint
+        codex_home = $codexHome
+        executable = $binary
+        executable_hash = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash
+        owner = 'codex-auto-retry'
+        version = 'startup-smoke'
+        started_at = [DateTime]::UtcNow.ToString('o')
+    }
+    [System.IO.File]::WriteAllText(
+        (Join-Path $dataDir 'shared-server.json'),
+        ($state | ConvertTo-Json -Depth 8),
+        [System.Text.UTF8Encoding]::new($false)
+    )
     # Keep the real User environment read-only. Only the isolated child inherits
     # the unavailable endpoint; never restore test state over live routing.
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
@@ -60,6 +83,7 @@ try {
     $startInfo.UseShellExecute = $false
     $startInfo.CreateNoWindow = $true
     $startInfo.EnvironmentVariables[$environmentName] = $endpoint
+    $startInfo.EnvironmentVariables['CODEX_HOME'] = $codexHome
     $process = [System.Diagnostics.Process]::Start($startInfo)
     $deadline = (Get-Date).AddSeconds(20)
     $status = $null
@@ -76,10 +100,16 @@ try {
     $storedConfig = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom-Json
     $afterEndpoint = [Environment]::GetEnvironmentVariable($environmentName, 'User')
     if ([bool]$storedConfig.shared_app_server_enabled) {
-        throw 'A failed shared backend was left enabled during startup.'
+        throw "A failed shared backend was left enabled during startup. controller_state=$($status.controller_state); last_error=$($status.last_error)"
     }
-    if ([string]$status.controller_state -ne 'shared_app_server_port_conflict') {
-        throw "Unexpected startup fail-open reason: $([string]$status.controller_state)"
+    # The first daemon tick may replace controller_state with official IPC
+    # readiness. The availability record preserves the startup failure reason.
+    $availability = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $dataDir 'shared-availability.json') | ConvertFrom-Json
+    if ([string]$availability.reason -ne 'codex_background_channel_unavailable') {
+        throw "Unexpected startup fail-open reason: $([string]$availability.reason)"
+    }
+    if ([bool]$status.shared_app_server_enabled) {
+        throw 'The live startup heartbeat still reports shared mode enabled.'
     }
     if (-not [string]::Equals([string]$afterEndpoint, [string]$beforeEndpoint, [System.StringComparison]::OrdinalIgnoreCase)) {
         throw 'The isolated startup test changed the real user endpoint.'
@@ -90,6 +120,7 @@ try {
         StartupHeartbeat = $true
         SharedModeDisabled = $true
         FailOpenReasonPublished = $true
+        FailOpenReason = [string]$availability.reason
         ProductionEndpointUntouched = $true
     }
 }

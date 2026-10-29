@@ -11,7 +11,6 @@
 | --- | --- | --- | --- | --- |
 | 核對已安裝版並驗證新版接續行為 | repo 修正不會自行更新本機守護程式 | 先查已安裝 build 與有無重要重試；需要更新時依 README 建置安裝包並保留設定；以隔離任務確認重置時間、停止原因與手動重試，不自動復活舊停止項目 | 維護者 | [README.md:149](README.md)、[docs/DECISIONS.md:19](docs/DECISIONS.md)；深掃報告（2026-10-27）「維護者要做的事」 |
 | 在真實 MCP host 驗證管理面板 | 靜態預覽與自動測試不能證明 host 內工具操作正常 | 一筆隔離任務驗證狀態顯示、技術細節、立即重試與放棄；放棄後重新偵測不復活同一失敗回合，goal-limit 停止不可誤放棄 | 維護者 | [CHANGELOG.md:14](CHANGELOG.md)；commit `16a28f0`；深掃報告（2026-10-27）「UI 優化」 |
-| 釐清啟動 fail-open smoke 的舊失敗紀錄 | REVIEW 仍列原因未查，較新 CI 成功不能直接證明這支個別情境已驗 | 隔離設定執行 `scripts/startup-fail-open-smoke-test.ps1`，保存退出碼與失敗點；重現則補最小回歸修正，無法重現則更新 REVIEW 的環境與證據，並校正 REVIEW.md:59 的舊 Actions 停用敘述（該敘述與 2026-10-29 push 觸發的 CI success 矛盾） | Codex | [REVIEW.md:59](REVIEW.md)、[REVIEW.md:62](REVIEW.md)；深掃報告（2026-10-27）「刻意不做／延後」 |
 
 ## 中期：等條件成立再做
 | 項目 | 觸發條件 | 驗收方式 | 建議執行者 | 證據 |

@@ -56,11 +56,26 @@ gh repo set-default --view
 
 ## 未解風險
 
-- 推送到 `main` 不會自動觸發 CI：GitHub 對「fork 時已含 workflow」的 repo 預設停用（Actions 頁顯示 *Workflows aren't being run on this forked repository*），需維護者在 Actions 頁按下啟用；在那之前每次推送後手動 `gh workflow run ci.yml`（`b4b6f6a` 的手動執行 `37035605853` 全綠）。`go test -race` 需要 gcc，本機未安裝，只能由 CI 驗證。
+- Actions 已啟用 push 觸發：2026-10-30 唯讀查詢確認 `855973b2f350377ea598cceea9369fc8bc565b14` 的 [CI run 40745326049](https://github.com/SanHsien/codex-auto-retry/actions/runs/40745326049) 為 `event=push`、`conclusion=success`（建立於 2026-10-28 18:27:41 UTC，即臺北時間 2026-10-29）。舊的 fork workflow 停用敘述已過期；不需再以手動觸發作為固定補救。`go test -race` 的 gcc 需求不變，此次本機維護驗收不涵蓋競態測試。
 - 發佈檔未做程式碼簽章；單檔安裝程式是自解壓執行檔，SmartScreen 與防毒軟體可能示警。
 - 繁體化後每次同步上游都要重跑轉換工具並人工對照 PowerShell 測試裡的字元碼常數。
-- `scripts/startup-fail-open-smoke-test.ps1` 在本機失敗（"A failed shared backend was left enabled during startup."）；`0ad4be8` 同訊息失敗、`013030e` 以不同訊息失敗，所以不是這次改動造成。CI 不跑這支，但它包含在發佈檔與 `scripts/smoke-test.ps1` 裡，原因未查。
 - `scripts/status-smoke-test.ps1` 依賴本機實際安裝狀態，在沒安裝的電腦上失敗，改動前後相同。
+
+## 啟動 fail-open smoke 複驗（2026-10-30）
+
+- 基準：detached HEAD `855973b2f350377ea598cceea9369fc8bc565b14`；Windows 11 專業版 `10.0.26300`（build 26300）、PowerShell 7.6.9、Windows PowerShell 5.1.26100.9711；使用 repo 內附執行檔，不涉及安裝版更新。
+- 隔離：子行程使用唯一暫存資料目錄、空 session roots、關閉預設 home 掃描；修正後另指定隔離 `CODEX_HOME`。`TEMP`／`TMP` 指向 repo 的 `dist/task-evidence/temp`；正式 User endpoint 僅讀取、比對，不寫入。
+- 根因：舊測試只占用連接埠，沒有失效的共享後端 ownership 紀錄；當官方 IPC 可用時，controller preparation 可直接成功，所以連接埠衝突不保證觸發 fail-open。這是 smoke 前提過時，並非已證實的產品 fail-open 缺陷。
+- 最小修正：建立已確認不在執行的 PID 之隔離 owned state，讓 startup gate 在 controller preparation 前執行 fail-open；同時核對設定與 heartbeat 都已停用共享模式。原因改查持久的 `shared-availability.json`，避免第一個 tick 更新 `controller_state` 後誤判；不修改產品 Go 程式或二進位檔。
+- 先紅後綠使用同一入口（完整外層指令如下）；初次原版退出碼 1：`A failed shared backend was left enabled during startup.`；補診斷後仍為 1：`controller_state=ready; last_error=`。修正後退出碼 0：`Status=passed`、`StartupHeartbeat=True`、`SharedModeDisabled=True`、`FailOpenReasonPublished=True`、`FailOpenReason=codex_background_channel_unavailable`、`ProductionEndpointUntouched=True`。原始輸出分別保存在本機 `dist/task-evidence/startup-fail-open.log`、`startup-red.log`、`startup-green.log`（忽略的本機證據，不納入版本控制）。
+
+```powershell
+$env:TEMP = Join-Path (Get-Location) 'dist/task-evidence/temp'
+$env:TMP = $env:TEMP
+powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/startup-fail-open-smoke-test.ps1
+```
+
+這次複驗補上個別啟動情境的本機證據；CI 仍未直接執行這支 smoke，不能拿整體 CI 成功取代這項驗收。
 
 ## 接受、不改契約
 
