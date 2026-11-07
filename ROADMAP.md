@@ -8,12 +8,13 @@
 
 ## 近期：可以直接動手
 
-目前沒有近期項目；原兩列（核對安裝版、真實 host 驗證）的處理見 [docs/DECISIONS.md](docs/DECISIONS.md) 2026-11-08 段，剩下的真實 host 驗收改列中期。
+| 項目 | 為什麼 | 驗收方式 | 建議執行者 | 證據 |
+| --- | --- | --- | --- | --- |
+| 在真實 Codex Desktop／MCP host 驗證接續與管理面板 | 已安裝版已含面板與額度等待修正，但隔離任務的接續行為與面板操作都還沒在真實 host 取得證據；驗證要在 host 視窗內開一筆可拋棄的隔離 Codex 任務，會動到執行中的守護程式與桌面 | 一筆隔離任務確認重置時間、停止原因、手動重試；面板驗證狀態顯示、技術細節、立即重試與放棄；放棄後重新偵測不復活同一失敗回合，goal-limit 停止不可誤放棄；不自動復活舊停止項目 | 維護者 | [CHANGELOG.md:14](CHANGELOG.md)；commit `16a28f0`；[docs/DECISIONS.md:19](docs/DECISIONS.md)；深掃報告（2026-10-27） |
 
 ## 中期：等條件成立再做
 | 項目 | 觸發條件 | 驗收方式 | 建議執行者 | 證據 |
 | --- | --- | --- | --- | --- |
-| 在真實 Codex Desktop／MCP host 驗證接續與管理面板 | 維護者可在 host 視窗內操作，且能開一筆可拋棄的隔離 Codex 任務（會動到執行中的守護程式與桌面，不能由背景代理跑） | 一筆隔離任務確認重置時間、停止原因、手動重試；面板驗證狀態顯示、技術細節、立即重試與放棄；放棄後重新偵測不復活同一失敗回合，goal-limit 停止不可誤放棄；不自動復活舊停止項目 | 維護者 | [CHANGELOG.md:14](CHANGELOG.md)；commit `16a28f0`；[docs/DECISIONS.md:19](docs/DECISIONS.md)；深掃報告（2026-10-27） |
 | 發布包含接續與面板修正的新版本 | 安裝、真實 host 與必要 smoke 驗收通過，維護者授權發布 | 同步所有版本欄位；`scripts/build-release.ps1` 產出來源雜湊一致的套件，驗證安裝及回復；release、tag、檔案皆指向已驗 SHA | Codex | [docs/DECISIONS.md:80](docs/DECISIONS.md)、[docs/DECISIONS.md:84](docs/DECISIONS.md)、[README.md:149](README.md) |
 | 擴充額度時間格式 | 真實錯誤出現目前不支援的時間格式 | 去識別化錯誤先成為失敗案例，驗證日期、時區與重置後排程，Go 測試及 Windows gate 通過 | Codex | 深掃報告（2026-10-27）「24 小時制」；[scripts/source/quota_wait.go:35-36](scripts/source/quota_wait.go)（`usageLimitResetPattern` 只收 `h:mm am/pm`）；[docs/DECISIONS.md:3](docs/DECISIONS.md) |
 | 重評子代理轉父任務續跑 | 假 Codex 能驗證父 thread 的 StartTurn 語意，或維護者明確接受真機風險 | 證明不對忙碌父任務重複送回合，保留原 ownership 與停止條件，測試涵蓋 owner 缺失與回復 | Claude Opus | [docs/DECISIONS.md:19](docs/DECISIONS.md)；深掃報告（2026-10-27）「刻意不做／延後」 |
