@@ -9,7 +9,6 @@
 ## 近期：可以直接動手
 | 項目 | 為什麼 | 驗收方式 | 建議執行者 | 證據 |
 | --- | --- | --- | --- | --- |
-| 離開 GitHub fork 網路（Settings → General → Danger Zone → Leave fork network，https://github.com/SanHsien/codex-auto-retry/settings） | 本線已有獨有功能並分叉獨立發展（`docs/DECISIONS.md` 2026-11-07）；不可逆，維護者確認後本人按 | `gh api repos/SanHsien/codex-auto-retry --jq .fork` 回 `false`；release `v1.2.0` 還在（不在就從備份重建）；README／NOTICE 的來源段落仍在；`main` 的 CI 仍 success | 維護者 | `docs/DECISIONS.md` 2026-11-07；repo-fleet-ops `docs/FORK-NETWORK-REVIEW.md` |
 | 核對已安裝版並驗證新版接續行為 | repo 修正不會自行更新本機守護程式 | 先查已安裝 build 與有無重要重試；需要更新時依 README 建置安裝包並保留設定；以隔離任務確認重置時間、停止原因與手動重試，不自動復活舊停止項目 | 維護者 | [README.md:149](README.md)、[docs/DECISIONS.md:19](docs/DECISIONS.md)；深掃報告（2026-10-27）「維護者要做的事」 |
 | 在真實 MCP host 驗證管理面板 | 靜態預覽與自動測試不能證明 host 內工具操作正常 | 一筆隔離任務驗證狀態顯示、技術細節、立即重試與放棄；放棄後重新偵測不復活同一失敗回合，goal-limit 停止不可誤放棄 | 維護者 | [CHANGELOG.md:14](CHANGELOG.md)；commit `16a28f0`；深掃報告（2026-10-27）「UI 優化」 |
 
