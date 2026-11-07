@@ -124,3 +124,12 @@
 **決定**：日常維護修改在本機跑 `tools\dev_check.ps1` 後直接推 `origin/main`。Dependabot 與外部貢獻仍走 PR，合併前讀 diff。
 
 **理由**：對齊 SanHsien 體系其他維護 fork 的治理規範。
+
+## 2026-11-07：離開 GitHub fork 網路（等維護者按）
+
+- **判準**：維護者 2026-11-07 定的：與上游差異大、本線有獨有功能、已分叉獨立發展，就可以脫離；與上游有沒有共用歷史、上游活不活躍都不列入（repo-fleet-ops `docs/PLAYBOOK.md` §9）。
+- **本線的獨有功能**：自己的版本線（1.x，上游 0.7.12）、只支援 Windows（移除非 Windows 程式）、GUI 安裝程式與控制中心、系統匣動態圖示、開始功能表與「已安裝的應用程式」註冊。
+- **決定**：建議在 Settings → General → Danger Zone 按 Leave fork network（https://github.com/SanHsien/codex-auto-retry/settings）。不可逆，由維護者本人按。
+- **來源 credit 不靠 fork 標示**：README 開頭、`NOTICE.md`、`FORK.md` 都寫明 fork 自 [`sybxxx/codex-auto-retry`](https://github.com/sybxxx/codex-auto-retry) 與授權，脫離後原樣保留。
+- **上游追蹤照舊**：`tools/upstream_baseline.json` 與 `Upstream check` workflow 不依賴 fork 標示；repo-fleet-ops 的 `audit` 認水位檔，換台電腦重新 clone 也照樣要求上游檢查。
+- **會遺失**：GitHub 文件說不保留 issue、PR、wiki、star、watcher。2026-11-07 查：PR 7 筆（全已結束）、star 0、wiki 沒有內容。release `v1.2.0` 是否保留文件沒寫，資產與說明已備份到維護者的 `OneDrive\文件\電腦維護\2026-11 fork 脫離前 release 備份\``（雜湊已核對）。

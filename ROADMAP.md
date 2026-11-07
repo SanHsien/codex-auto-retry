@@ -9,13 +9,13 @@
 ## 近期：可以直接動手
 | 項目 | 為什麼 | 驗收方式 | 建議執行者 | 證據 |
 | --- | --- | --- | --- | --- |
+| 離開 GitHub fork 網路（Settings → General → Danger Zone → Leave fork network，https://github.com/SanHsien/codex-auto-retry/settings） | 本線已有獨有功能並分叉獨立發展（`docs/DECISIONS.md` 2026-11-07）；不可逆，維護者確認後本人按 | `gh api repos/SanHsien/codex-auto-retry --jq .fork` 回 `false`；release `v1.2.0` 還在（不在就從備份重建）；README／NOTICE 的來源段落仍在；`main` 的 CI 仍 success | 維護者 | `docs/DECISIONS.md` 2026-11-07；repo-fleet-ops `docs/FORK-NETWORK-REVIEW.md` |
 | 核對已安裝版並驗證新版接續行為 | repo 修正不會自行更新本機守護程式 | 先查已安裝 build 與有無重要重試；需要更新時依 README 建置安裝包並保留設定；以隔離任務確認重置時間、停止原因與手動重試，不自動復活舊停止項目 | 維護者 | [README.md:149](README.md)、[docs/DECISIONS.md:19](docs/DECISIONS.md)；深掃報告（2026-10-27）「維護者要做的事」 |
 | 在真實 MCP host 驗證管理面板 | 靜態預覽與自動測試不能證明 host 內工具操作正常 | 一筆隔離任務驗證狀態顯示、技術細節、立即重試與放棄；放棄後重新偵測不復活同一失敗回合，goal-limit 停止不可誤放棄 | 維護者 | [CHANGELOG.md:14](CHANGELOG.md)；commit `16a28f0`；深掃報告（2026-10-27）「UI 優化」 |
 
 ## 中期：等條件成立再做
 | 項目 | 觸發條件 | 驗收方式 | 建議執行者 | 證據 |
 | --- | --- | --- | --- | --- |
-| 重評要不要離開 GitHub fork 網路 | 上游預設分支到 2026-12-20 仍沒有新 commit（最後一筆 2026-09-21，滿 90 天），或上游 archived／刪除 | 照 repo-fleet-ops PLAYBOOK §9 重判；改判「建議脫離」時先補齊 README／NOTICE 的來源段落；脫離前先處理 open PR（目前 #7）、確認 release 資產可重建，再列給維護者確認（按鈕由維護者按） | Claude Opus | 2026-11-07 評估判「再觀察」：本線已有自己的版本線（1.x）、移除非 Windows 程式、加 GUI 安裝與系統匣，但 FORK.md 寫產品邏輯以上游為準（repo-fleet-ops `docs/FORK-NETWORK-REVIEW.md`）；查法 `gh api "repos/sybxxx/codex-auto-retry/commits?per_page=1"` |
 | 發布包含接續與面板修正的新版本 | 安裝、真實 host 與必要 smoke 驗收通過，維護者授權發布 | 同步所有版本欄位；`scripts/build-release.ps1` 產出來源雜湊一致的套件，驗證安裝及回復；release、tag、檔案皆指向已驗 SHA | Codex | [docs/DECISIONS.md:80](docs/DECISIONS.md)、[docs/DECISIONS.md:84](docs/DECISIONS.md)、[README.md:149](README.md) |
 | 擴充額度時間格式 | 真實錯誤出現目前不支援的時間格式 | 去識別化錯誤先成為失敗案例，驗證日期、時區與重置後排程，Go 測試及 Windows gate 通過 | Codex | 深掃報告（2026-10-27）「24 小時制」；[scripts/source/quota_wait.go:35-36](scripts/source/quota_wait.go)（`usageLimitResetPattern` 只收 `h:mm am/pm`）；[docs/DECISIONS.md:3](docs/DECISIONS.md) |
 | 重評子代理轉父任務續跑 | 假 Codex 能驗證父 thread 的 StartTurn 語意，或維護者明確接受真機風險 | 證明不對忙碌父任務重複送回合，保留原 ownership 與停止條件，測試涵蓋 owner 缺失與回復 | Claude Opus | [docs/DECISIONS.md:19](docs/DECISIONS.md)；深掃報告（2026-10-27）「刻意不做／延後」 |
