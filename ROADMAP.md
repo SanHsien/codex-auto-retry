@@ -1,20 +1,19 @@
 # 路線圖
 
 > 本 repo 後續工作的單一真相源。做完一項，就在同一個 commit 刪掉那一列；新工作只加在這裡。
-> 現況段的數字是 2026-10-29 依 `main` `4fb3829b27e1` 查的快照，開工前先重查 GitHub。
+> 現況段的數字是 2026-11-08 依 `main` `c19b1e6` 查的快照，開工前先重查 GitHub。
 
 ## 現況
-這是 Windows Codex Desktop 自動接續守護工具的維護 fork（[AGENTS.md:7](AGENTS.md)）。2026-10-29 `gh` 查詢顯示 CI、CodeQL、Dependency freshness、Upstream check 最近結果成功、開啟安全告警為 0，最近 release 為 v1.2.0；issues 停用，未查到 issue（2026-10-29 `gh` 查詢）。額度等待與面板修正仍在 Unreleased；深掃報告（2026-10-27）指出當時已安裝版尚未更新、真實 MCP host 未驗，今天的安裝狀態須另查（[CHANGELOG.md:11](CHANGELOG.md)）。
+這是 Windows Codex Desktop 自動接續守護工具的維護 fork（[AGENTS.md:7](AGENTS.md)）。2026-11-08 `gh` 查詢：`c19b1e6` 的 CI、CodeQL 為 success，code scanning 開啟告警 0 筆，最近 release 為 v1.2.0；issues 停用，未查到 issue。已安裝的 `%LOCALAPPDATA%\CodexAutoRetry\codex-auto-retry.exe` 的完整 SHA-256（`4467FCF869055038609098278BF1E924F582B05F3769C21FB02F77A4A55D3805`）與 `scripts/build-info.json` 記錄相同（該檔最後更新於 `16a28f0`，含面板與額度修正）；其後唯一動到 `scripts/source` 的 `c4337cd` 只改 `ui/package-lock.json`，尚未進安裝版。額度等待與面板修正仍在 Unreleased；深掃報告（2026-10-27）指出當時已安裝版尚未更新、真實 MCP host 未驗，已於 2026-11-08 核對，見上（[CHANGELOG.md:11](CHANGELOG.md)）。
 
 ## 近期：可以直接動手
-| 項目 | 為什麼 | 驗收方式 | 建議執行者 | 證據 |
-| --- | --- | --- | --- | --- |
-| 核對已安裝版並驗證新版接續行為 | repo 修正不會自行更新本機守護程式 | 先查已安裝 build 與有無重要重試；需要更新時依 README 建置安裝包並保留設定；以隔離任務確認重置時間、停止原因與手動重試，不自動復活舊停止項目 | 維護者 | [README.md:149](README.md)、[docs/DECISIONS.md:19](docs/DECISIONS.md)；深掃報告（2026-10-27）「維護者要做的事」 |
-| 在真實 MCP host 驗證管理面板 | 靜態預覽與自動測試不能證明 host 內工具操作正常 | 一筆隔離任務驗證狀態顯示、技術細節、立即重試與放棄；放棄後重新偵測不復活同一失敗回合，goal-limit 停止不可誤放棄 | 維護者 | [CHANGELOG.md:14](CHANGELOG.md)；commit `16a28f0`；深掃報告（2026-10-27）「UI 優化」 |
+
+目前沒有近期項目；原兩列（核對安裝版、真實 host 驗證）的處理見 [docs/DECISIONS.md](docs/DECISIONS.md) 2026-11-08 段，剩下的真實 host 驗收改列中期。
 
 ## 中期：等條件成立再做
 | 項目 | 觸發條件 | 驗收方式 | 建議執行者 | 證據 |
 | --- | --- | --- | --- | --- |
+| 在真實 Codex Desktop／MCP host 驗證接續與管理面板 | 維護者可在 host 視窗內操作，且能開一筆可拋棄的隔離 Codex 任務（會動到執行中的守護程式與桌面，不能由背景代理跑） | 一筆隔離任務確認重置時間、停止原因、手動重試；面板驗證狀態顯示、技術細節、立即重試與放棄；放棄後重新偵測不復活同一失敗回合，goal-limit 停止不可誤放棄；不自動復活舊停止項目 | 維護者 | [CHANGELOG.md:14](CHANGELOG.md)；commit `16a28f0`；[docs/DECISIONS.md:19](docs/DECISIONS.md)；深掃報告（2026-10-27） |
 | 發布包含接續與面板修正的新版本 | 安裝、真實 host 與必要 smoke 驗收通過，維護者授權發布 | 同步所有版本欄位；`scripts/build-release.ps1` 產出來源雜湊一致的套件，驗證安裝及回復；release、tag、檔案皆指向已驗 SHA | Codex | [docs/DECISIONS.md:80](docs/DECISIONS.md)、[docs/DECISIONS.md:84](docs/DECISIONS.md)、[README.md:149](README.md) |
 | 擴充額度時間格式 | 真實錯誤出現目前不支援的時間格式 | 去識別化錯誤先成為失敗案例，驗證日期、時區與重置後排程，Go 測試及 Windows gate 通過 | Codex | 深掃報告（2026-10-27）「24 小時制」；[scripts/source/quota_wait.go:35-36](scripts/source/quota_wait.go)（`usageLimitResetPattern` 只收 `h:mm am/pm`）；[docs/DECISIONS.md:3](docs/DECISIONS.md) |
 | 重評子代理轉父任務續跑 | 假 Codex 能驗證父 thread 的 StartTurn 語意，或維護者明確接受真機風險 | 證明不對忙碌父任務重複送回合，保留原 ownership 與停止條件，測試涵蓋 owner 缺失與回復 | Claude Opus | [docs/DECISIONS.md:19](docs/DECISIONS.md)；深掃報告（2026-10-27）「刻意不做／延後」 |
