@@ -138,5 +138,5 @@
 ## 2026-11-08：已安裝版核對完成；真實 host 驗收列為近期（維護者）
 
 - **核對結果**：已安裝 `codex-auto-retry.exe` 的 SHA-256 與 `scripts/build-info.json` 的 `codex-auto-retry.exe` 欄位完整相同（`4467fcf869055038609098278bf1e924f582b05f3769c21fb02f77a4a55d3805`，2026-11-08 `sha256sum` 實查）；該檔最後更新於 `16a28f0`（2026-10-26）。其後 `scripts/source` 唯一變動是 `c4337cd`（只改 `ui/package-lock.json`），安裝版因此已含面板與額度等待修正，不需為了這件事重建。
-- **決定**：隔離任務的接續行為驗證與面板操作驗證，都要動執行中的守護程式與 Codex Desktop 視窗，合併成 `ROADMAP.md` 近期的一列，執行者是維護者（在 host 內開一筆可拋棄的隔離任務）。它不是等外部事件的中期列，而是現在就待維護者動手的工作。
+- **決定**：隔離任務的接續行為驗證與面板操作驗證，都要動執行中的守護程式與 Codex Desktop 視窗，合併成 `ROADMAP.md` 近期的一列，執行者是Claude 主 session（agent-desktop 在 host 內操作；實體點擊前 `focus-window` 須成功，維護者在用電腦時不做）。這一列不需要登入或憑證，只是在 host 視窗開一筆可拋棄的隔離任務並操作面板，依 repo-fleet-ops `docs/PLAYBOOK.md` 的 GUI 驗收規則由 Claude 用 agent-desktop 代做；它不是等外部事件的中期列，而是現在就可以做的工作。
 - **後續**：這一列驗收通過，才輪到中期「發布」列（發布 Unreleased 修正的前提）。
