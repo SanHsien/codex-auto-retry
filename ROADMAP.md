@@ -4,7 +4,7 @@
 > 現況段的數字是 2026-11-08 依 `main` `c19b1e6` 查的快照，開工前先重查 GitHub。
 
 ## 現況
-這是 Windows Codex Desktop 自動接續守護工具的維護 fork（[AGENTS.md:7](AGENTS.md)）。2026-11-08 `gh` 查詢：`c19b1e6` 的 CI、CodeQL 為 success，code scanning 開啟告警 0 筆，最近 release 為 v1.2.0；issues 停用，未查到 issue。已安裝的 `%LOCALAPPDATA%\CodexAutoRetry\codex-auto-retry.exe` 的完整 SHA-256（`4467FCF869055038609098278BF1E924F582B05F3769C21FB02F77A4A55D3805`）與 `scripts/build-info.json` 記錄相同（該檔最後更新於 `16a28f0`，含面板與額度修正）；其後唯一動到 `scripts/source` 的 `c4337cd` 只改 `ui/package-lock.json`，尚未進安裝版。額度等待與面板修正仍在 Unreleased；深掃報告（2026-10-27）指出當時已安裝版尚未更新、真實 MCP host 未驗，已於 2026-11-08 核對，見上（[CHANGELOG.md:11](CHANGELOG.md)）。
+這是 Windows Codex Desktop 自動接續守護工具的維護 fork（[AGENTS.md:7](AGENTS.md)）。2026-11-08 `gh` 查詢：`c19b1e6` 的 CI、CodeQL 為 success，code scanning 開啟告警 0 筆，最近 release 為 v1.2.0；issues 停用，未查到 issue。已安裝的 `%LOCALAPPDATA%\CodexAutoRetry\codex-auto-retry.exe` 的完整 SHA-256（`4467FCF869055038609098278BF1E924F582B05F3769C21FB02F77A4A55D3805`）等於 `16a28f0` 那次建置（含面板與額度修正）；`966329c` 重建了 `scripts/bin`（面板技術細節保留展開），安裝需先完全關閉 Codex Desktop，2026-11-14 尚未安裝。額度等待與面板修正仍在 Unreleased；深掃報告（2026-10-27）指出當時已安裝版尚未更新、真實 MCP host 未驗，已於 2026-11-08 核對，見上（[CHANGELOG.md:11](CHANGELOG.md)）。
 
 ## 近期：可以直接動手
 
