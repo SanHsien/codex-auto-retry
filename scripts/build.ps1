@@ -26,6 +26,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Panel dependencies failed to install.' }
     & npm run typecheck
     if ($LASTEXITCODE -ne 0) { throw 'Panel type check failed.' }
+    & npm test
+    if ($LASTEXITCODE -ne 0) { throw 'Panel UI tests failed.' }
     & npm run build
     if ($LASTEXITCODE -ne 0) { throw 'Panel build failed.' }
 }

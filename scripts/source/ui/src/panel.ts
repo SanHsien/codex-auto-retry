@@ -364,6 +364,13 @@ function renderMetrics(next: ManagementSnapshot): void {
 }
 
 function renderQueue(next: ManagementSnapshot): void {
+  // Read the live DOM before replacing it, including toggles not yet dispatched.
+  // Only current rows carry state forward; removed tasks leave no stored state.
+  const expandedThreadIds = new Set(
+    Array.from(elements.queueList.querySelectorAll<HTMLDetailsElement>("details[data-thread-id]"))
+      .filter((details) => details.open)
+      .map((details) => details.dataset.threadId),
+  );
   elements.queueList.replaceChildren();
   if (next.retries.length === 0) {
     const empty = document.createElement("div");
@@ -373,11 +380,11 @@ function renderQueue(next: ManagementSnapshot): void {
     return;
   }
   for (const retry of next.retries) {
-    elements.queueList.append(createQueueItem(retry, next.paused));
+    elements.queueList.append(createQueueItem(retry, next.paused, expandedThreadIds.has(retry.thread_id)));
   }
 }
 
-function createQueueItem(retry: ManagedRetry, paused: boolean): HTMLElement {
+function createQueueItem(retry: ManagedRetry, paused: boolean, expanded: boolean): HTMLElement {
   const row = document.createElement("article");
   row.className = "queue-item";
   row.dataset.threadId = retry.thread_id;
@@ -449,7 +456,7 @@ function createQueueItem(retry: ManagedRetry, paused: boolean): HTMLElement {
   row.append(main, state, actions);
   const note = queueNote(retry);
   if (note) row.append(note);
-  row.append(queueDetails(retry));
+  row.append(queueDetails(retry, expanded));
   return row;
 }
 
@@ -481,9 +488,11 @@ function queueNote(retry: ManagedRetry): HTMLElement | null {
 }
 
 // The raw, privacy-safe identifiers stay available for bug reports.
-function queueDetails(retry: ManagedRetry): HTMLElement {
+function queueDetails(retry: ManagedRetry, expanded: boolean): HTMLElement {
   const details = document.createElement("details");
   details.className = "queue-raw";
+  details.dataset.threadId = retry.thread_id;
+  details.open = expanded;
   const summary = document.createElement("summary");
   summary.textContent = L("技術細節", "Technical details");
   const list = document.createElement("dl");
