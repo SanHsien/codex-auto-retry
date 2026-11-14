@@ -1,5 +1,18 @@
 # 維護決策
 
+## 2026-11-14：修補面板間接依賴 Hono 的五筆安全弱點
+
+**決定**：將 `scripts/source/ui/package-lock.json` 的 `hono` 由 4.13.13 升至 4.13.16，並更新下載位置與完整性雜湊。4.13.16 是以下五筆弱點的首個修補版本，符合 `@modelcontextprotocol/sdk` 的 `^4.11.4` 與 `@hono/node-server` 的 peer dependency 範圍；不變更直接依賴、不增加 override。
+
+**處理項目**：
+- [GHSA-4m76-xfj5-7975](https://github.com/advisories/GHSA-4m76-xfj5-7975)：掛載路徑可繞過掛載前綴內的 middleware。
+- [GHSA-h7mg-cq63-vhpq](https://github.com/advisories/GHSA-h7mg-cq63-vhpq)：特定路由組合或編碼換行字元可略過萬用路徑 middleware。
+- [GHSA-3gg2-335m-rxc6](https://github.com/advisories/GHSA-3gg2-335m-rxc6)：CSS helper 的結束標籤跳脫不足，可造成 HTML 注入。
+- [GHSA-46wx-v44x-9hh2](https://github.com/advisories/GHSA-46wx-v44x-9hh2)：CSRF 防護未檢查 `text/ping` 請求。
+- [GHSA-4h7h-rv7c-7m2v](https://github.com/advisories/GHSA-4h7h-rv7c-7m2v)：帶額外參數的 multipart 表單可略過欄位驗證。
+
+**不處理項目**：無；上述五筆均採用修補版本，沒有以開發工具用途豁免。
+
 ## 2026-11-14：真實 Codex Desktop host 面板實機與技術細節展開狀態
 
 - **做法**：在真實 Codex Desktop（已安裝 v1.2.0）開新對話叫出管理面板，用 agent-desktop 實體點擊，點擊前確認 Codex 視窗在前景；佇列裡是 11-13 被額度或供應商故障中斷、早已結束的 Codex 派工 thread。
