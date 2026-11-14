@@ -577,7 +577,7 @@ func restoreOwnedSharedEnvironment(dataDir string, legacyEndpoints ...string) (s
 }
 
 func readUserEnvironment(name string) (string, bool, error) {
-	key, err := registry.OpenKey(registry.CURRENT_USER, `Environment`, registry.QUERY_VALUE)
+	key, err := registry.OpenKey(registry.CURRENT_USER, userEnvironmentSubKey, registry.QUERY_VALUE)
 	if errors.Is(err, registry.ErrNotExist) {
 		return "", false, nil
 	}
@@ -596,7 +596,7 @@ func readUserEnvironment(name string) (string, bool, error) {
 }
 
 func writeUserEnvironment(name, value string) error {
-	key, _, err := registry.CreateKey(registry.CURRENT_USER, `Environment`, registry.SET_VALUE)
+	key, _, err := registry.CreateKey(registry.CURRENT_USER, userEnvironmentSubKey, registry.SET_VALUE)
 	if err != nil {
 		return err
 	}
@@ -605,12 +605,12 @@ func writeUserEnvironment(name, value string) error {
 }
 
 func restoreUserEnvironment(name, value string, present bool) error {
-	key, err := registry.OpenKey(registry.CURRENT_USER, `Environment`, registry.SET_VALUE)
+	key, err := registry.OpenKey(registry.CURRENT_USER, userEnvironmentSubKey, registry.SET_VALUE)
 	if errors.Is(err, registry.ErrNotExist) {
 		if !present {
 			return nil
 		}
-		key, _, err = registry.CreateKey(registry.CURRENT_USER, `Environment`, registry.SET_VALUE)
+		key, _, err = registry.CreateKey(registry.CURRENT_USER, userEnvironmentSubKey, registry.SET_VALUE)
 	}
 	if err != nil {
 		return err
@@ -625,7 +625,16 @@ func restoreUserEnvironment(name, value string, present bool) error {
 	return nil
 }
 
-func broadcastEnvironmentChange() {
+// userEnvironmentSubKey is the HKCU key holding persistent user environment
+// variables. Tests point it at a private scratch key so they never write to the
+// live user environment.
+var userEnvironmentSubKey = `Environment`
+
+// broadcastEnvironmentChange is replaceable so tests do not notify every
+// top-level window about scratch-key changes.
+var broadcastEnvironmentChange = broadcastUserEnvironmentChange
+
+func broadcastUserEnvironmentChange() {
 	user32 := windows.NewLazySystemDLL("user32.dll")
 	proc := user32.NewProc("SendMessageTimeoutW")
 	message, err := windows.UTF16PtrFromString("Environment")

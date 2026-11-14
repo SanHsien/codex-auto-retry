@@ -237,9 +237,11 @@ func TestOwnedSharedEnvironmentRestoresMissingEndpoint(t *testing.T) {
 	if !result.Changed {
 		t.Fatal("missing shared endpoint was not reported as changed")
 	}
-	value, present, err := readUserEnvironment(name)
-	if err != nil || !present || value != endpoint {
-		t.Fatalf("missing shared endpoint was not restored: value=%q present=%v err=%v", value, present, err)
+	// Use a new name: reassigning present would change what the cleanup
+	// closure restores and write an empty value instead of deleting it.
+	value, restored, err := readUserEnvironment(name)
+	if err != nil || !restored || value != endpoint {
+		t.Fatalf("missing shared endpoint was not restored: value=%q present=%v err=%v", value, restored, err)
 	}
 	var backup sharedEnvironmentBackup
 	data, err := os.ReadFile(filepath.Join(dataDir, "environment-backup.json"))
