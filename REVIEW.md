@@ -53,6 +53,7 @@ gh repo set-default --view
 | R-16 | P2 | 英文使用者只看得到中文介面與錯誤訊息，版本號用 `-fork.N` 尾碼；改為整套中英雙語（可切換或並列）、版本號改為 1.0.0（`72e7641`、`0117a72`，2026-10-04） |
 | R-17 | P2 | 設定視窗只顯示任務 ID；取消等待中的重試會直接刪除且無法再偵測到；改為顯示標題、取消後保留 24 小時可重新開始、加入重新偵測中斷任務（`184275d`、`bee25b4`、`20084ec`，2026-10-05） |
 | R-18 | P2 | 從 PowerShell 7 終端機執行安裝執行檔或 `.cmd`，Windows PowerShell 5.1 繼承 7 的 `PSModulePath` 而找不到 `Get-FileHash`，安裝在驗證發佈檔時失敗；啟動前清掉該變數。另修共用後端冒煙測試清理暫存資料夾時偶發 EPERM（真機實測發現，2026-10-08） |
+| R-19 | P2 | Go 測試直接讀寫真實 `HKCU\Environment`；`TestOwnedSharedEnvironmentRestoresMissingEndpoint` 重新賦值清理閉包捕捉的 `present`，清理時寫入空值而非刪除，每跑一次留一個 `CODEX_AUTO_RETRY_TEST_<nanos>`（維護者電腦累積 33 個）。登錄路徑與環境變更廣播改為可替換，`TestMain` 改用專屬測試子鍵並在結束後刪除，真實 `HKCU\Environment` 多出任何 `CODEX_AUTO_RETRY_*` 就讓套件失敗；閉包問題一併修正（`ae5d007`，2026-11-15） |
 
 ## 未解風險
 
