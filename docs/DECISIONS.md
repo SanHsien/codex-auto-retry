@@ -1,6 +1,23 @@
 # 維護決策
 
-## 2026-11-14：修補面板間接依賴 Hono 的五筆安全弱點
+## 2026-11-21：真實 host 驗收額度重置顯示、立即重試與放棄
+
+- **做法**：已安裝版仍是 11-14 那版（兩個 exe 的 SHA-256 `D3FD195F…DE2A`），守護程式（supervisor 28180、worker 30920）全程沒有重啟。用 Codex CLI `codex exec` 開兩筆可拋棄任務，以單次 `-c` 覆寫把 model provider 指到本機 stub（`127.0.0.1:48731`，`request_max_retries=0`），不改 `config.toml`、不送 OpenAI 請求、不耗額度。stub 第一次回 HTTP 429 `usage_limit_reached`，Codex 自己寫出「…or try again at 11:16 AM.」；第二次回 503，Codex 寫出 `unexpected status 503 Service Unavailable`。面板在 Codex Desktop（`OpenAI.Codex_26.1117.3838.0`）新開一則對話叫出，用 agent-desktop 讀無障礙樹；實體點擊前都確認 `focus-window` 成功、Codex 在前景、電腦閒置超過 60 秒。維護者的真實對話與 11-13 以前的 109 筆舊停止紀錄都沒有動。
+- **通過**：
+  - 重置時間：守護紀錄寫 `retry scheduled thread=01a1fbc7... category=rate_limit ... delay_seconds=5422`，`quota_reset_at` 為 `2026-11-21T11:16:00+08:00`。面板顯示「額度用完，預計 11:16 恢復；恢復後自動重試，不會先消耗次數。」與「21 分 45 秒 後重試」，技術細節多出「額度恢復 11:16」。
+  - 停止原因：到期時寫 `retry stopped before dispatch ... reason=shared_app_server_disabled`；503 那筆面板顯示「已停止／共用後端已關閉」與說明文字。
+  - 對已停止的可拋棄任務按「立即重試（重新計數）」：紀錄寫 `retry restarted thread=01a1fc24...`，同一秒又停在派送閘門（原因同上）。
+  - 放棄：兩筆都寫 `retry dismissed ... reason=user_control`，面板佇列變空。
+  - 放棄後重新偵測不復活：`interrupted task rescan completed listed=0 candidates=3`。
+  - 舊停止項目不自動復活：兩次重新偵測只列出本輪自己的任務，109 筆舊紀錄沒有被重新排程。
+- **沒有驗到**：
+  - 實際接續：本機 Codex Desktop 目前不在可恢復模式（`controller_state` 在 `shared_app_server_disabled` 與 `controller_timeout` 之間跳，`recovery_mode=none`），所有重試都停在派送前。CLI 任務本來也不歸桌面版所有。要驗接續，需要用 `scripts/launch-codex.ps1` 重開 Codex Desktop，再拿到一筆桌面版自己的失敗任務；本輪沒有重開維護者的 Desktop。
+  - 對等待中的任務按「立即重試」：面板把它藏起來了，見下方缺陷一。
+  - goal-limit 停止不可誤放棄：需要進行中的 Codex 目標，加上供應商連續回空回應，stub 接不進桌面版的對話，所以沒有驗。
+- **發現的缺陷（本輪未修，已列入 `ROADMAP.md` 與 `REVIEW.md` R-20、R-21）**：
+  - 一、心跳判斷太嚴：`management.go:132` 的逾時是 `max(4×輪詢, 15 秒)`，但這台機器的掃描間隔實測 25～50 秒（`daemon.go:176` 的註解也寫「Probes can take most of a minute on a busy machine」）。面板與 MCP 因此在 worker 活著時回報 `running=false`、`heartbeat_stale=true`，顯示「未執行／未偵測到有效心跳」，並依 `management.go:143` 藏起等待中與執行中的任務。實測：03:08～03:13 UTC 按 12 次「重新整理狀態」，那筆等待中的任務一次都沒有出現。第一次叫出面板時，Codex 也把這個狀態轉述成「目前背景服務未執行，重試佇列為空」。
+  - 二、額度等待後才停止的任務看不到：`management.go:602` 的 `stoppedRetryIsVisible` 從 `FailedAt` 起算 1 小時。等額度重置超過 1 小時的任務，一停止就直接看不到。實測：`01a1fbc7` 在 01:46:07Z 失敗，03:16:41Z 停止，03:25:10Z 的快照 `stopped_retries=0`。要按「重新偵測」，它才會以「偵測到中斷」重新列出（03:39:01Z）。
+
 
 **決定**：將 `scripts/source/ui/package-lock.json` 的 `hono` 由 4.13.13 升至 4.13.16，並更新下載位置與完整性雜湊。4.13.16 是以下五筆弱點的首個修補版本，符合 `@modelcontextprotocol/sdk` 的 `^4.11.4` 與 `@hono/node-server` 的 peer dependency 範圍；不變更直接依賴、不增加 override。
 

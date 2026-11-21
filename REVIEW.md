@@ -61,6 +61,8 @@ gh repo set-default --view
 - 發佈檔未做程式碼簽章；單檔安裝程式是自解壓執行檔，SmartScreen 與防毒軟體可能示警。
 - 繁體化後每次同步上游都要重跑轉換工具並人工對照 PowerShell 測試裡的字元碼常數。
 - `scripts/status-smoke-test.ps1` 依賴本機實際安裝狀態，在沒安裝的電腦上失敗，改動前後相同。
+- R-20（P2，2026-11-21 真實 host 驗收發現，未修）：心跳逾時 `max(4×poll, 15s)`（`scripts/source/management.go:132`）比忙碌機器上實際的掃描間隔短。實測間隔 25～50 秒，worker 活著時，面板與 `get_auto_retry_status` 回 `running=false`、`heartbeat_stale=true`，面板顯示「未執行」，並藏起等待中與執行中的任務（`management.go:143`）。重現與驗收條件見 `ROADMAP.md`，證據見 `docs/DECISIONS.md`「2026-11-21」。
+- R-21（P2，同上，未修）：`stoppedRetryIsVisible`（`management.go:602`）從 `FailedAt` 起算 1 小時。等額度超過 1 小時才停止的任務，一停止就從面板消失，要手動按「重新偵測」才會再出現。重現見 `ROADMAP.md`。
 
 ## 啟動 fail-open smoke 複驗（2026-10-30）
 
