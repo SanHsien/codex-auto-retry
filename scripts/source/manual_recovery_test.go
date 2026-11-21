@@ -25,10 +25,10 @@ func TestCancelKeepsTaskAsRestartableCancelledEntry(t *testing.T) {
 		thread.Stopped.Attempts != 2 || thread.Stopped.MaxAttempts != 15 {
 		t.Fatalf("cancelled retry was not kept as a restartable entry: %+v", thread.Stopped)
 	}
-	if !stoppedRetryIsVisible(thread.Stopped, now.Add(3*time.Hour)) {
+	if !stoppedRetryIsVisible(thread, now.Add(3*time.Hour)) {
 		t.Fatal("a cancelled task disappeared after a few hours")
 	}
-	if stoppedRetryIsVisible(thread.Stopped, now.Add(25*time.Hour)) {
+	if stoppedRetryIsVisible(thread, now.Add(25*time.Hour)) {
 		t.Fatal("a cancelled task stayed visible beyond its window")
 	}
 	rows := managedRetries(d.state, now.Add(time.Hour), languageChinese)

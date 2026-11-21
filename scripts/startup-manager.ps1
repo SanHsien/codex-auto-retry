@@ -229,6 +229,23 @@ function Test-HeartbeatFresh {
     }
 }
 
+function Get-HeartbeatMaxAge {
+    param($Status, $Config)
+    # Mirrors heartbeatStaleAfter in scripts/source/management.go: four missed
+    # heartbeats, at least 15 s. A scan that runs longer than the poll interval
+    # delays the next tick, so the measured interval is the real period.
+    $period = 2.0
+    try {
+        if ($Config -and $Config.PSObject.Properties['poll_interval_seconds']) { $period = [double]$Config.poll_interval_seconds }
+        if ($Status -and $Status.PSObject.Properties['scan_interval_ms']) {
+            $measured = [double]$Status.scan_interval_ms / 1000.0
+            if ($measured -gt $period) { $period = $measured }
+        }
+    }
+    catch { $period = 2.0 }
+    return [TimeSpan]::FromSeconds([Math]::Max(15.0, 4.0 * $period))
+}
+
 function Read-JsonOrNull {
     param([Parameter(Mandatory = $true)][string]$Path)
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
@@ -245,7 +262,7 @@ function Get-ManagerState {
     $processes = @(Get-ManagerProcesses)
     $heartbeatFresh = $false
     if ($status -and $status.last_scan_at) {
-        $heartbeatFresh = Test-HeartbeatFresh -Value $status.last_scan_at
+        $heartbeatFresh = Test-HeartbeatFresh -Value $status.last_scan_at -MaxAge (Get-HeartbeatMaxAge -Status $status -Config $config)
     }
     $serviceRunning = $null -ne $status -and [bool]$status.running -and $heartbeatFresh -and $processes.Count -gt 0
     $startupEntry = Get-RunValue

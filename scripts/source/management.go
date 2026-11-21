@@ -129,10 +129,7 @@ func (m *managementService) snapshotLocked(now time.Time) (ManagementSnapshot, e
 		return ManagementSnapshot{}, err
 	}
 
-	staleAfter := time.Duration(config.PollIntervalSeconds*4) * time.Second
-	if staleAfter < 15*time.Second {
-		staleAfter = 15 * time.Second
-	}
+	staleAfter := heartbeatStaleAfter(config.PollIntervalSeconds, status)
 	processRunning := statusFound && processOwnsRuntime(status.PID, m.dataDir)
 	heartbeatStale := !statusFound || !processRunning || status.LastScanAt.IsZero() || now.Sub(status.LastScanAt) > staleAfter
 	running := statusFound && status.Running && !heartbeatStale
@@ -564,7 +561,7 @@ func managedRetries(state RuntimeState, now time.Time, language string) []Manage
 				FailedAt:              timestampOrEmpty(thread.Awaiting.FailedAt),
 			})
 		}
-		if thread.Stopped != nil && stoppedRetryIsVisible(thread.Stopped, now) {
+		if thread.Stopped != nil && stoppedRetryIsVisible(thread, now) {
 			retries = append(retries, ManagedRetry{
 				ThreadID:              threadID,
 				Label:                 text(language, "任務 ", "Task ") + shortThreadID(threadID),
@@ -599,7 +596,24 @@ func managedRetries(state RuntimeState, now time.Time, language string) []Manage
 	return retries
 }
 
-func stoppedRetryIsVisible(stopped *StoppedRetry, now time.Time) bool {
+// heartbeatStaleAfter allows four missed heartbeats (at least 15 s). The
+// heartbeat period is the poll interval only while scans finish within it; a
+// scan that runs longer delays the next tick, so the worker's measured
+// interval between heartbeats is the real period.
+func heartbeatStaleAfter(pollIntervalSeconds int, status StatusSnapshot) time.Duration {
+	period := time.Duration(pollIntervalSeconds) * time.Second
+	if measured := time.Duration(status.ScanIntervalMs) * time.Millisecond; measured > period {
+		period = measured
+	}
+	staleAfter := 4 * period
+	if staleAfter < 15*time.Second {
+		staleAfter = 15 * time.Second
+	}
+	return staleAfter
+}
+
+func stoppedRetryIsVisible(thread ThreadState, now time.Time) bool {
+	stopped := thread.Stopped
 	if stopped == nil || stopped.StoppedAt.IsZero() {
 		return stopped != nil
 	}
@@ -607,7 +621,14 @@ func stoppedRetryIsVisible(stopped *StoppedRetry, now time.Time) bool {
 		return false
 	}
 	window := stoppedDisplayWindow(stopped)
-	if !stopped.FailedAt.IsZero() && !stopped.FailedAt.After(now) && now.Sub(stopped.FailedAt) > window {
+	// Hide failures that were already old when the watchdog stopped them. A
+	// quota wait holds the failure on purpose until the reset, so its age
+	// counts from the reset, not from the failure.
+	failureCurrentAt := stopped.FailedAt
+	if thread.QuotaResetAt.After(failureCurrentAt) {
+		failureCurrentAt = thread.QuotaResetAt
+	}
+	if !failureCurrentAt.IsZero() && !failureCurrentAt.After(now) && now.Sub(failureCurrentAt) > window {
 		return false
 	}
 	if stopped.StoppedAt.After(now) {

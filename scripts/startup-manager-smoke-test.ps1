@@ -136,6 +136,28 @@ try {
         throw "Startup manager did not distinguish a disabled StartupApproved value while Run exists.`n$statusOutput"
     }
     $null = Set-CodexAutoRetryStartupApprovalEnabled -RunName $testRunName
+
+    # A live worker whose scans take longer than the poll interval must not be
+    # reported as stale; a heartbeat far beyond the measured interval still is.
+    $heartbeatStatusPath = Join-Path $localRoot 'CodexAutoRetry\status.json'
+    $heartbeatConfigPath = Join-Path $localRoot 'CodexAutoRetry\config.json'
+    $heartbeatConfigExisted = Test-Path -LiteralPath $heartbeatConfigPath -PathType Leaf
+    if (-not $heartbeatConfigExisted) {
+        [IO.File]::WriteAllText($heartbeatConfigPath, '{"poll_interval_seconds":2}', [Text.UTF8Encoding]::new($false))
+    }
+    foreach ($case in @(@{ AgeSeconds = 40; Fresh = 'True' }, @{ AgeSeconds = 300; Fresh = 'False' })) {
+        $heartbeatStatus = @{ version = 'smoke'; running = $true; pid = $PID; scan_interval_ms = 35000
+            last_scan_at = [DateTimeOffset]::UtcNow.AddSeconds(-$case.AgeSeconds).ToString('o') }
+        [IO.File]::WriteAllText($heartbeatStatusPath, ($heartbeatStatus | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
+        $heartbeatOutput = (& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $manager `
+            -Action status -UserProfileRoot $profileRoot -LocalAppDataRoot $localRoot -RunName $testRunName 2>&1 | Out-String)
+        if ($LASTEXITCODE -ne 0 -or $heartbeatOutput -notmatch ('(?im)HeartbeatFresh\s*:\s*' + $case.Fresh)) {
+            throw "Startup manager misjudged a $($case.AgeSeconds) s old heartbeat with a 35 s measured scan interval (expected HeartbeatFresh=$($case.Fresh)).`n$heartbeatOutput"
+        }
+    }
+    Remove-Item -LiteralPath $heartbeatStatusPath -Force
+    if (-not $heartbeatConfigExisted) { Remove-Item -LiteralPath $heartbeatConfigPath -Force }
+
     $disableArgs = @('-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $manager,
         '-Action', 'disable', '-UserProfileRoot', $profileRoot, '-LocalAppDataRoot', $localRoot, '-RunName', $testRunName)
     $null = & powershell.exe @disableArgs 2>&1 | Out-String

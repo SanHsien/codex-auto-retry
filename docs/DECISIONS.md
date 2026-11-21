@@ -1,5 +1,12 @@
 # 維護決策
 
+## 2026-11-21：心跳逾時改用實測間隔、`last_scan_at` 倒退的根因、額度等待後停止的任務照常顯示（R-20、R-21）
+
+- **心跳逾時（R-20）**：原規則是「漏掉 4 次心跳（至少 15 秒）就算失效」，但「一次心跳」被寫死成輪詢間隔。輪詢只決定兩輪之間最少隔多久；一輪掃描跑得比輪詢久時，下一輪要等它跑完（`time.Ticker` 會丟掉趕不上的 tick），真正的心跳週期是掃描本身的長度。所以保留「4 次、至少 15 秒」，只把週期改成實測值：worker 每輪記下與上一次心跳的間隔，寫進 `status.json` 的 `scan_interval_ms`；`heartbeatStaleAfter`（`scripts/source/management.go`）取 `max(輪詢, scan_interval_ms)` 的 4 倍。啟動管理員（`scripts/startup-manager.ps1` 的 `Get-HeartbeatMaxAge`）用同一條規則。沒選的做法：從 `lifecycleProbeTimeout` 推上限——一輪裡有好幾個探測，加總不是固定值；只看 worker 存活——卡死但沒結束的 worker 會被當成正常。舊版 worker 沒有這個欄位，就退回輪詢間隔，跟以前一樣。
+- **`last_scan_at` 倒退**：根因是 `daemon.run` 把 `ticker.C` 收到的時間當成「現在」。Ticker 送的是排定的 tick 時間；前一輪掃描超過輪詢間隔時，排著的那個值已經落後了「超出的時間」，心跳又寫成「那個值＋本輪耗時」，所以長的一輪後面接短的一輪，心跳就往回跳。證據：同樣寫法的獨立 Go 程式（輪詢 200 ms、交替 700／50 ms 工作）每次長輪後都倒退 450 ms；本機已安裝版 11-21 04:23～04:26Z 取樣，`last_scan_at` 倒退四次（-3.9、-2.3、-2.4、-1.0 秒），每次都緊接在一輪 5～6 秒的掃描後面。修正：`run` 改用 `time.Now()`。這個落差也讓心跳看起來比實際舊，所以跟 R-20 一起修。
+- **額度等待後停止的任務（R-21）**：`stoppedRetryIsVisible` 有兩道條件：停止後 1 小時內（手動停止 24 小時），而且故障本身也不能超過同一個時限。第二道是用來藏「watchdog 停機期間留下、重新啟動才看到並直接停止」的舊故障（`daemon.go` 處理事件時刻意保留停機期間的故障）。等額度是 watchdog 自己把故障留到重置時間（最長 8 天，`quotaResetHorizon`），那段時間故障並沒有變舊。所以第二道條件改從 `max(FailedAt, QuotaResetAt)` 起算，第一道不變。沒選「全部只看 `StoppedAt`」：那會讓上述停機期間的舊故障重新出現在面板。
+- **驗證**：先紅後綠的 Go 測試在 `scripts/source/heartbeat_visibility_test.go`；啟動管理員的情境加在 `scripts/startup-manager-smoke-test.ps1`。
+
 ## 2026-11-21：真實 host 驗收額度重置顯示、立即重試與放棄
 
 - **做法**：已安裝版仍是 11-14 那版（兩個 exe 的 SHA-256 `D3FD195F…DE2A`），守護程式（supervisor 28180、worker 30920）全程沒有重啟。用 Codex CLI `codex exec` 開兩筆可拋棄任務，以單次 `-c` 覆寫把 model provider 指到本機 stub（`127.0.0.1:48731`，`request_max_retries=0`），不改 `config.toml`、不送 OpenAI 請求、不耗額度。stub 第一次回 HTTP 429 `usage_limit_reached`，Codex 自己寫出「…or try again at 11:16 AM.」；第二次回 503，Codex 寫出 `unexpected status 503 Service Unavailable`。面板在 Codex Desktop（`OpenAI.Codex_26.1117.3838.0`）新開一則對話叫出，用 agent-desktop 讀無障礙樹；實體點擊前都確認 `focus-window` 成功、Codex 在前景、電腦閒置超過 60 秒。維護者的真實對話與 11-13 以前的 109 筆舊停止紀錄都沒有動。

@@ -239,31 +239,34 @@ func capabilityForControllerState(state string, sharedEnabled bool) desktopCapab
 }
 
 type StatusSnapshot struct {
-	BuildSourceHash                     string    `json:"build_source_hash"`
-	DesktopLaunchMode                   string    `json:"desktop_launch_mode"`
-	DesktopTransport                    string    `json:"desktop_transport,omitempty"`
-	RecoveryMode                        string    `json:"recovery_mode,omitempty"`
-	AutomaticRecoverySupported          bool      `json:"automatic_recovery_supported"`
-	RecoveryCapabilityReason            string    `json:"recovery_capability_reason,omitempty"`
-	Version                             string    `json:"version"`
-	Running                             bool      `json:"running"`
-	PID                                 int       `json:"pid"`
-	StartedAt                           time.Time `json:"started_at"`
-	LastScanAt                          time.Time `json:"last_scan_at"`
-	WatchedRoots                        int       `json:"watched_roots"`
-	PendingRetries                      int       `json:"pending_retries"`
-	ActiveRetries                       int       `json:"active_retries"`
-	Paused                              bool      `json:"paused"`
-	SharedAppServerEnabled              bool      `json:"shared_app_server_enabled"`
-	SharedAppServerRequested            bool      `json:"shared_app_server_requested"`
-	ControllerState                     string    `json:"controller_state,omitempty"`
-	LastError                           string    `json:"last_error,omitempty"`
-	MemoryUsageMB                       int64     `json:"memory_usage_mb,omitempty"`
-	MemoryLimitMB                       int       `json:"memory_limit_mb,omitempty"`
-	MemoryGuardTriggered                bool      `json:"memory_guard_triggered,omitempty"`
-	SharedAppServerMemoryUsageMB        int64     `json:"shared_app_server_memory_usage_mb,omitempty"`
-	SharedAppServerMemoryLimitMB        int       `json:"shared_app_server_memory_limit_mb,omitempty"`
-	SharedAppServerMemoryGuardTriggered bool      `json:"shared_app_server_memory_guard_triggered,omitempty"`
-	RetrySafetyWarning                  string    `json:"retry_safety_warning,omitempty"`
-	LogPath                             string    `json:"log_path"`
+	BuildSourceHash            string    `json:"build_source_hash"`
+	DesktopLaunchMode          string    `json:"desktop_launch_mode"`
+	DesktopTransport           string    `json:"desktop_transport,omitempty"`
+	RecoveryMode               string    `json:"recovery_mode,omitempty"`
+	AutomaticRecoverySupported bool      `json:"automatic_recovery_supported"`
+	RecoveryCapabilityReason   string    `json:"recovery_capability_reason,omitempty"`
+	Version                    string    `json:"version"`
+	Running                    bool      `json:"running"`
+	PID                        int       `json:"pid"`
+	StartedAt                  time.Time `json:"started_at"`
+	LastScanAt                 time.Time `json:"last_scan_at"`
+	// ScanIntervalMs is the measured time between the last two heartbeats. It
+	// is the real heartbeat period when scans run longer than the poll interval.
+	ScanIntervalMs                      int64  `json:"scan_interval_ms,omitempty"`
+	WatchedRoots                        int    `json:"watched_roots"`
+	PendingRetries                      int    `json:"pending_retries"`
+	ActiveRetries                       int    `json:"active_retries"`
+	Paused                              bool   `json:"paused"`
+	SharedAppServerEnabled              bool   `json:"shared_app_server_enabled"`
+	SharedAppServerRequested            bool   `json:"shared_app_server_requested"`
+	ControllerState                     string `json:"controller_state,omitempty"`
+	LastError                           string `json:"last_error,omitempty"`
+	MemoryUsageMB                       int64  `json:"memory_usage_mb,omitempty"`
+	MemoryLimitMB                       int    `json:"memory_limit_mb,omitempty"`
+	MemoryGuardTriggered                bool   `json:"memory_guard_triggered,omitempty"`
+	SharedAppServerMemoryUsageMB        int64  `json:"shared_app_server_memory_usage_mb,omitempty"`
+	SharedAppServerMemoryLimitMB        int    `json:"shared_app_server_memory_limit_mb,omitempty"`
+	SharedAppServerMemoryGuardTriggered bool   `json:"shared_app_server_memory_guard_triggered,omitempty"`
+	RetrySafetyWarning                  string `json:"retry_safety_warning,omitempty"`
+	LogPath                             string `json:"log_path"`
 }

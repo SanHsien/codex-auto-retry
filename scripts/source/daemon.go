@@ -31,6 +31,7 @@ type daemon struct {
 	active                              map[string]RetryJob
 	activeCtx                           map[string]context.CancelFunc
 	lastScan                            time.Time
+	scanInterval                        time.Duration
 	lastError                           string
 	controllerState                     string
 	lastControllerProbe                 time.Time
@@ -42,6 +43,7 @@ type daemon struct {
 	lastSharedAppServerMemoryCheck      time.Time
 	writeState                          func(string, any) error
 	writeStatusFile                     func(string, any) error
+	newTicker                           func(time.Duration) (<-chan time.Time, func())
 	stateWriteDeferred                  bool
 	statusWriteDeferred                 bool
 	rescansThisTick                     int
@@ -101,18 +103,30 @@ func (d *daemon) run(ctx context.Context) error {
 	if err := d.tick(ctx, time.Now().UTC()); err != nil {
 		return err
 	}
-	ticker := time.NewTicker(time.Duration(d.config.PollIntervalSeconds) * time.Second)
-	defer ticker.Stop()
+	ticks, stopTicker := d.startTicker(time.Duration(d.config.PollIntervalSeconds) * time.Second)
+	defer stopTicker()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case now := <-ticker.C:
-			if err := d.tick(ctx, now.UTC()); err != nil {
+		case <-ticks:
+			// A ticker delivers the time the tick was scheduled. When the
+			// previous scan overran the poll interval, that value is stale by
+			// the overrun, and stamping the heartbeat from it moved
+			// last_scan_at backwards. Use the clock.
+			if err := d.tick(ctx, time.Now().UTC()); err != nil {
 				return err
 			}
 		}
 	}
+}
+
+func (d *daemon) startTicker(interval time.Duration) (<-chan time.Time, func()) {
+	if d.newTicker != nil {
+		return d.newTicker(interval)
+	}
+	ticker := time.NewTicker(interval)
+	return ticker.C, ticker.Stop
 }
 
 func (d *daemon) tick(ctx context.Context, now time.Time) error {
@@ -173,7 +187,11 @@ func (d *daemon) tick(ctx context.Context, now time.Time) error {
 	jobs := d.dispatchDueLocked(now)
 	// Probes can take most of a minute on a busy machine; stamp the heartbeat
 	// when the scan finishes so status.json is not already stale when written.
-	d.lastScan = now.Add(time.Since(tickStarted))
+	scanFinished := now.Add(time.Since(tickStarted))
+	if !d.lastScan.IsZero() && scanFinished.After(d.lastScan) {
+		d.scanInterval = scanFinished.Sub(d.lastScan)
+	}
+	d.lastScan = scanFinished
 	d.state.prune(now)
 	stateErr := d.persistStateLocked()
 	statusErr := d.writeStatusLocked(true, len(roots))
@@ -1045,6 +1063,7 @@ func (d *daemon) writeStatusLocked(running bool, rootCount int) error {
 		PID:                                 os.Getpid(),
 		StartedAt:                           d.startedAt,
 		LastScanAt:                          d.lastScan,
+		ScanIntervalMs:                      d.scanInterval.Milliseconds(),
 		WatchedRoots:                        rootCount,
 		PendingRetries:                      pending,
 		ActiveRetries:                       active,

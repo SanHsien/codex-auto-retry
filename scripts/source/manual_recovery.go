@@ -138,7 +138,7 @@ func (d *daemon) rescanInterruptedLocked(now time.Time) int {
 		candidate := latest[threadID]
 		thread := d.state.Threads[threadID]
 		if thread.Pending != nil || thread.Awaiting != nil || thread.GoalHeld || thread.GoalStatus == "active" ||
-			(thread.Stopped != nil && stoppedRetryIsVisible(thread.Stopped, now)) {
+			(thread.Stopped != nil && stoppedRetryIsVisible(thread, now)) {
 			continue
 		}
 		if _, active := d.active[threadID]; active {
