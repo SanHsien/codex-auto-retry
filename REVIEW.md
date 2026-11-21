@@ -54,6 +54,8 @@ gh repo set-default --view
 | R-17 | P2 | 設定視窗只顯示任務 ID；取消等待中的重試會直接刪除且無法再偵測到；改為顯示標題、取消後保留 24 小時可重新開始、加入重新偵測中斷任務（`184275d`、`bee25b4`、`20084ec`，2026-10-05） |
 | R-18 | P2 | 從 PowerShell 7 終端機執行安裝執行檔或 `.cmd`，Windows PowerShell 5.1 繼承 7 的 `PSModulePath` 而找不到 `Get-FileHash`，安裝在驗證發佈檔時失敗；啟動前清掉該變數。另修共用後端冒煙測試清理暫存資料夾時偶發 EPERM（真機實測發現，2026-10-08） |
 | R-19 | P2 | Go 測試直接讀寫真實 `HKCU\Environment`；`TestOwnedSharedEnvironmentRestoresMissingEndpoint` 重新賦值清理閉包捕捉的 `present`，清理時寫入空值而非刪除，每跑一次留一個 `CODEX_AUTO_RETRY_TEST_<nanos>`（維護者電腦累積 33 個）。登錄路徑與環境變更廣播改為可替換，`TestMain` 改用專屬測試子鍵並在結束後刪除，真實 `HKCU\Environment` 多出任何 `CODEX_AUTO_RETRY_*` 就讓套件失敗；閉包問題一併修正（`ae5d007`，2026-11-15） |
+| R-20 | P2 | 心跳逾時寫死成 `max(4×輪詢, 15 秒)`，掃描比輪詢慢時（2026-11-21 真實 host 實測間隔 25～50 秒），面板、MCP 與啟動管理員在 worker 活著時回 `running=false`、`heartbeat_stale=true`，並藏起等待中與執行中的任務。worker 改寫出實測心跳間隔 `scan_interval_ms`，逾時改為 4 個實測週期（至少 15 秒，`management.go` 的 `heartbeatStaleAfter`、`startup-manager.ps1` 的 `Get-HeartbeatMaxAge`）。順帶查出並修掉 `last_scan_at` 倒退：`daemon.run` 用 `time.Ticker` 的排定時間當「現在」，前一輪超時後那個值已過時；改用 `time.Now()`。新版尚未安裝到維護者電腦，見 `ROADMAP.md`（`bf059f6`，2026-11-21） |
+| R-21 | P2 | `stoppedRetryIsVisible` 的「故障太舊」判斷從 `FailedAt` 起算，等額度超過 1 小時才停止的任務一停止就從面板消失；等額度的任務改從 `QuotaResetAt` 起算，停止後的顯示期間不變（`bf059f6`，2026-11-21） |
 
 ## 未解風險
 
@@ -61,8 +63,6 @@ gh repo set-default --view
 - 發佈檔未做程式碼簽章；單檔安裝程式是自解壓執行檔，SmartScreen 與防毒軟體可能示警。
 - 繁體化後每次同步上游都要重跑轉換工具並人工對照 PowerShell 測試裡的字元碼常數。
 - `scripts/status-smoke-test.ps1` 依賴本機實際安裝狀態，在沒安裝的電腦上失敗，改動前後相同。
-- R-20（P2，2026-11-21 真實 host 驗收發現，未修）：心跳逾時 `max(4×poll, 15s)`（`scripts/source/management.go:132`）比忙碌機器上實際的掃描間隔短。實測間隔 25～50 秒，worker 活著時，面板與 `get_auto_retry_status` 回 `running=false`、`heartbeat_stale=true`，面板顯示「未執行」，並藏起等待中與執行中的任務（`management.go:143`）。重現與驗收條件見 `ROADMAP.md`，證據見 `docs/DECISIONS.md`「2026-11-21」。
-- R-21（P2，同上，未修）：`stoppedRetryIsVisible`（`management.go:602`）從 `FailedAt` 起算 1 小時。等額度超過 1 小時才停止的任務，一停止就從面板消失，要手動按「重新偵測」才會再出現。重現見 `ROADMAP.md`。
 
 ## 啟動 fail-open smoke 複驗（2026-10-30）
 
