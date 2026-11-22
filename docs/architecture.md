@@ -91,12 +91,17 @@ the explicit launcher, existing-process, stale-shell and self-update boundaries.
    person superseded the automatic chain.
 8. The controller verifies that Codex Desktop is using the configured shared
    transport using its executable identity and established connection to the
-   exact shared port; absence of a stdio child alone proves nothing. On current
-   Windows Desktop builds, an official stdio app-server is additionally paired
-   with the verified `\\.\pipe\codex-ipc` router. A thread-owner discovery and
-   targeted `thread-follower-start-turn` request are required before that path
-   is considered automatic recovery. Older builds still produce the visible,
-   terminal `codex_restart_required` state instead of another countdown.
+   exact shared port; absence of a stdio child alone proves nothing. The
+   Desktop-owned processes it accepts are the main process, its network
+   utility, and (Desktop `26.1117` and later) the NodeService utility that
+   hosts the app-server. On Windows Desktop builds up to `26.1111`, an official
+   stdio app-server is additionally paired with the verified
+   `\\.\pipe\codex-ipc` router. A thread-owner discovery and targeted
+   `thread-follower-start-turn` request are required before that path is
+   considered automatic recovery. Builds without the router (`26.1117` and
+   later, and builds older than the router) produce the visible, terminal
+   `codex_restart_required` state instead of another countdown when shared mode
+   is enabled, and `shared_app_server_disabled` when it is not.
 9. A reverse reader finds the latest `turn_context` and
    `thread_settings_applied` records in that task's rollout and decodes only the
    allowlisted execution settings needed by `thread/resume`.

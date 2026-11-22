@@ -46,16 +46,34 @@ if ($main.Count -eq 0) {
     return
 }
 $mainIds = @($main | ForEach-Object { [int]$_.ProcessId })
-# The client is Desktop (or its Electron network process), not the listening
-# app-server. Do not count arbitrary task/CLI descendants as Desktop clients.
-$clientIds = @($mainIds) + @($all | Where-Object {
+# Desktop 26.1117 moved the app-server out of the main process: it is now
+# started by the "app-server-host" Electron utility
+# (--type=utility --utility-sub-type=node.mojom.NodeService). Accept that host
+# only when it is a direct child of a verified main process AND runs the very
+# same executable as that parent. A NodeService of another Electron app, a
+# plain node.exe, or a utility further down the tree is never a Desktop host.
+$nodeHostIds = @($all | Where-Object {
+    $candidate = $_
+    $candidate.ExecutablePath -and
+    $candidate.CommandLine -match '(?:^|\s)--type=utility(?:\s|$)' -and
+    $candidate.CommandLine -match '(?:^|\s)--utility-sub-type=node\.mojom\.NodeService(?:\s|$)' -and
+    @($main | Where-Object {
+        [int]$_.ProcessId -eq [int]$candidate.ParentProcessId -and
+        $_.ExecutablePath -eq $candidate.ExecutablePath
+    }).Count -gt 0
+} | ForEach-Object { [int]$_.ProcessId })
+# The client is Desktop (its main process, its Electron network process, or
+# its app-server host utility), not the listening app-server. Do not count
+# arbitrary task/CLI descendants as Desktop clients.
+$clientIds = @($mainIds) + @($nodeHostIds) + @($all | Where-Object {
     $mainIds -contains [int]$_.ParentProcessId -and
     @($main | ForEach-Object { $_.ExecutablePath }) -contains $_.ExecutablePath -and
     $_.CommandLine -match '--utility-sub-type=network\.mojom\.NetworkService'
 } | ForEach-Object { [int]$_.ProcessId })
+$ownerIds = @($mainIds) + @($nodeHostIds)
 $owned = @($all | Where-Object {
     $_.Name -eq 'codex.exe' -and
-    $mainIds -contains [int]$_.ParentProcessId -and
+    $ownerIds -contains [int]$_.ParentProcessId -and
     $_.CommandLine -match '(?:^|\s)app-server(?:\s|$)'
 })
 $legacy = @($owned | Where-Object {

@@ -1,0 +1,10 @@
+{
+  "_source": "Reconstructed, not captured: no process tree was recorded while Desktop 26.1111.x was installed. It is the shape the probe was written for before 26.1117 (app-server is a direct child of the main process). Desktop's own logs agree with it: 26.1111.9664.0 logs '[IpcRouter] I am the router' and never logs '[app-server-host] App server utility started'. Process ids are made up.",
+  "processes": [
+    {"ProcessId": 20252, "ParentProcessId": 4120, "Name": "ChatGPT.exe", "ExecutablePath": "C:\\Program Files\\WindowsApps\\OpenAI.Codex_26.1111.9664.0_x64__2p2nqsd0c76g0\\app\\ChatGPT.exe", "CommandLine": "\"C:\\Program Files\\WindowsApps\\OpenAI.Codex_26.1111.9664.0_x64__2p2nqsd0c76g0\\app\\ChatGPT.exe\""},
+    {"ProcessId": 20300, "ParentProcessId": 20252, "Name": "ChatGPT.exe", "ExecutablePath": "C:\\Program Files\\WindowsApps\\OpenAI.Codex_26.1111.9664.0_x64__2p2nqsd0c76g0\\app\\ChatGPT.exe", "CommandLine": "\"C:\\Program Files\\WindowsApps\\OpenAI.Codex_26.1111.9664.0_x64__2p2nqsd0c76g0\\app\\ChatGPT.exe\" --type=utility --utility-sub-type=network.mojom.NetworkService --lang=zh-TW --service-sandbox-type=none"},
+    {"ProcessId": 20340, "ParentProcessId": 20252, "Name": "ChatGPT.exe", "ExecutablePath": "C:\\Program Files\\WindowsApps\\OpenAI.Codex_26.1111.9664.0_x64__2p2nqsd0c76g0\\app\\ChatGPT.exe", "CommandLine": "\"C:\\Program Files\\WindowsApps\\OpenAI.Codex_26.1111.9664.0_x64__2p2nqsd0c76g0\\app\\ChatGPT.exe\" --type=renderer --standard-schemes=app,codex-sandbox"},
+    {"ProcessId": 17960, "ParentProcessId": 20252, "Name": "codex.exe", "ExecutablePath": "C:\\Program Files\\WindowsApps\\OpenAI.Codex_26.1111.9664.0_x64__2p2nqsd0c76g0\\app\\resources\\codex.exe", "CommandLine": "\"C:\\Program Files\\WindowsApps\\OpenAI.Codex_26.1111.9664.0_x64__2p2nqsd0c76g0\\app\\resources\\codex.exe\" app-server --analytics-default-enabled"}
+  ],
+  "connections": []
+}

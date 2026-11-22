@@ -1,5 +1,29 @@
 # 維護決策
 
+## 2026-11-22：Desktop 26.1117 起沒有官方 IPC 路由；傳輸判斷改認 app-server host（R-22）
+
+接續下一段「恢復通道仍不可用」的兩條線索。全程唯讀：沒有重開或關閉 Codex Desktop，沒有改它的設定與後端路由，沒有碰對話。
+
+- **線索一，`\\.\pipe\codex-ipc` 不存在：這版 Desktop 已經沒有那個路由，不是改名，也不是要某個條件才建立。**
+  - Desktop 自己的紀錄（`%LOCALAPPDATA%\Packages\OpenAI.Codex_2p2nqsd0c76g0\LocalCache\Local\Codex\Logs`）：`26.1111.2228.0` 與 `26.1111.9664.0` 的工作階段有 `[IpcRouter] I am the router`，最後一筆是 2026-11-20T10:04:23Z。`26.1117.3838.0`（第一筆紀錄 2026-11-20T10:06:16Z）與 `26.1117.4957.0` 的工作階段一筆都沒有，改成出現 `[app-server-host] App server utility started pid=…`。所以是 `26.1111.9664.0` → `26.1117.3838.0` 這次更新拿掉的。
+  - `26.1117.4957.0` 的 `app.asar`（15,520 個檔，逐檔讀內容，另外解開 68 個 `.codex-gzip`）、`app.asar.unpacked`、`resources\plugins`、`resources\native`：`thread-owner-discovery`、`thread-follower-start-turn`、`handledByClientId` 都是 0 筆。`codex-ipc` 這個字串只剩在一個算路徑的函式裡，唯一的呼叫端是 Node 權限允許清單，沒有任何程式對它 `listen`。
+  - `codex.exe`（`codex-cli 0.171.0-alpha.13`）裡的 `\\.\pipe\codex-ipc` 旁邊是 `client-discovery-response`、`timed out waiting for IDE context`：它是去連 IDE 擴充套件的用戶端，不是建立管道的那一方。
+  - 目前存在的管道是 `codex-app-tools-<uuid>`、`codex-browser-use-<uuid>`、`codex-computer-use-<uuid>`、`OpenAI.CodexSandbox.…`，名稱每次隨機，是 Desktop 給自己的 MCP 與瀏覽器工具用的，沒有證據顯示能用來對某個 thread 送出接續。
+  - **決定**：不改 `codex_ipc_windows.go`。沒有新通道可以接，硬接任何一個隨機名稱的管道都是猜。舊版 Desktop 仍走原本的路由，所以那段程式留著。
+  - **還不知道的**：新版把「誰擁有這個 thread」的協調移到哪裡（程式裡看得到行程內的 `clientCoordination`，沒有看到對外介面）；OpenAI 之後會不會再提供對外路由。
+- **線索二，行程樹：已修。** 實查這台機器：主行程 `ChatGPT.exe` 55000 → `ChatGPT.exe --type=utility --utility-sub-type=node.mojom.NodeService` 13328 → `codex.exe … app-server` 48584（沒有 `--listen`）。`desktopTransportScript` 原本只認主行程的直接子行程，所以回 `unknown`。
+  - 改法：一個行程要同時符合三件事才算 app-server host——父行程是已驗證的主行程、執行檔路徑跟那個父行程一模一樣、命令列有 `--type=utility` 與 `--utility-sub-type=node.mojom.NodeService`。host 底下的 `codex.exe app-server` 才算 Desktop 的 app-server。沒有選「往上走任意層直到主行程」：那會把任務或 CLI 自己開的 app-server 也算進來。
+  - 同一個 host 也加進「共用連線的用戶端」名單。依據是 Desktop 紀錄裡 `[AppServerConnection] Initializing app-server transport` 由 host 那個行程寫出，而且新版程式仍讀 `CODEX_APP_SERVER_WS_URL`；這一點沒有在開著共用後端的 Desktop 上實測，見下方「沒有驗到」。
+  - 測試（`scripts/source/desktop_transport_tree_windows_test.go`，資料在 `scripts/source/testdata/`）：新版行程樹是這台機器實際抓的（去掉使用者名稱與多餘參數）；舊版那份是依舊判斷的前提重建的，不是實抓，檔內有註明。未修的腳本對新版行程樹回 `unknown`，測試先紅後綠。另有 10 個不該被接受的情形（別的程式的 NodeService、不是主行程子行程的 NodeService、父行程是 renderer／NetworkService／exec-server／`node.exe`、獨立 CLI 的 app-server 等）都維持 `unknown`。
+- **在這台機器上的結果（唯讀）**：
+  - 直接跑傳輸判斷腳本：舊腳本 `unknown`，新腳本 `legacy_stdio`。
+  - 用新程式碼跑正式的判斷流程（設定檔複製到暫存目錄，不碰已安裝的資料目錄）：傳輸 `legacy_stdio`、官方 IPC 不可用、共用後端關閉 → `controller_state` 仍是 `shared_app_server_disabled`，`recovery_mode` 仍是 `none`。
+  - 也就是說，這次修正讓判斷變正確，但**不會**讓這台機器進入恢復模式。Desktop `26.1117` 以後，唯一剩下的恢復路徑是共用後端（`shared_websocket`）。
+- **沒有驗到**：
+  - 新版 Desktop 開共用後端時，連到共用埠的是不是 host 那個行程。要驗就得改維護者 Desktop 的後端路由，本輪不做，列在 `ROADMAP.md`。
+  - 新版沒有安裝。安裝要先關 Desktop，本輪不關；已重建 `scripts/bin`，等下一次 Desktop 閒置時再裝。
+- **順帶量到的**：傳輸判斷腳本在這台機器跑一次要 5～15 秒（新舊腳本交替各跑 5 次：舊 13.4、13.9、15.0、8.5、5.1 秒，新 9.7、15.4、5.2、5.8、5.9 秒），上限是 20 秒（`desktopTransportCheckTimeout`）；本輪用正式流程跑了 4 次判斷，逾時 3 次，其中 2 次發生在同時編譯 Go 測試的時候。單獨量，`Get-NetTCPConnection -State Established` 是 2～7 秒、`Get-CimInstance Win32_Process` 是 1～2 秒，其餘是 PowerShell 啟動與載入模組。新舊腳本的篩選部分在同一份行程快照上各約 0.2～0.3 秒，快慢不是這次改動造成的。11-21 看到 `controller_state` 在 `shared_app_server_disabled` 與 `controller_timeout` 之間跳，可能是同一件事，沒有另外查證；已列入 `ROADMAP.md`。
+
 ## 2026-11-22：R-20／R-21 修正版裝上真實 host；重開 Codex Desktop 後恢復通道仍不可用，實際接續沒有驗到
 
 - **安裝**：關閉 Codex Desktop 前先確認沒有進行中的任務（`status.json` 的 `pending_retries=0`、`active_retries=0`，Codex home 的 rollout 超過 3 小時沒有寫入，沒有 `codex exec` 行程）。安裝前守護程式是 supervisor 28180、worker 30920，狀態檔裡有 109 筆舊停止紀錄。關閉分兩步：agent-desktop `close-app`（送出視窗關閉）只把視窗收掉，Desktop 留在背景；再用 Windows Restart Manager 的 `RmShutdown`（不帶強制旗標）要求結束，主行程隨即結束，其餘子行程約 9 分鐘內自己退出，沒有強制結束任何行程。`pwsh -NoProfile -File scripts\install.ps1` exit 0；兩個已安裝 exe 的 SHA-256 由 `D3FD195F…DE2A` 變成 `1E849611EF072EE00F3854A73B9BBD6DD90703342CEB99D064966F9A337E95EA`，等於 `scripts/build-info.json`；`status.json` 的 `build_source_hash` 是 `82C69F56…58F3`（等於 build-info 的 `source_hash`），並出現 `scan_interval_ms`。安裝後是 supervisor 42524、worker 29000，舊停止紀錄沒有被重新排程。

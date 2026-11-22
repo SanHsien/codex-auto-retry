@@ -16,8 +16,11 @@ The plugin has two deliberately separate modes:
 ## Process-Scoped Desktop Launch
 
 The safe launcher is used only when an explicit shared WebSocket route is
-needed. Current Desktop builds can keep their official stdio backend and still
-accept recovery through the verified `codex-ipc` owner route described below.
+needed. Desktop builds up to `26.1111` can keep their official stdio backend
+and still accept recovery through the verified `codex-ipc` owner route
+described below. Desktop `26.1117` and later no longer create that route (see
+the note under the capability table), so on those builds the shared WebSocket
+route is the only one the watchdog can use.
 
 ## Codex Capability Profiles
 
@@ -27,10 +30,23 @@ Windows Codex App profile is:
 
 | Observed transport | Automatic recovery | Recovery path | Meaning |
 | --- | --- | --- | --- |
-| Official `stdio` with verified `codex-ipc` owner route | Yes | Official IPC owner-routed `thread-follower-start-turn` | Current Desktop exposes a loopback named-pipe router. The watchdog discovers the exact thread owner and submits an empty-input recovery request without changing global routing. |
-| Official `stdio` without verified IPC | No | Safe process-scoped launcher | Codex is healthy, but an external watchdog cannot inject into its private stdio pipe. |
+| Official `stdio` with verified `codex-ipc` owner route | Yes | Official IPC owner-routed `thread-follower-start-turn` | Desktop up to `26.1111` exposes a loopback named-pipe router. The watchdog discovers the exact thread owner and submits an empty-input recovery request without changing global routing. |
+| Official `stdio` without verified IPC | No | Safe process-scoped launcher | Codex is healthy, but an external watchdog cannot inject into its private stdio pipe. This is every Desktop from `26.1117` on that was started without the shared route. |
 | Verified plugin-owned WebSocket | Yes | Shared WebSocket RPC | The endpoint, process identity, command line, version marker, and handshake all passed. |
 | Stopped or unknown | No | None | The watchdog remains fail-closed until Codex or a verifiable connection is available. |
+
+Desktop `26.1117` changed two things the watchdog depends on (checked on
+2026-11-22 against `OpenAI.Codex_26.1117.4957.0`; evidence is in
+`docs/DECISIONS.md`):
+
+- The `codex-ipc` router is gone. The pipe is not created, and the app bundle
+  no longer contains `thread-owner-discovery` or `thread-follower-start-turn`.
+  The official IPC row above cannot be reached on these builds.
+- `codex.exe app-server` is started by an Electron utility process
+  (`--type=utility --utility-sub-type=node.mojom.NodeService`), not by the main
+  process. The transport probe accepts that utility as an app-server owner and
+  as a shared-route client only when it is a direct child of a verified main
+  process and runs the same executable as that parent.
 
 The `desktop_transport`, `recovery_mode`, `automatic_recovery_supported`, and
 `recovery_capability_reason` fields are diagnostic only and are intentionally
@@ -89,9 +105,10 @@ A bounded launch mutex prevents concurrent safe-launch clicks. The current-user
 OpenAI.Codex package supplies the executable path, not a saved versioned path.
 
 Ordinary Codex launches no longer depend on the watchdog after old plugin-owned
-persistent routing has been retired. They use the official backend; current
-Desktop builds may still support silent recovery through their verified
-`codex-ipc` owner route, while older builds require the safe launcher or remain
+persistent routing has been retired. They use the official backend; Desktop builds
+up to `26.1111` may still support silent recovery through their verified
+`codex-ipc` owner route, while builds without that route (`26.1117` and later,
+and builds older than the router) require the safe launcher or remain
 monitor-only. A missing/disabled Windows startup approval can therefore disable
 retries without making Codex unbootable.
 Foreign persistent user routes are preserved, not claimed to be safe or owned.

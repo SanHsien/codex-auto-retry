@@ -59,7 +59,8 @@ gh repo set-default --view
 
 ## 未解風險
 
-- 這台機器的 Codex Desktop `26.1117.4957.0` 沒有可用的恢復通道（2026-11-22 實查）：`\\.\pipe\codex-ipc` 不存在，`desktopTransportScript` 又只認主行程直接啟動的 app-server，而這版改由 NodeService 子行程啟動。結果是 `recovery_mode=none`，重試全部停在派送前，用 `scripts/launch-codex.ps1` 重開也一樣；守護程式目前只能監看與列出故障。未修，後續見 `ROADMAP.md` 近期第一列與 `docs/DECISIONS.md`「2026-11-22」。
+- Codex Desktop `26.1117` 以後沒有官方 IPC 恢復通道（2026-11-22 查實）：`26.1117.3838.0` 起 Desktop 不再建立 `\\.\pipe\codex-ipc`，程式裡也沒有 owner 路由的協定了。這台機器（`26.1117.4957.0`、共用後端關閉）因此是 `recovery_mode=none`，重試全部停在派送前，守護程式只能監看與列出故障。行程樹判斷已修（R-22），但修好後結果一樣；剩下的恢復路徑只有共用後端，新版 Desktop 上還沒有實測。後續見 `ROADMAP.md` 近期前兩列與 `docs/DECISIONS.md`「2026-11-22：Desktop 26.1117 起沒有官方 IPC 路由」。
+- 傳輸判斷在維護者電腦上跑一次 5～15 秒，上限 20 秒，會逾時成 `controller_timeout`（2026-11-22 實測，未修，見 `ROADMAP.md`）。
 - Actions 已啟用 push 觸發：2026-10-30 唯讀查詢確認 `855973b2f350377ea598cceea9369fc8bc565b14` 的 [CI run 40745326049](https://github.com/SanHsien/codex-auto-retry/actions/runs/40745326049) 為 `event=push`、`conclusion=success`（建立於 2026-10-28 18:27:41 UTC，即臺北時間 2026-10-29）。舊的 fork workflow 停用敘述已過期；不需再以手動觸發作為固定補救。`go test -race` 的 gcc 需求不變，此次本機維護驗收不涵蓋競態測試。
 - 發佈檔未做程式碼簽章；單檔安裝程式是自解壓執行檔，SmartScreen 與防毒軟體可能示警。
 - 繁體化後每次同步上游都要重跑轉換工具並人工對照 PowerShell 測試裡的字元碼常數。
