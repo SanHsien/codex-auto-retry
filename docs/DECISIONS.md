@@ -1,5 +1,22 @@
 # 維護決策
 
+## 2026-11-22：R-20／R-21 修正版裝上真實 host；重開 Codex Desktop 後恢復通道仍不可用，實際接續沒有驗到
+
+- **安裝**：關閉 Codex Desktop 前先確認沒有進行中的任務（`status.json` 的 `pending_retries=0`、`active_retries=0`，Codex home 的 rollout 超過 3 小時沒有寫入，沒有 `codex exec` 行程）。安裝前守護程式是 supervisor 28180、worker 30920，狀態檔裡有 109 筆舊停止紀錄。關閉分兩步：agent-desktop `close-app`（送出視窗關閉）只把視窗收掉，Desktop 留在背景；再用 Windows Restart Manager 的 `RmShutdown`（不帶強制旗標）要求結束，主行程隨即結束，其餘子行程約 9 分鐘內自己退出，沒有強制結束任何行程。`pwsh -NoProfile -File scripts\install.ps1` exit 0；兩個已安裝 exe 的 SHA-256 由 `D3FD195F…DE2A` 變成 `1E849611EF072EE00F3854A73B9BBD6DD90703342CEB99D064966F9A337E95EA`，等於 `scripts/build-info.json`；`status.json` 的 `build_source_hash` 是 `82C69F56…58F3`（等於 build-info 的 `source_hash`），並出現 `scan_interval_ms`。安裝後是 supervisor 42524、worker 29000，舊停止紀錄沒有被重新排程。
+- **重開**：`scripts\launch-codex.ps1` exit 0，`desktop-launch.json` 寫 `mode=official`、`reason=shared_disabled`、`outcome=launch_requested`。`scripts\status.ps1` 回 `ProcessRunning=True`、`HeartbeatStale=False`；直接以 stdio 呼叫已安裝的 `codex-auto-retry-mcp.exe mcp` 的 `get_auto_retry_status`，回 `running=true`、`heartbeat_stale=false`。
+- **沒有通過：恢復模式**。重開後觀察 5 分鐘，約 5 小時後再看一次，`recovery_mode` 都是 `none`、`controller_state=shared_app_server_disabled`。11-21 寫的推測「Desktop 不是由 `launch-codex.ps1` 開的」不成立：這次確實由它開，結果一樣。這台機器現在的 Desktop 是 `OpenAI.Codex_26.1117.4957.0`，實查到兩件事：
+  - `\\.\pipe\codex-ipc` 不存在（列舉具名管道查的；Desktop 自己的 `codex-mcp-*`、`codex-app-tools-*` 等管道都在）。`dialCodexIPC` 開不到，`officialIPCReady` 就是 false。Desktop 的程式裡還留著這個管道路徑的字串，為什麼沒有建立沒有查到。
+  - `codex.exe app-server` 的父行程是 `ChatGPT.exe --type=utility --utility-sub-type=node.mojom.NodeService`，不是主行程；執行檔也改從 `%LOCALAPPDATA%\OpenAI\Codex\bin\<hash>\codex.exe` 起。`desktopTransportScript` 只把主行程的直接子行程算成 app-server，所以回 `unknown`，`preflight` 連官方 IPC 都不會去試，直接落到 `shared_app_server_disabled`。就算管道回來，這個判斷也要先改。
+  - 2026-11-17 的守護紀錄還有 `retry action started`、`retry rescheduled … reason=codex_thread_owner_unavailable`，代表當時管道連得上；是哪一版 Desktop 之後變的沒有查到。
+- **決定**：不為了驗收對維護者的 Desktop 開共用後端模式。那會改掉 Desktop 的後端路由，而且同一個傳輸判斷只看主行程與 NetworkService 的連線，app-server 改由 NodeService 啟動後能不能認出共用連線還沒有證據，要先在隔離環境看。後續列在 `ROADMAP.md` 近期第一列與 `REVIEW.md` 未解風險。
+- **新版在真實 host 上驗到的**（做法同 11-21：`codex exec` 加單次 `-c` 覆寫，把 model provider 指到本機 stub `127.0.0.1:48731`，stub 一律回 503；三次請求都打在 stub，沒有送 OpenAI 請求）：
+  - 等待中的任務看得到（R-20）：`retry scheduled thread=01a1ffe7... category=server … delay_seconds=15` 之後，`get_auto_retry_status` 回 `pending_retries=1`，該筆 `state=pending`、`can_retry_now=true`。11-21 同一個情境按 12 次重新整理都看不到。
+  - 對等待中的任務「立即重試」：第二筆（`01a1ffe8`）還在等待時呼叫 `retry_now`，回「已請求立即重試」，紀錄寫 `retry expedited thread=01a1ffe8...`，同一秒停在派送閘門（`reason=shared_app_server_disabled`）。請求到被處理隔了 11 秒，那一輪掃描剛好比較久。
+  - 停止後看得到、可放棄：兩筆都以 `state=stopped`、`stop_reason=shared_app_server_disabled`、`can_dismiss=true` 列出；`dismiss_retry` 後紀錄寫 `retry dismissed … reason=user_control`，`rescan_interrupted_tasks` 寫 `listed=0 candidates=5`，佇列是空的。
+  - 這三項是直接呼叫已安裝的 MCP 程式驗的，沒有在面板上用滑鼠點；面板與 MCP 走同一套工具，但畫面沒有重看。
+- **沒有驗到**：實際接續（紀錄出現 `official_ipc_turn_started`、任務接著跑）；goal-limit 停止不可誤放棄。R-21（等額度超過 1 小時才停止的任務）沒有在真實 host 重現，要等一小時以上，只有 Go 測試。
+- **收尾**：三筆可拋棄 thread 已封存（`01a1ffe7-ef58-7522-b11b-54fcc4c6c1e2`、`01a1ffe8-8414-75d0-88a7-c43ec7de1ae7`，以及 11-21 留下的 `01a1fbfa-d7c6-7c72-8cb1-989ce0684e1b`）；stub 已停；Codex Desktop 留著，是由 `launch-codex.ps1` 開的那一個。
+
 ## 2026-11-21：心跳逾時改用實測間隔、`last_scan_at` 倒退的根因、額度等待後停止的任務照常顯示（R-20、R-21）
 
 - **心跳逾時（R-20）**：原規則是「漏掉 4 次心跳（至少 15 秒）就算失效」，但「一次心跳」被寫死成輪詢間隔。輪詢只決定兩輪之間最少隔多久；一輪掃描跑得比輪詢久時，下一輪要等它跑完（`time.Ticker` 會丟掉趕不上的 tick），真正的心跳週期是掃描本身的長度。所以保留「4 次、至少 15 秒」，只把週期改成實測值：worker 每輪記下與上一次心跳的間隔，寫進 `status.json` 的 `scan_interval_ms`；`heartbeatStaleAfter`（`scripts/source/management.go`）取 `max(輪詢, scan_interval_ms)` 的 4 倍。啟動管理員（`scripts/startup-manager.ps1` 的 `Get-HeartbeatMaxAge`）用同一條規則。沒選的做法：從 `lifecycleProbeTimeout` 推上限——一輪裡有好幾個探測，加總不是固定值；只看 worker 存活——卡死但沒結束的 worker 會被當成正常。舊版 worker 沒有這個欄位，就退回輪詢間隔，跟以前一樣。
