@@ -203,6 +203,13 @@ func (c nativeDesktopTransportChecker) State(ctx context.Context) (desktopTransp
 	}
 	done := make(chan outcome, 1)
 	go func() {
+		// A system call that panics must not take the watchdog down with it;
+		// report it as an error so preflight treats the transport as unknown.
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				done <- outcome{err: fmt.Errorf("desktop transport probe panicked: %v", recovered)}
+			}
+		}()
 		// Like the former script, the TCP table is read only when a verified
 		// Desktop main process exists.
 		s, err := snapshot(func(processes []transportProcess) bool {
@@ -227,6 +234,9 @@ func (c nativeDesktopTransportChecker) State(ctx context.Context) (desktopTransp
 }
 
 func liveTransportSnapshot(wantConnections func([]transportProcess) bool) (transportSnapshot, error) {
+	if err := transportAPIsAvailable(); err != nil {
+		return transportSnapshot{}, err
+	}
 	processes, err := snapshotTransportProcesses()
 	if err != nil {
 		return transportSnapshot{}, err
@@ -309,9 +319,34 @@ func processCommandLine(handle windows.Handle) string {
 }
 
 var (
+	modTransportKernel32    = windows.NewLazySystemDLL("kernel32.dll")
+	modTransportNTDLL       = windows.NewLazySystemDLL("ntdll.dll")
 	modIPHelper             = windows.NewLazySystemDLL("iphlpapi.dll")
 	procGetExtendedTCPTable = modIPHelper.NewProc("GetExtendedTcpTable")
+
+	// transportRequiredProcs lists every Win32 entry point the live snapshot
+	// calls. LazyProc.Call and the x/sys/windows wrappers (which use
+	// LazyProc.Addr) panic when a DLL or function cannot be found, so each one
+	// is resolved with Find first and a missing one becomes an error.
+	transportRequiredProcs = []*windows.LazyProc{
+		modTransportKernel32.NewProc("CreateToolhelp32Snapshot"),
+		modTransportKernel32.NewProc("Process32FirstW"),
+		modTransportKernel32.NewProc("Process32NextW"),
+		modTransportKernel32.NewProc("OpenProcess"),
+		modTransportKernel32.NewProc("QueryFullProcessImageNameW"),
+		modTransportNTDLL.NewProc("NtQueryInformationProcess"),
+		procGetExtendedTCPTable,
+	}
 )
+
+func transportAPIsAvailable() error {
+	for _, proc := range transportRequiredProcs {
+		if err := proc.Find(); err != nil {
+			return fmt.Errorf("desktop transport probe API unavailable: %w", err)
+		}
+	}
+	return nil
+}
 
 const (
 	tcpTableOwnerPIDAll    = 5 // TCP_TABLE_OWNER_PID_ALL

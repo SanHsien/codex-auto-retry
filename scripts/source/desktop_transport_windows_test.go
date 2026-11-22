@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/windows"
 )
 
 func fixtureUint32(t *testing.T, value any) uint32 {
@@ -257,5 +259,44 @@ func TestDesktopTransportLiveProbeStaysFarBelowTimeout(t *testing.T) {
 		if elapsed > time.Second {
 			t.Fatalf("live probe run %d took %v (state %s), budget 1s of the %v limit", i+1, elapsed, state, desktopTransportCheckTimeout)
 		}
+	}
+}
+
+// LazyProc.Call and the x/sys/windows wrappers panic when a DLL or function is
+// missing, and the probe runs in a goroutine, so a panic would end the whole
+// watchdog. A missing entry point must come back as an error instead, which
+// preflight reports as an unknown transport.
+func TestDesktopTransportMissingWin32APIReturnsError(t *testing.T) {
+	saved := transportRequiredProcs
+	t.Cleanup(func() { transportRequiredProcs = saved })
+	for _, missing := range []*windows.LazyProc{
+		windows.NewLazySystemDLL("iphlpapi.dll").NewProc("GetExtendedTcpTableDoesNotExist"),
+		windows.NewLazySystemDLL("codex-auto-retry-missing.dll").NewProc("GetExtendedTcpTable"),
+	} {
+		transportRequiredProcs = append(append([]*windows.LazyProc{}, saved...), missing)
+		if _, err := liveTransportSnapshot(func([]transportProcess) bool { return true }); err == nil {
+			t.Fatalf("missing %s was not reported", missing.Name)
+		}
+		checker := nativeDesktopTransportChecker{expectedEndpoint: func() string { return "ws://127.0.0.1:49622" }}
+		if state, err := checker.State(context.Background()); err == nil {
+			t.Fatalf("missing %s: State returned %s without an error", missing.Name, state)
+		}
+	}
+	for _, proc := range saved {
+		if err := proc.Find(); err != nil {
+			t.Fatalf("required entry point %s is missing on this machine: %v", proc.Name, err)
+		}
+	}
+}
+
+func TestDesktopTransportSnapshotPanicReturnsError(t *testing.T) {
+	checker := nativeDesktopTransportChecker{
+		expectedEndpoint: func() string { return "ws://127.0.0.1:49622" },
+		snapshot: func(func([]transportProcess) bool) (transportSnapshot, error) {
+			panic("simulated missing procedure")
+		},
+	}
+	if state, err := checker.State(context.Background()); err == nil {
+		t.Fatalf("panic in the snapshot returned %s without an error", state)
 	}
 }
