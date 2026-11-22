@@ -2,16 +2,7 @@
 
 package main
 
-import (
-	"context"
-	"encoding/json"
-	"os"
-	"os/exec"
-	"strings"
-	"syscall"
-	"testing"
-	"time"
-)
+import "testing"
 
 func TestDesktopTransportClientEvidence(t *testing.T) {
 	exe := `C:\Program Files\WindowsApps\OpenAI.Codex_test\app\ChatGPT.exe`
@@ -42,24 +33,8 @@ func TestDesktopTransportClientEvidence(t *testing.T) {
 			if tc.owner != 0 {
 				connections = append(connections, map[string]any{"OwningProcess": tc.owner, "RemoteAddress": "127.0.0.1", "RemotePort": 49622})
 			}
-			fixture, _ := json.Marshal(map[string]any{"processes": processes, "connections": connections})
-			ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-			defer cancel()
-			ps, err := resolvePowerShellExecutable("")
-			if err != nil {
-				t.Fatal(err)
-			}
-			cmd := exec.CommandContext(ctx, ps, "-NoProfile", "-NonInteractive", "-Command", "-")
-			cmd.Env = append(os.Environ(), "TRANSPORT_FIXTURE="+string(fixture))
-			cmd.Stdin = strings.NewReader(powerShellScriptInput(`$fixture = $env:TRANSPORT_FIXTURE | ConvertFrom-Json
-function Get-CimInstance { param($ClassName,$ErrorAction) return $fixture.processes }
-function Get-NetTCPConnection { param($State,$ErrorAction) return $fixture.connections }
-$expectedPort=49622
-` + desktopTransportScript))
-			cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: createNoWindow}
-			out, err := cmd.CombinedOutput()
-			if err != nil || strings.TrimSpace(string(out)) != tc.want {
-				t.Fatalf("got %q %v want %s", out, err, tc.want)
+			if got := runTransportFixture(t, processes, connections, 49622); got != tc.want {
+				t.Fatalf("got %q want %s", got, tc.want)
 			}
 		})
 	}
@@ -70,32 +45,12 @@ func TestDesktopTransportAcceptsCodexDesktopExecutable(t *testing.T) {
 	process := func(id, parent int, name, path, cmd string) map[string]any {
 		return map[string]any{"ProcessId": id, "ParentProcessId": parent, "Name": name, "ExecutablePath": path, "CommandLine": cmd}
 	}
-	fixture, err := json.Marshal(map[string]any{
-		"processes": []map[string]any{
-			process(10, 1, "Codex.exe", exe, `"`+exe+`"`),
-			process(200, 500, "codex.exe", `C:\codex.exe`, "app-server --listen ws://127.0.0.1:49622"),
-		},
-		"connections": []map[string]any{{"OwningProcess": 10, "RemoteAddress": "127.0.0.1", "RemotePort": 49622}},
-	})
-	if err != nil {
-		t.Fatal(err)
+	processes := []map[string]any{
+		process(10, 1, "Codex.exe", exe, `"`+exe+`"`),
+		process(200, 500, "codex.exe", `C:\codex.exe`, "app-server --listen ws://127.0.0.1:49622"),
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	ps, err := resolvePowerShellExecutable("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.CommandContext(ctx, ps, "-NoProfile", "-NonInteractive", "-Command", "-")
-	cmd.Env = append(os.Environ(), "TRANSPORT_FIXTURE="+string(fixture))
-	cmd.Stdin = strings.NewReader(powerShellScriptInput(`$fixture = $env:TRANSPORT_FIXTURE | ConvertFrom-Json
-function Get-CimInstance { param($ClassName,$ErrorAction) return $fixture.processes }
-function Get-NetTCPConnection { param($State,$ErrorAction) return $fixture.connections }
-$expectedPort=49622
-` + desktopTransportScript))
-	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: createNoWindow}
-	out, err := cmd.CombinedOutput()
-	if err != nil || strings.TrimSpace(string(out)) != "shared_server" {
-		t.Fatalf("got %q %v want shared_server", out, err)
+	connections := []map[string]any{{"OwningProcess": 10, "RemoteAddress": "127.0.0.1", "RemotePort": 49622}}
+	if got := runTransportFixture(t, processes, connections, 49622); got != "shared_server" {
+		t.Fatalf("got %q want shared_server", got)
 	}
 }

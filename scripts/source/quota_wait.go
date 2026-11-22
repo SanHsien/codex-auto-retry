@@ -10,10 +10,10 @@ import (
 	"time"
 )
 
-// desktopTransportCheckTimeout bounds the PowerShell process scan that proves
-// which transport Codex Desktop uses. A busy machine routinely needs more than
-// the previous 8 seconds, and every timeout was reported as the generic
-// controller_unavailable.
+// desktopTransportCheckTimeout bounds the process and TCP table scan that
+// proves which transport Codex Desktop uses. The scan was a PowerShell script
+// that needed 5-15 s on a busy machine; since 2026-11-22 it is native and takes
+// milliseconds, so this is only a guard against a hung system call.
 const desktopTransportCheckTimeout = 20 * time.Second
 
 // lifecycleProbeTimeout must exceed the transport check it contains.

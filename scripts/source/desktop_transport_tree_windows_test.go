@@ -3,15 +3,10 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
-	"syscall"
 	"testing"
-	"time"
 )
 
 type transportTreeFixture struct {
@@ -53,33 +48,11 @@ func loadTransportTreeFixture(t *testing.T, name string) transportTreeFixture {
 	return fixture
 }
 
-// runTransportTreeProbe runs the production probe script against a fixture by
-// replacing only the two system queries it makes.
+// runTransportTreeProbe runs the production classifier against a fixture.
+// Only the two system reads (process tree, ESTABLISHED TCP table) are replaced.
 func runTransportTreeProbe(t *testing.T, fixture transportTreeFixture) string {
 	t.Helper()
-	payload, err := json.Marshal(map[string]any{"processes": fixture.Processes, "connections": fixture.Connections})
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	ps, err := resolvePowerShellExecutable("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.CommandContext(ctx, ps, "-NoProfile", "-NonInteractive", "-Command", "-")
-	cmd.Env = append(os.Environ(), "TRANSPORT_FIXTURE="+string(payload))
-	cmd.Stdin = strings.NewReader(powerShellScriptInput(`$fixture = $env:TRANSPORT_FIXTURE | ConvertFrom-Json
-function Get-CimInstance { param($ClassName,$ErrorAction) return $fixture.processes }
-function Get-NetTCPConnection { param($State,$ErrorAction) return $fixture.connections }
-$expectedPort=49622
-` + desktopTransportScript))
-	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: createNoWindow}
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("probe failed: %v\n%s", err, out)
-	}
-	return strings.TrimSpace(string(out))
+	return runTransportFixture(t, fixture.Processes, fixture.Connections, transportTreeTestPort)
 }
 
 func transportTreeProcess(t *testing.T, fixture transportTreeFixture, id int) map[string]any {

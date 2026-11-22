@@ -268,7 +268,7 @@ worker restarts.
   owned server is restarted through the same ownership checks; an occupied or
   unowned port remains fail-open.
 - Official IPC readiness is re-probed at most once per ten seconds even with
-  shared mode disabled; each probe has a 45-second deadline (the desktop transport check itself allows 20 seconds and runs twice in shared mode). Config reload
+  shared mode disabled; each probe has a 45-second deadline (the desktop transport check itself allows 20 seconds and runs twice in shared mode; it is a native process and TCP table read that takes tens of milliseconds, so the limit only guards against a hung system call). Config reload
   and successful dispatch/lifecycle checks preserve `official_ipc_ready`.
 - `transport_recovery.go` checks whether a stopped chain can rejoin the queue.
   Pre-dispatch `shared_app_server_disabled` stops set `transport_blocked=true` only
@@ -305,8 +305,11 @@ worker restarts.
   prompt fallback is still a structured background request and runs only after
   an explicit empty-input validation rejection.
 
-Windows PowerShell is used only for read-only process ownership and Desktop
-transport checks. The embedded stdin stream ends with a blank submission line
+Windows PowerShell is used only for read-only process ownership checks. The
+Desktop transport check reads the process tree (Toolhelp snapshot, image path,
+`ProcessCommandLineInformation`) and the TCP table (`GetExtendedTcpTable`)
+through Win32 directly; it used to be a PowerShell script that needed 5-15
+seconds. The embedded stdin stream ends with a blank submission line
 because Windows PowerShell otherwise may exit before executing its final
 compound statement.
 

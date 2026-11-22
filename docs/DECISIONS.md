@@ -1,5 +1,32 @@
 # 維護決策
 
+## 2026-11-22：傳輸判斷改走原生查詢，不再跑 PowerShell（R-23）
+
+接續下一段「順帶量到的」：傳輸判斷一次 5～15 秒、上限 20 秒，正式流程 4 次逾時 3 次。全程唯讀：沒有關閉或重開 Codex Desktop，沒有安裝。
+
+- **時間花在哪**（這台機器，Windows PowerShell 5.1，同一個行程內逐步計時，各 3 次）：
+  - PowerShell 啟動（`-NoProfile`，什麼都不做）：0.67～0.98 秒。
+  - `Get-CimInstance Win32_Process` 不加篩選（約 720 個行程，含第一次載入 CIM 模組）：1.3～1.6 秒；加上 `Name` 篩選與只取需要的欄位（15 個行程）：仍要 0.87～0.98 秒，時間在 WMI 本身。
+  - `Get-NetTCPConnection -State Established`：第一次 3.6～3.7 秒（含載入 NetTCPIP 模組），同一行程第二次 1.6～1.8 秒；改用 CIM 直接查 `MSFT_NetTCPConnection` 並篩選埠號：2.2～2.4 秒。
+  - 對照：`netstat -ano` 約 45 毫秒，但狀態欄是依系統語言翻譯的字，不能拿來判斷 ESTABLISHED。
+  - 結論：時間幾乎都在「開 PowerShell＋WMI＋載入網路模組」，判斷邏輯本身在同一份快照上只要 0.2～0.3 秒（上一段已量）。在 PowerShell 裡最好的組合（篩選後的 CIM＋其他查法）估計仍要 2.5～3 秒，而且 WMI 在機器忙時會再變慢。
+- **改法**：`scripts/source/desktop_transport_windows.go` 改成直接呼叫 Windows API：`CreateToolhelp32Snapshot` 列行程，只對 `ChatGPT.exe`／`Codex.exe`（含 `codex.exe`）開行程讀 `QueryFullProcessImageName` 與 `NtQueryInformationProcess(ProcessCommandLineInformation)`；有已驗證的主行程時才用 `GetExtendedTcpTable(TCP_TABLE_OWNER_PID_ALL)` 讀 IPv4 連線表，只留狀態值為 `MIB_TCP_STATE_ESTAB` 的列。判斷規則逐條照搬原腳本，放在純函式 `classifyDesktopTransport`（原腳本的 `-match`、`-eq`、`-contains` 都不分大小寫，Go 版的比對也都不分）：主行程 → 父行程是主行程且執行檔相同、帶 NodeService 旗標的 host → 父行程是主行程或 host 的 `codex.exe app-server`；連線只認主行程、host、同執行檔的 NetworkService 子行程連到 `127.0.0.1:<共用埠>`。
+  - 只讀候選名稱的行程不會改變答案：每個角色都要求映像名是 `ChatGPT.exe` 或 `Codex.exe`（host 與 NetworkService 要跟主行程同一個執行檔）。測試 `TestDesktopTransportCandidateFilterIsLossless` 拿兩份行程樹加上 `node.exe` 誘餌，比對「全部行程」與「只留候選」的判斷，逐一換連線擁有者都一致。
+  - 沒選的做法：只把 CIM 加篩選（量到只省 0.5 秒左右，`Get-NetTCPConnection` 的 2～4 秒還在）；在 PowerShell 裡解析 `netstat`（狀態欄隨語言改變）；跨輪快取主行程身分（主行程重開後要另外判斷快取失效，原生查詢已經只要幾十毫秒，不值得多一個會過期的狀態）。
+  - 20 秒的上限（`desktopTransportCheckTimeout`）與 45 秒的探測預算都沒有改，現在只用來防系統呼叫卡住；卡住時同樣回報 `controller_timeout`（`TestDesktopTransportHungSnapshotReportsControllerTimeout`）。
+- **原生查詢和原本的查法在這台機器上一致**（唯讀比對）：15 個候選行程的 PID、父 PID、執行檔路徑、命令列與 `Get-CimInstance Win32_Process` 逐筆相同，0 筆不同；舊腳本與新程式對同一台機器都回 `legacy_stdio`。連到 `127.0.0.1` 的 ESTABLISHED 連線，在 `Get-NetTCPConnection` 前後各讀一次原生連線表，`Get-NetTCPConnection` 看到的 58 筆全部在原生結果裡（只比一次會因連線開關而有落差，第一次比對有 12 筆是這個原因）。
+- **前後實測**（這台機器，各 10 次，`Readiness` 用已安裝設定檔的複本，不碰已安裝的資料目錄）：
+
+  | | 改前 p50 | 改前 p95 | 改後 p50 | 改後 p95 | 逾時 |
+  | --- | --- | --- | --- | --- | --- |
+  | 傳輸判斷（`checker.State`） | 5.57 秒 | 8.18 秒 | 27 毫秒 | 32 毫秒 | 改前 0、改後 0 |
+  | 正式判斷流程（`Readiness`） | 6.34 秒 | 13.53 秒 | 34 毫秒 | 37 毫秒 | 改前 0、改後 0 |
+  | 同上，同時跑 `go test ./...` | （上一段：4 次逾時 3 次） | | 33 毫秒 | 39 毫秒 | 改後 0 |
+
+  10 次取樣的 p95 就是最大值。改前這 10 次剛好沒有逾時，但最慢一次已用掉上限的三分之二；結果都是 `legacy_stdio`／`shared_app_server_disabled`，跟改前相同。
+- **釘住的測試**：`TestDesktopTransportLiveProbeStaysFarBelowTimeout` 在跑測試的機器上實跑 5 次，每次必須在 1 秒內（上限的 1/20），CI 的 Windows runner 沒有 Desktop 也會跑到行程快照。原本用 PowerShell 跑 fixture 的 25 個情形（兩份行程樹各 1、10 個必須維持 `unknown`、6 個共用連線擁有者、6 個用戶端證據、1 個 `Codex.exe` 主行程）改成直接餵給 Go 判斷，期望值一個都沒改；原本只比對腳本字串的兩個測試改成行為測試；另補 TCP 表的位元組順序、Desktop 沒開時不讀 TCP 表兩個測試。
+- **沒有驗到**：新版沒有安裝；要等共用後端啟用時一起裝（見 `ROADMAP.md`）。11-21 看到的 `controller_timeout` 是不是這個原因，沒有另外查證；裝上之後若 `controller_state` 不再在 `controller_timeout` 與其他值之間跳，就算間接證實。
+
 ## 2026-11-22：Desktop 26.1117 起沒有官方 IPC 路由；傳輸判斷改認 app-server host（R-22）
 
 接續下一段「恢復通道仍不可用」的兩條線索。全程唯讀：沒有重開或關閉 Codex Desktop，沒有改它的設定與後端路由，沒有碰對話。

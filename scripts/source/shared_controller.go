@@ -67,9 +67,8 @@ func newSharedAppServerController(config Config, dataDir string, logger *safeLog
 	server := newSharedServerManager(config, dataDir, logger)
 	return &sharedAppServerController{
 		server: server,
-		checker: powerShellDesktopTransportChecker{
-			configuredExecutable: config.PowerShellExecutable,
-			expectedEndpoint:     server.Endpoint,
+		checker: nativeDesktopTransportChecker{
+			expectedEndpoint: server.Endpoint,
 		},
 		officialIPC:       newOfficialDesktopIPC(),
 		settingsForThread: findThreadResumeSettings,
