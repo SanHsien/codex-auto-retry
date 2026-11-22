@@ -48,6 +48,13 @@ Desktop `26.1117` changed two things the watchdog depends on (checked on
   as a shared-route client only when it is a direct child of a verified main
   process and runs the same executable as that parent.
 
+Shared mode on `26.1117` was verified on 2026-11-23 (`OpenAI.Codex_26.1117.4957.0`,
+Desktop started by `scripts/launch-codex.ps1`): the only established connection
+to the shared port belonged to that NodeService utility, the watchdog reported
+`controller_state=ready` and `recovery_mode=shared_websocket` for five minutes,
+and a task that failed with HTTP 503 was resumed through the shared backend.
+Evidence is in `docs/DECISIONS.md`.
+
 The `desktop_transport`, `recovery_mode`, `automatic_recovery_supported`, and
 `recovery_capability_reason` fields are diagnostic only and are intentionally
 derived from live evidence. A Codex update that changes its process or

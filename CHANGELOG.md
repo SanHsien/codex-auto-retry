@@ -14,7 +14,7 @@
 - **面板：每個任務一眼看懂狀態**：等待額度的任務顯示「預計幾點恢復」，停止的任務用一句白話說明原因與下一步，並可展開「技術細節」（任務 ID、故障類別、原因代碼、故障／停止／額度恢復時間）；停止的任務新增「放棄」（垃圾桶）按鈕與 MCP 工具 `dismiss_retry`，只把佇列項目移除，不動 Codex 任務；面板在手機寬度不會橫向捲動。
 
 ### Fixed
-- **Codex Desktop `26.1117` 以後認不出桌面版的後端**：新版 Desktop 改由 NodeService 子行程啟動 `codex.exe app-server`，傳輸判斷只認主行程的直接子行程，所以回報 `unknown`。現在也接受這個子行程，條件是它的父行程是已驗證的 Desktop 主行程、執行檔相同。注意：`26.1117` 起 Desktop 不再提供 `codex-ipc` 路由，沒有開共用後端時仍然只能監看與列出故障，這次修正不會改變這一點。
+- **Codex Desktop `26.1117` 以後認不出桌面版的後端**：新版 Desktop 改由 NodeService 子行程啟動 `codex.exe app-server`，傳輸判斷只認主行程的直接子行程，所以回報 `unknown`。現在也接受這個子行程，條件是它的父行程是已驗證的 Desktop 主行程、執行檔相同。注意：`26.1117` 起 Desktop 不再提供 `codex-ipc` 路由，沒有開共用後端時仍然只能監看與列出故障，這次修正不會改變這一點。開共用後端並用安全啟動器開 Desktop 時，2026-11-23 在 `26.1117.4957.0` 實測：連到共用埠的正是這個子行程，失敗的任務會被自動接續。
 - **傳輸判斷常常逾時**：判斷 Codex Desktop 用哪種傳輸的檢查原本是一段 PowerShell（`Get-CimInstance Win32_Process` 加 `Get-NetTCPConnection`），在維護者電腦上一次要 5～15 秒，上限 20 秒，機器忙時就回報 `controller_timeout`。改成直接用 Windows API 讀行程樹與 TCP 連線表，同一台機器上一次約 30 毫秒；判斷規則（主行程 → 同執行檔的 NodeService host → `codex.exe app-server`）不變。
 - **守護程式正常卻顯示「未執行」**：心跳逾時原本固定為 `max(4×輪詢, 15 秒)`，掃描比輪詢慢的機器上，面板、MCP 與啟動管理員把活著的守護程式判成未執行，並藏起等待中與執行中的任務。worker 現在在 `status.json` 寫出實測的心跳間隔 `scan_interval_ms`，逾時改為 4 個實際心跳週期（至少 15 秒）。
 - **`last_scan_at` 倒退**：`time.Ticker` 送出的是排定時間，前一輪掃描超時後那個值已經過時，心跳因此往回跳。掃描改用當下時間。

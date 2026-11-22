@@ -1,5 +1,19 @@
 # 維護決策
 
+## 2026-11-23：維護者電腦改用共用後端，裝上 R-22／R-23，實測接續成立
+
+維護者同意後，在維護者離開電腦的時段施工（開工前 `precheck.ps1` 為 `PRECONDITIONS_PASS`：閒置 4,548 秒、最新 rollout 5,447 秒前、`pending_retries=0`、`active_retries=0`、前景不是瀏覽器或播放器）。
+
+- **開工前狀態**：已安裝版 `1E849611…95EA`；守護程式其實沒在跑——worker 29000 在 2026-11-22T14:37:13Z 以 `code=143` 結束，supervisor 沒有把它拉回來（`supervisor.log` 最後一行），只剩一個 MCP 行程。原因沒有查。使用者層級與機器層級的 `CODEX_APP_SERVER_WS_URL` 都沒有設定。
+- **關閉 Desktop**：對主行程的頂層視窗送 `WM_CLOSE`，20 秒後主行程仍在，再用 Restart Manager `RmShutdown`（旗標 0，不強制）。主行程與 WindowsApps 下的子行程隨即全部結束，沒有 `Stop-Process`。剩下的 `extension-host.exe` 是 Chrome 的 native messaging host（父行程是 Chrome 開的 `cmd.exe`），不屬於 Desktop，沒有動；另一個 `%LOCALAPPDATA%\OpenAI\Codex\bin\…\codex.exe app-server`（由 `cmd /c codex app-server` 開）也不屬於 Desktop，沒有動。
+- **安裝**：`Assert-CodexBuildProvenance` 通過後，`scripts\install.ps1 -EnableSharedAppServer` exit 0。兩個已安裝 exe 的 SHA-256 都是 `BEF7DEB6405B6DED697D925E4A65F4DE472BD28AB0FCB7B96DBFC955C66431B7`，等於 `scripts/build-info.json`；`build_source_hash` 是 `0545E9F4…C2DF`，等於 build-info 的 `source_hash`。共用後端由守護程式自己起在 `ws://127.0.0.1:49621`；安裝後 `CODEX_APP_SERVER_WS_URL` 在使用者層級仍未設定（`EnvironmentChanged=False`）。
+- **重開**：`scripts\launch-codex.ps1` exit 0，`desktop-launch.json` 寫 `mode=shared`、`reason=verified`、`outcome=launch_requested`。
+- **連看 5 分鐘**（每 20 秒一筆，共 14 筆）：第一筆是 Desktop 還在起動的 `codex_app_not_ready`／`desktop_connection_not_proven`，之後 13 筆都是 `controller_state=ready`、`recovery_mode=shared_websocket`、`desktop_transport=shared_websocket`、`recovery_capability_reason=verified`，沒有 `controller_timeout`。每一筆裡連到 `127.0.0.1:49621` 的 ESTABLISHED 連線都只有一條，擁有者是 `ChatGPT.exe --utility-sub-type=node.mojom.NodeService`——R-22 依紀錄推測的「共用連線由 host 發出」在真機上成立。
+- **CLI 不受影響**：`codex exec --skip-git-repo-check`（stdin 關閉，工作目錄在 `$HOME\codex-work`）回 `ok`、exit 0。
+- **接續實測**：起本機 stub（`127.0.0.1:48731`，一律回 503），`codex exec -c openai_base_url=http://127.0.0.1:48731/v1` 失敗（Codex 自己重連 5 次後 `unexpected status 503`，stub 收到 38 次請求）。守護紀錄：`retry scheduled thread=01a2042f... category=server … delay_seconds=15` → `retry action started` → `retry action accepted … action=conversation_continue`（共用後端路徑裡沒有 goal 的一般對話，原因代碼就是 `silent_turn_started_in_background`）→ `retry acknowledged` → `retry chain recovered`。該 thread 的 rollout 多出第二個 `task_started`／`task_complete`，最後回覆是 `ok`；stub 的請求數沒有再增加，接續的回合走的是共用後端自己的設定，不是 `-c` 覆寫。stub 已停。
+- **`config.toml`**：本 repo 的腳本與程式都不讀寫它（`scripts` 下非測試檔 0 筆 `config.toml`）。施工期間它的 SHA-256 由 `59948706…4687` 變成 `11313681…6736`，寫入時間 00:56:01（臺北）正是 stub 那筆 `codex exec` 開始的時候，是 Codex 自己寫的；`-c` 覆寫的 `48731` 沒有寫進去。派工方預期的 `FB6EB896…C11B` 在開工前就已經不是現值（前一次寫入是 11-22 23:14，也是某個 Codex 工作階段開始的時候）。
+- **沒有驗到**：Desktop 自己開的對話被接續；goal-limit 停止；面板上用滑鼠操作。之後只要 Desktop 不是由安全啟動器開的（例如從開始功能表直接開、或 Desktop 自我更新後重開），就會回到官方 stdio、只能監看。
+
 ## 2026-11-22：傳輸判斷改走原生查詢，不再跑 PowerShell（R-23）
 
 接續下一段「順帶量到的」：傳輸判斷一次 5～15 秒、上限 20 秒，正式流程 4 次逾時 3 次。全程唯讀：沒有關閉或重開 Codex Desktop，沒有安裝。
