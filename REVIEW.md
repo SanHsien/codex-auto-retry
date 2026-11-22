@@ -56,6 +56,7 @@ gh repo set-default --view
 | R-19 | P2 | Go 測試直接讀寫真實 `HKCU\Environment`；`TestOwnedSharedEnvironmentRestoresMissingEndpoint` 重新賦值清理閉包捕捉的 `present`，清理時寫入空值而非刪除，每跑一次留一個 `CODEX_AUTO_RETRY_TEST_<nanos>`（維護者電腦累積 33 個）。登錄路徑與環境變更廣播改為可替換，`TestMain` 改用專屬測試子鍵並在結束後刪除，真實 `HKCU\Environment` 多出任何 `CODEX_AUTO_RETRY_*` 就讓套件失敗；閉包問題一併修正（`ae5d007`，2026-11-15） |
 | R-20 | P2 | 心跳逾時寫死成 `max(4×輪詢, 15 秒)`，掃描比輪詢慢時（2026-11-21 真實 host 實測間隔 25～50 秒），面板、MCP 與啟動管理員在 worker 活著時回 `running=false`、`heartbeat_stale=true`，並藏起等待中與執行中的任務。worker 改寫出實測心跳間隔 `scan_interval_ms`，逾時改為 4 個實測週期（至少 15 秒，`management.go` 的 `heartbeatStaleAfter`、`startup-manager.ps1` 的 `Get-HeartbeatMaxAge`）。順帶查出並修掉 `last_scan_at` 倒退：`daemon.run` 用 `time.Ticker` 的排定時間當「現在」，前一輪超時後那個值已過時；改用 `time.Now()`。新版尚未安裝到維護者電腦，見 `ROADMAP.md`（`bf059f6`，2026-11-21） |
 | R-21 | P2 | `stoppedRetryIsVisible` 的「故障太舊」判斷從 `FailedAt` 起算，等額度超過 1 小時才停止的任務一停止就從面板消失；等額度的任務改從 `QuotaResetAt` 起算，停止後的顯示期間不變（`bf059f6`，2026-11-21） |
+| R-22 | P2 | Codex Desktop `26.1117` 改由 NodeService 子行程（`ChatGPT.exe --type=utility --utility-sub-type=node.mojom.NodeService`）啟動 `codex.exe app-server`，`desktopTransportScript` 只認主行程的直接子行程，回 `unknown`，`preflight` 因此不檢查官方 IPC，狀態把 Desktop 傳輸說成無法證明。改為也接受這個子行程，條件是父行程為已驗證的主行程、執行檔路徑相同；它底下的 app-server 才算 Desktop 的，它連到共用埠也算 Desktop 的連線。測試用這台機器實抓的 `26.1117.4957.0` 行程樹（先紅後綠）與 10 個必須維持 `unknown` 的情形。修好後這台機器的判斷由 `unknown` 變成 `legacy_stdio`，但 `recovery_mode` 仍是 `none`：新版 Desktop 沒有官方 IPC 路由，見「未解風險」。已重建 `scripts/bin`，尚未安裝到維護者電腦，見 `ROADMAP.md`（`ebaf23b`，2026-11-22） |
 
 ## 未解風險
 
