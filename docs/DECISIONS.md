@@ -1,5 +1,50 @@
 # 維護決策
 
+## 2026-11-24：調查 11-22 22:37 worker exit 143，終止者無法判定
+
+- **調查基準**：工作樹 `codex/exit143-1124`，SHA `0ab93fdbc07b03ae07266f2cb2495c96d8429ef3`。只讀已安裝的日誌與 Windows 狀態，未停止服務、改設定或安裝工具；本次只改事件文件，沒有可由失敗測試證明的程式 bug。
+- **結論：not determinable（無法判定）**。確定 worker PID 29000 非正常結束，不能確定誰終止它。`143 = 128 + 15` 只是 SIGTERM 類慣例；本程式在 Windows 直接記錄 `exec.ExitError.ExitCode()`，數字本身沒有終止者或信號來源。不能據此指認使用者、工具逾時、更新或工作排程器。
+- **時區**：本機 `Get-TimeZone` 為 `Taipei Standard Time`（UTC+08:00）。`supervisor.go` 用 UTC，`logger.go` 用 `log.LUTC`；兩份產品日誌都是 UTC。因此調查窗為本地 2026-11-22 22:30–22:40，即 UTC 14:30–14:40。
+
+**直接證據**（2026-11-24 讀取，保留原始行號與內容）：
+
+`C:\Users\SanHsien\AppData\Local\CodexAutoRetry\logs\supervisor.log:44-46`：
+
+```text
+2026-11-21T20:54:43Z worker starting version=1.2.0
+2026-11-22T14:37:13Z worker exited unexpectedly pid=29000 category=worker_exit code=143
+2026-11-22T16:51:12Z worker starting version=1.2.0
+```
+
+`C:\Users\SanHsien\AppData\Local\CodexAutoRetry\logs\daemon.log:3591-3593`：
+
+```text
+2026/11/22 14:12:25 retry skipped thread=01a20399... category=non_retryable reason=permanent request or policy error
+2026/11/22 16:51:13 watchdog starting version=1.2.0
+2026/11/22 16:51:13 shared app-server starting pid=24408 port=49621
+```
+
+```text
+22:12:25 本地：最後一筆 worker 訊息
+  -> 22:37:13：supervisor 記錄 worker exit 143
+  -> 翌日 00:51:12：下一筆 worker starting（相隔 2:13:59）
+```
+
+- 事件窗內 daemon 沒有任何訊息，也沒有 `watchdog stopped`。結束前共用後端仍是關閉狀態（同檔 3564：`2026/11/21 20:54:44 shared app-server disabled; Codex remains on its official backend`）；共用後端在翌日安裝後才啟動，不能把它的 timeout 當作本次根因。
+- `scripts/source/supervisor.go` 的 `runSupervisor` 只啟動、等待 worker，再檢查 `supervisor.stop`；沒有定時殺 worker 或主動重啟 worker 的流程。正常停止會記 `worker stopped intentionally`，本次沒有。非正常結束後原本應於退避等待後再啟動（起始 1 秒、上限 1 分鐘），但日誌中沒有立即再啟動或啟動失敗紀錄。**這只能證明缺少復原紀錄**：supervisor 是否也被終止、停用標記是否在退避期間出現或是否有寫入失敗，都沒有保留證據，不能把「沒拉回來」直接判成 supervisor bug。
+
+**已查的 Windows 證據與限制**（`Get-WinEvent` 本地時間窗 22:30–22:40）：
+
+- `System`：0 筆；最舊保留事件是 2026-08-13，涵蓋當日，未找到關機或重開機證據。
+- `Application`：只有 22:31:16 的 `VBScriptDeprecationAlert`，ID 4096、Message 空白；沒有 worker 崩潰或更新歸因證據。最舊保留事件是 2026-08-21。
+- `Microsoft-Windows-TaskScheduler/Operational`：`IsEnabled=False`，該窗無事件。現有排程任務未找到執行 `codex-auto-retry` 的 action；現有 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\CodexAutoRetry` 是 `"C:\Users\SanHsien\AppData\Local\CodexAutoRetry\codex-auto-retry.exe" supervise`。這是目前快照，不能排除當時另有排程或間接清理程序。
+- `Microsoft-Windows-PowerShell/Operational`：該窗無事件，最舊事件已是 2026-11-24 18:25:51+08:00，當日內容已不在保留範圍；不能排除 `Stop-Process` 或使用者腳本。
+- `Microsoft-Windows-Sysmon/Operational`：不存在；`Security`：存取遭拒，未能查核 4688／4689 行程稽核。未改稽核設定或提升權限。
+- README／既有事件文件所指 Desktop 日誌根目錄 `%LOCALAPPDATA%\Packages\OpenAI.Codex_2p2nqsd0c76g0\LocalCache\Local\Codex\Logs` 已查；沒有 `2026\11\22` 目錄，全根目錄日誌搜尋 `2026-11-22T14:37:1` 及該窗終止／更新關鍵字沒有命中，無從取得 Desktop 歸因。
+- repo 的安裝、停用與解除安裝腳本有寫停止標記及強制停止流程，但本次沒有當時的呼叫紀錄；目前安裝目錄也沒有 `install-journal.json`，不能拿翌日安裝紀錄解釋前一天事件。
+
+**處置**：保留「終止者無法判定」；不因缺失的行程稽核猜測根因或修改程式。若日後另有當時的行程終止／父行程／工具執行紀錄，才重新歸因。本段補完下方 2026-11-23「原因沒有查」的調查狀態，不改其當時觀測。
+
 ## 2026-11-23：維護者電腦改用共用後端，裝上 R-22／R-23，實測接續成立
 
 維護者同意後，在維護者離開電腦的時段施工（開工前 `precheck.ps1` 為 `PRECONDITIONS_PASS`：閒置 4,548 秒、最新 rollout 5,447 秒前、`pending_retries=0`、`active_retries=0`、前景不是瀏覽器或播放器）。
