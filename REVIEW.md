@@ -92,3 +92,6 @@ powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 
 
 - 非 Windows 作業系統（macOS / Linux）不在本 fork 支援與驗收範圍內。
 - 永久失效之登入憑證不在自動續跑範圍內，需由使用者於 Codex Desktop 重新登入。
+## 2026-11-27：安全啟動冷開準備時限
+
+安全啟動冷開後端時，準備時限只有 6 秒，短於後端自身最長 12 秒的就緒等待。`de6cc20`（2026-11-27）將 worker 時限調為 18 秒、啟動器請求有效期調為 20 秒，仍保留請求到期及官方連線備援。回歸測試在修正前失敗，修正後通過。真機紀錄只有 `backend_prepare_failed`，仍須安裝新版後驗收桌面接續。
