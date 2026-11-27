@@ -27,8 +27,12 @@ func TestSharedRecoveryRespectsConsentAndExpiry(t *testing.T) {
 			calls := 0
 			recoverSharedBackend = func(ctx context.Context, dir string, c Config) (Config, error) {
 				calls++
-				if _, ok := ctx.Deadline(); !ok {
+				deadline, ok := ctx.Deadline()
+				if !ok {
 					t.Fatal("unbounded recovery")
+				}
+				if scenario == "success" && deadline.Sub(now) != 18*time.Second {
+					t.Fatalf("recovery only allows %v for a backend startup that can take 12 seconds plus validation", deadline.Sub(now))
 				}
 				if scenario == "failed" {
 					return c, errors.New("fake unavailable")
@@ -42,6 +46,9 @@ func TestSharedRecoveryRespectsConsentAndExpiry(t *testing.T) {
 				_ = recordSharedUnavailable(d.dataDir, "shared_app_server_memory_limit_exceeded")
 			}
 			expiry := now.Add(10 * time.Second)
+			if scenario == "success" {
+				expiry = now.Add(20 * time.Second)
+			}
 			if scenario == "expired" {
 				expiry = now.Add(-time.Second)
 			}

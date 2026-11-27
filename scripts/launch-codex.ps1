@@ -146,7 +146,9 @@ function Invoke-CodexLaunchRecovery {
     $route = Get-CodexLaunchRoute $Runtime
     if ($route.Mode -eq 'shared') { return $route }
     $clock = [Diagnostics.Stopwatch]::StartNew()
-    for ($attempt = 1; $attempt -le 2 -and $clock.Elapsed.TotalSeconds -lt 24; $attempt++) {
+    $requestSeconds = 20
+    $overallSeconds = 44
+    for ($attempt = 1; $attempt -le 2 -and $clock.Elapsed.TotalSeconds -lt $overallSeconds; $attempt++) {
         Assert-CodexDesktopStopped $Executable
         $config = Read-CodexLaunchJson (Join-Path $Runtime 'config.json')
         $status = Read-CodexLaunchJson (Join-Path $Runtime 'status.json')
@@ -160,16 +162,16 @@ function Invoke-CodexLaunchRecovery {
         $requestPath = Join-Path $Runtime 'shared-recovery-request.json'
         $temporary = Join-Path $Runtime ('shared-recovery-' + $id + '.tmp')
         try {
-            $request = @{ id = $id; expires_at = [DateTimeOffset]::UtcNow.AddSeconds(10).ToString('o') }
+            $until = [DateTimeOffset]::UtcNow.AddSeconds($requestSeconds)
+            $request = @{ id = $id; expires_at = $until.ToString('o') }
             [IO.File]::WriteAllText($temporary, ($request | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
             if (Test-Path -LiteralPath $requestPath) { [IO.File]::Replace($temporary, $requestPath, [NullString]::Value) }
             else { [IO.File]::Move($temporary, $requestPath) }
-            $until = [DateTimeOffset]::UtcNow.AddSeconds(10)
             do {
                 Start-Sleep -Milliseconds 200
                 $result = Read-CodexLaunchJson (Join-Path $Runtime 'shared-recovery-result.json')
                 if ((Get-CodexAutoRetryStatusProperty $result 'id' '') -eq $id) { break }
-            } while ([DateTimeOffset]::UtcNow -lt $until -and $clock.Elapsed.TotalSeconds -lt 24)
+            } while ([DateTimeOffset]::UtcNow -lt $until -and $clock.Elapsed.TotalSeconds -lt $overallSeconds)
             Write-CodexLaunchResult $Runtime 'official' ('recovery_attempt_' + $attempt) 'checked'
             $route = Get-CodexLaunchRoute $Runtime
             if ($route.Mode -eq 'shared') { return $route }

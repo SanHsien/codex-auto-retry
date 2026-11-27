@@ -64,7 +64,8 @@ func (d *daemon) processSharedRecovery(ctx context.Context, now time.Time) {
 		})
 		d.logger.Printf("shared launch recovery category=%s", reason)
 	}()
-	if !request.ExpiresAt.After(now) || request.ExpiresAt.Sub(now) > 15*time.Second {
+	// The launcher submits a 20-second request. Reject stale or excessive leases.
+	if !request.ExpiresAt.After(now) || request.ExpiresAt.Sub(now) > 22*time.Second {
 		return
 	}
 	if desktopRunningProbe() {
@@ -99,7 +100,8 @@ func (d *daemon) processSharedRecovery(ctx context.Context, now time.Time) {
 		reason = "availability_unreadable"
 		return
 	}
-	deadline := now.Add(6 * time.Second)
+	// Backend startup alone may take 12 seconds, before ownership validation.
+	deadline := now.Add(18 * time.Second)
 	if request.ExpiresAt.Before(deadline) {
 		deadline = request.ExpiresAt
 	}

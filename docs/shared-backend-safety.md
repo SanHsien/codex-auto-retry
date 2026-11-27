@@ -74,8 +74,9 @@ lost preference: a version-10 configuration already set to false stays false
 until the user explicitly enables it.
 
 When an already-running compatible worker is fresh, the safe launcher may
-request preparation twice, waiting up to 10 seconds per request. The worker
-owns preparation on its serialized tick and consumes expiring requests; it
+request preparation twice, waiting up to 20 seconds per request. The worker
+handles each request on its serialized tick and limits preparation to 18 seconds
+or the remaining time before expiry, whichever is shorter. It
 does not activate goals or retry conversations as part of preparation. User
 opt-out, an existing Desktop, an expired request or a memory guard refuses
 automatic preparation. If the worker is stopped, the launcher does not start
